@@ -1,0 +1,34 @@
+const fs = require('fs');
+const readline = require('readline');
+
+async function extractMissingComponents() {
+  const fileStream = fs.createReadStream('C:/Users/phons/.gemini/antigravity/brain/39386585-9744-4129-87ca-5e2c355221c2/.system_generated/logs/transcript_full.jsonl');
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+  let lineNum = 0;
+  for await (const line of rl) {
+    lineNum++;
+    const targets = ['function KanbanBoard', 'function LeaveAttendanceView', 'function TeamRosterView'];
+    for (const target of targets) {
+      if (line.includes(target)) {
+        try {
+          const obj = JSON.parse(line);
+          if (obj.tool_calls) {
+            obj.tool_calls.forEach(tc => {
+              if (tc.args && (tc.args.ReplacementContent || tc.args.CodeContent)) {
+                const content = tc.args.ReplacementContent || tc.args.CodeContent;
+                if (content.includes(target)) {
+                  const compName = target.replace('function ', '');
+                  console.log(`[Line ${lineNum}] Found ${compName} in ${tc.name}! Length: ${content.length}`);
+                  fs.writeFileSync(`d:/Team Projects/js/extracted_${compName}_${lineNum}.txt`, content, 'utf8');
+                }
+              }
+            });
+          }
+        } catch(e){}
+      }
+    }
+  }
+}
+
+extractMissingComponents();

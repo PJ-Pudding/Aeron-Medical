@@ -1,0 +1,30 @@
+const fs = require('fs');
+const readline = require('readline');
+
+async function findClientsDirectoryView() {
+  const fileStream = fs.createReadStream('C:/Users/phons/.gemini/antigravity/brain/39386585-9744-4129-87ca-5e2c355221c2/.system_generated/logs/transcript_full.jsonl');
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+  let lineNum = 0;
+  for await (const line of rl) {
+    lineNum++;
+    if (line.includes('ClientsDirectoryView') && line.includes('function ClientsDirectoryView')) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj.tool_calls) {
+          obj.tool_calls.forEach(tc => {
+            if (tc.args && (tc.args.ReplacementContent || tc.args.CodeContent)) {
+              const content = tc.args.ReplacementContent || tc.args.CodeContent;
+              if (content.includes('function ClientsDirectoryView')) {
+                console.log(`[Line ${lineNum}] Found ClientsDirectoryView in ${tc.name}! Length: ${content.length}`);
+                fs.writeFileSync(`d:/Team Projects/js/clients_extracted_${lineNum}.txt`, content, 'utf8');
+              }
+            }
+          });
+        }
+      } catch(e){}
+    }
+  }
+}
+
+findClientsDirectoryView();

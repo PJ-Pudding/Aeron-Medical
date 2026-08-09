@@ -1,0 +1,330 @@
+<main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12 overflow-y-auto">
+          
+          {/* TAB 1: Dashboard */}
+          {activeSidebarTab === 'dashboard' && (
+            <ManagerDashboard 
+              projects={filteredProjects}
+              allProjects={projects}
+              members={members}
+              costCalculations={costCalculations}
+              onEditProject={(p) => { setEditingProject(p); setIsModalOpen(true); }}
+              onAddLog={(p) => { setLogTargetProject(p); setIsLogModalOpen(true); }}
+              onViewHistory={handleOpenHistoryModal}
+              onMoveProject={handleMoveProject}
+              onBookDemo={(p) => { setDemoPrefill({ projectId: p.id, hospitalName: p.hospitalName, productId: p.productId, salesPerson: p.assignee }); setIsDemoModalOpen(true); }}
+            />
+          )}
+
+          {/* TAB 2: Clients */}
+          {activeSidebarTab === 'clients' && (
+            <ClientsDirectoryView
+              projects={projects}
+              members={members}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              filterClientType={filterClientType}
+              setFilterClientType={setFilterClientType}
+              onEditProject={(p) => { setEditingProject(p); setIsModalOpen(true); }}
+              onBookDemo={(p) => { setDemoPrefill({ projectId: p.id, hospitalName: p.hospitalName, productId: p.productId, salesPerson: p.assignee }); setIsDemoModalOpen(true); }}
+              onAddLog={(p) => { setLogTargetProject(p); setIsLogModalOpen(true); }}
+            />
+          )}
+
+          {/* TAB 3: Project (Sales Kanban) */}
+          {activeSidebarTab === 'project' && (
+            <MemberKanban 
+              projects={filteredProjects} 
+              stages={window.STAGES}
+              members={members}
+              products={products}
+              activeMemberId={activeView}
+              demoBookings={demoBookings}
+              onMoveProject={handleMoveProject}
+              onEditProject={(p) => { setEditingProject(p); setIsModalOpen(true); }}
+              onDeleteProject={handleDeleteProject}
+              onAddLog={(p) => { setLogTargetProject(p); setIsLogModalOpen(true); }}
+              onViewHistory={handleOpenHistoryModal}
+              onOpenVoiceModal={handleOpenVoiceModal}
+              onOpenNewModal={() => { setEditingProject(null); setIsModalOpen(true); }}
+              onBookDemo={(p) => { setDemoPrefill({ projectId: p.id, hospitalName: p.hospitalName, productId: p.productId, salesPerson: p.assignee }); setIsDemoModalOpen(true); }}
+              onOpenChecklist={(b) => { setChecklistTargetBooking(b); setIsChecklistModalOpen(true); }}
+            />
+          )}
+
+          {/* TAB 4: Logistic */}
+          {activeSidebarTab === 'logistic' && (
+            <div className="space-y-6">
+              <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs w-fit">
+                <button
+                  onClick={() => setLogisticSubView('product_catalog')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    logisticSubView === 'product_catalog' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📦 ฐานข้อมูลสินค้า & เครื่อง Demo
+                </button>
+                <button
+                  onClick={() => setLogisticSubView('shipment_tracking')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    logisticSubView === 'shipment_tracking' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🚚 ติดตามการขนส่ง ({activeShipmentCount})
+                </button>
+                <button
+                  onClick={() => setLogisticSubView('repair_service')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    logisticSubView === 'repair_service' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🔧 ทะเบียนส่งซ่อม ({activeRepairCount})
+                </button>
+                <button
+                  onClick={() => setLogisticSubView('sold_products')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    logisticSubView === 'sold_products' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🏥 เครื่องที่ขายแล้ว ({soldProducts.length})
+                </button>
+              </div>
+
+              {logisticSubView === 'product_catalog' && (
+                <ProductCatalogView 
+                  products={products}
+                  demoBookings={demoBookings}
+                  onOpenNewProduct={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
+                  onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true); }}
+                  onDeleteProduct={(id) => setProducts(prev => prev.filter(p => p.id !== id))}
+                  onOpenRepairModal={handleOpenRepairFromCatalog}
+                />
+              )}
+
+              {logisticSubView === 'shipment_tracking' && (
+                <ShipmentTrackingView 
+                  shipments={shipments}
+                  purchaseOrders={purchaseOrders}
+                  products={products}
+                  onOpenNewShipment={(prefill) => { setEditingShipment(prefill); setIsShipmentModalOpen(true); }}
+                  onEditShipment={(shipment) => { setEditingShipment(shipment); setIsShipmentModalOpen(true); }}
+                  onDeleteShipment={handleDeleteShipment}
+                />
+              )}
+
+              {logisticSubView === 'repair_service' && (
+                <RepairServiceView 
+                  repairTickets={repairTickets}
+                  products={products}
+                  members={members}
+                  onOpenNewTicket={(prefill) => { setEditingRepairTicket(prefill); setIsRepairModalOpen(true); }}
+                  onEditTicket={(ticket) => { setEditingRepairTicket(ticket); setIsRepairModalOpen(true); }}
+                  onDeleteTicket={handleDeleteRepairTicket}
+                  onViewInCatalog={(pName) => { setLogisticSubView('product_catalog'); }}
+                />
+              )}
+
+              {logisticSubView === 'sold_products' && (
+                <SoldProductsView 
+                  soldProducts={soldProducts}
+                  projects={projects}
+                  members={members}
+                  onOpenNewAsset={(prefill) => { setEditingSoldAsset(prefill); setIsSoldModalOpen(true); }}
+                  onEditAsset={(asset) => { setEditingSoldAsset(asset); setIsSoldModalOpen(true); }}
+                  onDeleteAsset={handleDeleteSoldAsset}
+                />
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: Calendar */}
+          {activeSidebarTab === 'calendar' && (
+            <DemoCalendarView 
+              demoBookings={demoBookings}
+              products={products}
+              projects={projects}
+              members={members}
+              currentUser={currentUser}
+              onOpenBookDemo={() => { setDemoPrefill(null); setIsDemoModalOpen(true); }}
+              onDeleteBooking={(id) => setDemoBookings(prev => prev.filter(b => b.id !== id))}
+              onUpdateStatus={handleUpdateBookingStatus}
+              onOpenChecklist={(b) => { setChecklistTargetBooking(b); setIsChecklistModalOpen(true); }}
+            />
+          )}
+
+          {/* TAB 6: Report */}
+          {activeSidebarTab === 'report' && (
+            <div className="space-y-6">
+              <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs w-fit">
+                <button
+                  onClick={() => setReportSubView('fda_registration')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    reportSubView === 'fda_registration' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📜 ทะเบียน อย. / ใบอนุญาต ({activeFDACount})
+                </button>
+                <button
+                  onClick={() => setReportSubView('activity_logs')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    reportSubView === 'activity_logs' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🔐 ประวัติใช้งานระบบ Audit Logs ({activityLogs.length})
+                </button>
+              </div>
+
+              {reportSubView === 'fda_registration' && (
+                <FDARegistrationView 
+                  fdaRegistrations={fdaRegistrations}
+                  products={products}
+                  members={members}
+                  onOpenNewFDA={(prefill) => { setEditingFDA(prefill); setIsFDAModalOpen(true); }}
+                  onEditFDA={(fda) => { setEditingFDA(fda); setIsFDAModalOpen(true); }}
+                  onDeleteFDA={handleDeleteFDA}
+                />
+              )}
+
+              {reportSubView === 'activity_logs' && (
+                <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                      <span>🔐 ประวัติการใช้งานระบบ (System Activity Audit Logs)</span>
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">ทั้งหมด {activityLogs.length} รายการ</span>
+                  </div>
+                  <div className="overflow-x-auto max-h-[600px]">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-900 uppercase text-[10px] text-slate-400 sticky top-0">
+                        <tr>
+                          <th className="p-3">วัน-เวลา</th>
+                          <th className="p-3">ผู้ใช้งาน</th>
+                          <th className="p-3">ตำแหน่ง</th>
+                          <th className="p-3">กิจกรรมที่ทำ</th>
+                          <th className="p-3">เป้าหมาย/ระบบ</th>
+                          <th className="p-3">รายละเอียดเพิ่มเติม</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-mono">
+                        {activityLogs.map(log => (
+                          <tr key={log.id} className="hover:bg-slate-900/40">
+                            <td className="p-3 text-slate-400 text-[11px]">{log.timestamp}</td>
+                            <td className="p-3 font-bold text-amber-300">{log.fullName}</td>
+                            <td className="p-3 text-slate-400">{log.role}</td>
+                            <td className="p-3 font-bold text-emerald-400">{log.action}</td>
+                            <td className="p-3 text-indigo-300">{log.target}</td>
+                            <td className="p-3 text-slate-300 text-[11px]">{log.details}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 7: Finance */}
+          {activeSidebarTab === 'finance' && (
+            <div className="space-y-6">
+              <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs w-fit">
+                <button
+                  onClick={() => setFinanceSubView('cost_calculation')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    financeSubView === 'cost_calculation' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🧮 คำนวณต้นทุน & กำไร (Cost Calculator)
+                </button>
+                <button
+                  onClick={() => setFinanceSubView('purchase_orders')}
+                  className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                    financeSubView === 'purchase_orders' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🛒 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
+                </button>
+              </div>
+
+              {financeSubView === 'cost_calculation' && (
+                <CostCalculationView 
+                  costCalculations={costCalculations}
+                  projects={projects}
+                  members={members}
+                  onOpenNewCalc={(prefill) => { setEditingCostCalc(prefill); setIsCostModalOpen(true); }}
+                  onEditCalc={(calc) => { setEditingCostCalc(calc); setIsCostModalOpen(true); }}
+                  onDeleteCalc={handleDeleteCostCalc}
+                />
+              )}
+
+              {financeSubView === 'purchase_orders' && (
+                <PurchaseOrderView 
+                  purchaseOrders={purchaseOrders}
+                  projects={projects}
+                  products={products}
+                  onOpenNewPO={(prefillProj) => { setEditingPO(prefillProj ? { projectId: prefillProj.id, hospitalName: prefillProj.hospitalName, productName: prefillProj.productName, quantity: prefillProj.quantity, totalAmountTHB: prefillProj.budget } : null); setIsPOModalOpen(true); }}
+                  onEditPO={(po) => { setEditingPO(po); setIsPOModalOpen(true); }}
+                  onDeletePO={handleDeletePO}
+                />
+              )}
+            </div>
+          )}
+
+          {/* TAB 8: HR */}
+          {activeSidebarTab === 'hr' && (
+            <div className="space-y-6">
+              <div className="glass-panel p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-600/20 border border-rose-500/30 flex items-center justify-center text-2xl shadow-inner">
+                    👥
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <span>ทีม Sales & บริหารทรัพยากรบุคคล (Sales Team & HR Roster)</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+                        {members.length} ท่าน
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      รายชื่อเซลล์ผู้รับผิดชอบพื้นที่ ระดับสิทธิ์บัญชีผู้ใช้ (5 Roles) และสรุปยอดหักเงินเดือนประจำเดือน
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsMemberModalOpen(true)}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-600/30 flex items-center gap-1"
+                >
+                  <span>+ จัดการสมาชิกทีม</span>
+                </button>
+              </div>
+
+              {/* Members Team Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {members.map(m => {
+                  const mProjects = projects.filter(p => p.assignee === m.name || p.assignee.includes(m.name.split(' ')[0]));
+                  const totalBudget = mProjects.reduce((s, p) => s + (Number(p.budget) || 0), 0);
+                  return (
+                    <div key={m.id} className="glass-card p-5 rounded-2xl border border-slate-800 space-y-3 hover:border-rose-500/40 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-3xl">{m.avatar || '👤'}</span>
+                          <div>
+                            <h3 className="font-extrabold text-white text-base">{m.name}</h3>
+                            <span className="text-xs text-amber-300 font-bold">{m.role}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-emerald-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                          {mProjects.length} โครงการ
+                        </span>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-slate-400">มูลค่าพอร์ตดูแล:</span>
+                        <span className="font-bold text-amber-300 font-mono text-sm">{formatShortCurrency(totalBudget)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+        </main>
