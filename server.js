@@ -4,12 +4,42 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 8085;
-const ROOT_DIR = __dirname;
+const ROOT_DIR = path.resolve(__dirname);
+const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5 MB Max Payload Protection
 
 const SUPABASE_HOST = process.env.SUPABASE_HOST || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 
+// 🛡️ Security Allowlist: Allowed Database Tables (Prevents Path Traversal)
+const ALLOWED_TABLES = new Set([
+  'projects',
+  'products',
+  'accounting',
+  'cost_calculations',
+  'costCalculations',
+  'demo_bookings',
+  'fda_registrations',
+  'leave_requests',
+  'members',
+  'messenger_trips',
+  'purchase_orders',
+  'repair_tickets',
+  'shipments',
+  'sold_products',
+  'attendance_logs',
+  'accounting_audit',
+  'users'
+]);
+
+function isValidTableName(tableName) {
+  if (!tableName || typeof tableName !== 'string') return false;
+  const cleanName = tableName.trim();
+  return /^[a-zA-Z0-9_]+$/.test(cleanName) && ALLOWED_TABLES.has(cleanName);
+}
+
 function syncToSupabaseCloud(tableName, jsonData) {
+  if (!SUPABASE_HOST || !SUPABASE_KEY || !isValidTableName(tableName)) return;
+
   try {
     const payload = JSON.stringify({
       table_name: tableName,
@@ -42,6 +72,8 @@ function syncToSupabaseCloud(tableName, jsonData) {
 }
 
 function fetchFromSupabaseCloud(tableName) {
+  if (!SUPABASE_HOST || !SUPABASE_KEY || !isValidTableName(tableName)) return Promise.resolve(null);
+
   return new Promise((resolve) => {
     const options = {
       hostname: SUPABASE_HOST,
@@ -86,6 +118,12 @@ const mimeTypes = {
 };
 
 const server = http.createServer(async (req, res) => {
+  // 🛡️ Global Security Headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
   const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   let pathname = decodeURIComponent(urlObj.pathname).replace(/^\/+/, '');
 
@@ -94,8 +132,19 @@ const server = http.createServer(async (req, res) => {
   // API Auth Handler: Login Route
   if (req.method === 'POST' && pathname === 'api/v1/auth/login') {
     let body = '';
-    req.on('data', chunk => { body += chunk; });
+    let sizeExceeded = false;
+    req.on('data', chunk => {
+      if (sizeExceeded) return;
+      body += chunk;
+      if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) {
+        sizeExceeded = true;
+        res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Payload Too Large: Maximum size is 5MB' }));
+        req.destroy();
+      }
+    });
     req.on('end', () => {
+      if (sizeExceeded) return;
       try {
         const payload = JSON.parse(body || '{}');
         const role = payload.role || 'OWNER';
@@ -110,7 +159,7 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ success: true, user: userPayload }));
         return;
       } catch (e) {
-        res.writeHead(400);
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Invalid auth request payload' }));
         return;
       }
@@ -121,7 +170,7 @@ const server = http.createServer(async (req, res) => {
   // API Load from Cloud DB with local fallback
   if (req.method === 'GET' && pathname === 'api/load-db') {
     const tableName = urlObj.searchParams.get('table');
-    if (tableName) {
+    if (tableName && isValidTableName(tableName)) {
       try {
         const cloudData = await fetchFromSupabaseCloud(tableName);
         if (cloudData) {
@@ -140,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'Table not found' }));
+    res.end(JSON.stringify({ error: 'Table not found or access denied' }));
     return;
   }
 
@@ -151,42 +200,64 @@ const server = http.createServer(async (req, res) => {
 
     if (['projects', 'finance', 'hr'].includes(endpoint)) {
       const tableName = endpoint === 'finance' ? 'cost_calculations' : endpoint;
-      try {
-        const cloudData = await fetchFromSupabaseCloud(tableName);
-        if (cloudData) {
+      if (isValidTableName(tableName)) {
+        try {
+          const cloudData = await fetchFromSupabaseCloud(tableName);
+          if (cloudData) {
+            res.writeHead(200, { 
+              'Content-Type': 'application/json; charset=utf-8',
+              'X-AERON-Auth-Status': authHeader ? 'Authorized' : 'PublicDemoSession',
+              'X-Data-Source': 'SupabaseCloud'
+            });
+            res.end(JSON.stringify(cloudData));
+            return;
+          }
+        } catch (e) {}
+
+        const targetPath = path.join(ROOT_DIR, 'db', `${endpoint === 'finance' ? 'costCalculations' : endpoint}.json`);
+        if (fs.existsSync(targetPath)) {
+          const data = fs.readFileSync(targetPath, 'utf8');
           res.writeHead(200, { 
             'Content-Type': 'application/json; charset=utf-8',
             'X-AERON-Auth-Status': authHeader ? 'Authorized' : 'PublicDemoSession',
-            'X-Data-Source': 'SupabaseCloud'
+            'X-Data-Source': 'LocalFile'
           });
-          res.end(JSON.stringify(cloudData));
+          res.end(data);
           return;
         }
-      } catch (e) {}
-
-      const targetPath = path.join(ROOT_DIR, 'db', `${endpoint === 'finance' ? 'costCalculations' : endpoint}.json`);
-      if (fs.existsSync(targetPath)) {
-        const data = fs.readFileSync(targetPath, 'utf8');
-        res.writeHead(200, { 
-          'Content-Type': 'application/json; charset=utf-8',
-          'X-AERON-Auth-Status': authHeader ? 'Authorized' : 'PublicDemoSession',
-          'X-Data-Source': 'LocalFile'
-        });
-        res.end(data);
-        return;
       }
     }
   }
 
-  // API Handler for saving DB with instant Cloud Sync
+  // 🛡️ API Handler for saving DB with Sanitization & Size Limit
   if (req.method === 'POST' && pathname === 'api/save-db') {
     let body = '';
-    req.on('data', chunk => { body += chunk; });
+    let sizeExceeded = false;
+    req.on('data', chunk => {
+      if (sizeExceeded) return;
+      body += chunk;
+      if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) {
+        sizeExceeded = true;
+        res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Payload Too Large: Maximum allowed size is 5MB' }));
+        req.destroy();
+      }
+    });
+
     req.on('end', () => {
+      if (sizeExceeded) return;
       try {
         const tableName = urlObj.searchParams.get('table');
-        if (tableName && body) {
-          // 1. Save to local disk
+        
+        // 🛡️ Strict Table Validation & Path Traversal Prevention
+        if (!tableName || !isValidTableName(tableName)) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Invalid or unauthorized table name' }));
+          return;
+        }
+
+        if (body) {
+          // 1. Save to local disk safely
           const targetPath = path.join(ROOT_DIR, 'db', `${tableName}.json`);
           fs.writeFileSync(targetPath, body, 'utf8');
 
@@ -201,29 +272,36 @@ const server = http.createServer(async (req, res) => {
           return;
         }
       } catch (e) {
-        res.writeHead(500);
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: e.message }));
         return;
       }
-      res.writeHead(400);
-      res.end('Bad Request');
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Bad Request' }));
     });
     return;
   }
 
-  const filePath = path.join(ROOT_DIR, pathname);
-  fs.stat(filePath, (err, stats) => {
+  // 🛡️ Static File Serving with Strict Path Traversal Protection
+  const resolvedPath = path.resolve(ROOT_DIR, pathname);
+  if (!resolvedPath.startsWith(ROOT_DIR)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('403 Forbidden: Access outside root is prohibited');
+    return;
+  }
+
+  fs.stat(resolvedPath, (err, stats) => {
     if (err || !stats.isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('404 Not Found');
       return;
     }
 
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = path.extname(resolvedPath).toLowerCase();
     const contentType = mimeTypes[ext] || 'application/octet-stream';
 
     res.writeHead(200, { 'Content-Type': contentType, 'Content-Length': stats.size });
-    fs.createReadStream(filePath).pipe(res);
+    fs.createReadStream(resolvedPath).pipe(res);
   });
 });
 
@@ -240,7 +318,7 @@ function startServer(port) {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`====================================================`);
-    console.log(`  🚀 AERON MEDICAL Node Web Server Running!`);
+    console.log(`  🚀 AERON MEDICAL Secure Node Web Server Running!`);
     console.log(`  🌐 Open in browser: http://localhost:${port}/`);
     console.log(`====================================================`);
   });
