@@ -7,6 +7,29 @@ const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 8085;
 const ROOT_DIR = path.resolve(__dirname);
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5 MB Max Payload Protection
 
+// 🔑 Load local .env configuration securely (if exists)
+const envFilePath = path.join(ROOT_DIR, '.env');
+if (fs.existsSync(envFilePath)) {
+  try {
+    const envContent = fs.readFileSync(envFilePath, 'utf8');
+    envContent.split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.substring(0, eqIdx).trim();
+          const val = trimmed.substring(eqIdx + 1).trim().replace(/^['"](.*)['"]$/, '$1');
+          if (key && !process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.warn('[Notice] Could not load .env file:', e.message);
+  }
+}
+
 const SUPABASE_HOST = process.env.SUPABASE_HOST || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 
@@ -191,6 +214,51 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: 'Table not found or access denied' }));
     return;
+  }
+
+  // ☁️ API Cloud Status Check
+  if (req.method === 'GET' && pathname === 'api/cloud-status') {
+    const isConfigured = Boolean(SUPABASE_HOST && SUPABASE_KEY);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ 
+      configured: isConfigured, 
+      host: SUPABASE_HOST ? SUPABASE_HOST.substring(0, 8) + '...' : null,
+      mode: isConfigured ? 'SupabaseCloud' : 'LocalOffline' 
+    }));
+    return;
+  }
+
+  // ☁️ API Batch Sync All Local Tables to Cloud
+  if (req.method === 'POST' && pathname === 'api/sync-all-to-cloud') {
+    try {
+      const dbPath = path.join(ROOT_DIR, 'db');
+      if (!fs.existsSync(dbPath)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'db directory not found' }));
+        return;
+      }
+      const files = fs.readdirSync(dbPath).filter(f => f.endsWith('.json'));
+      let syncedCount = 0;
+      for (const file of files) {
+        const tableName = file.replace('.json', '');
+        if (isValidTableName(tableName)) {
+          const filePath = path.join(dbPath, file);
+          try {
+            const content = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '').trim();
+            const jsonData = JSON.parse(content);
+            syncToSupabaseCloud(tableName, jsonData);
+            syncedCount++;
+          } catch (e) {}
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, message: `Synced ${syncedCount} tables to Supabase Cloud`, syncedCount }));
+      return;
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
   }
 
   // Protected REST API V1 Routes with Cloud Sync
