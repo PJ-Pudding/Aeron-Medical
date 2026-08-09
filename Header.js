@@ -41,6 +41,7 @@ function Header({
   onOpenKanbanModal = () => {} 
 }) {
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
+  const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [cloudStatus, setCloudStatus] = useState({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSyncing: false,
@@ -274,11 +275,11 @@ function Header({
               <span className="absolute left-2.5 top-2 text-slate-500 text-xs">🔍</span>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            {/* Desktop Action Buttons (Hidden on Mobile) */}
+            <div className="hidden lg:flex items-center gap-2">
               <button
                 onClick={onOpenNewModal}
-                className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs py-2 px-3.5 rounded-xl shadow-md shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-95"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs py-2 px-3.5 rounded-xl shadow-md shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-95"
               >
                 <span className="text-base font-bold leading-none">+</span>
                 <span>เพิ่มโครงการ</span>
@@ -350,20 +351,20 @@ function Header({
                 {cloudStatus.isSyncing ? (
                   <>
                     <span className="animate-spin text-xs">🔄</span>
-                    <span className="hidden xl:inline text-[11px]">กำลังซิงค์...</span>
+                    <span className="inline text-[11px]">กำลังซิงค์...</span>
                   </>
                 ) : cloudStatus.isOnline ? (
                   <>
                     <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
                     <span className="text-xs">☁️</span>
-                    <span className="hidden xl:inline text-[11px] font-bold">Cloud Synced</span>
+                    <span className="inline text-[11px] font-bold">Cloud Synced</span>
                     {cloudStatus.lastSyncTime && <span className="hidden 2xl:inline text-[10px] text-emerald-400/80 font-mono">({cloudStatus.lastSyncTime})</span>}
                   </>
                 ) : (
                   <>
                     <span className="h-2 w-2 rounded-full bg-amber-400"></span>
                     <span className="text-xs">📴</span>
-                    <span className="hidden xl:inline text-[11px] font-bold text-amber-300">Offline</span>
+                    <span className="inline text-[11px] font-bold text-amber-300">Offline</span>
                   </>
                 )}
               </button>
@@ -377,7 +378,7 @@ function Header({
                     title="คลิกเพื่อสลับสิทธิ์การใช้งาน / เปลี่ยนบทบาทผู้ใช้"
                   >
                     <span className="text-base">{currentUser.avatar || '👤'}</span>
-                    <div className="text-left hidden lg:block">
+                    <div className="text-left">
                       <div className="font-bold text-white leading-none text-[11px]">{currentUser.name.split(' ')[0]}</div>
                       <div className="text-[9.5px] font-mono text-emerald-300 font-bold">{currentUser.role}</div>
                     </div>
@@ -392,6 +393,48 @@ function Header({
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* 📱 Mobile Action & Quick Menu Controls (Visible on Mobile/Tablet < lg) */}
+            <div className="lg:hidden flex items-center gap-1.5 w-full justify-between pt-1 border-t border-slate-800/80">
+              <button
+                onClick={onOpenNewModal}
+                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs py-2 px-2.5 rounded-xl shadow-md active:scale-95 touch-manipulation"
+              >
+                <span className="text-sm font-bold">+</span>
+                <span>เพิ่มโครงการ</span>
+              </button>
+
+              {/* Mobile Cloud Status Pill */}
+              <button
+                onClick={triggerCloudSync}
+                disabled={cloudStatus.isSyncing}
+                className={`p-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1 active:scale-95 ${
+                  cloudStatus.isOnline ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                }`}
+                title="คลิกเพื่อซิงค์ข้อมูลกับ Cloud"
+              >
+                <span>{cloudStatus.isSyncing ? '🔄' : cloudStatus.isOnline ? '☁️' : '📴'}</span>
+              </button>
+
+              {/* Mobile Action Sheet Trigger */}
+              <button
+                onClick={() => setIsMobileActionSheetOpen(true)}
+                className="p-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 touch-manipulation"
+              >
+                <span>⚡ จัดการ</span>
+              </button>
+
+              {/* Mobile User Profile Button */}
+              {currentUser && (
+                <button
+                  onClick={onOpenLoginModal}
+                  className="p-1.5 px-2 bg-slate-900 border border-slate-700 rounded-xl text-xs flex items-center gap-1 active:scale-95"
+                >
+                  <span className="text-base">{currentUser.avatar || '👤'}</span>
+                  <span className="text-[10px] font-bold text-emerald-300 font-mono">{currentUser.role.substring(0, 5)}</span>
+                </button>
+              )}
             </div>
 
           </div>
@@ -621,6 +664,111 @@ function Header({
         )}
 
       </div>
+
+      {/* 📱 Mobile Quick Action Bottom Sheet */}
+      {isMobileActionSheetOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <h3 className="font-bold text-white text-sm">เมนูจัดการด่วน (Quick Actions)</h3>
+              </div>
+              <button
+                onClick={() => setIsMobileActionSheetOpen(false)}
+                className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs"
+              >
+                ✕ ปิด
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
+                className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">➕</span>
+                <span className="font-bold text-xs text-white">เพิ่มโครงการ</span>
+                <span className="text-[10px] text-emerald-300">สร้างโครงการใหม่</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenDemoModal(); }}
+                className="p-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">🧪</span>
+                <span className="font-bold text-xs text-white">จองเครื่อง Demo</span>
+                <span className="text-[10px] text-purple-300">ลงคิวทดสอบสินค้า</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenRepairModal(); }}
+                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">🔧</span>
+                <span className="font-bold text-xs text-white">แจ้งส่งซ่อม</span>
+                <span className="text-[10px] text-rose-300">เปิดใบงานซ่อมบำรุง</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); exportToCSV(); }}
+                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">📥</span>
+                <span className="font-bold text-xs text-white">ส่งออก CSV</span>
+                <span className="text-[10px] text-slate-400">ดาวน์โหลดรายงาน</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenMemberModal(); }}
+                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">👥</span>
+                <span className="font-bold text-xs text-white">จัดการทีม</span>
+                <span className="text-[10px] text-slate-400">รายชื่อสมาชิก Sales</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); triggerCloudSync(); }}
+                className="p-3 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">☁️</span>
+                <span className="font-bold text-xs text-white">ซิงค์ Cloud ทันที</span>
+                <span className="text-[10px] text-teal-300">{cloudStatus.isSyncing ? 'กำลังซิงค์...' : 'อัปเดต Supabase'}</span>
+              </button>
+            </div>
+
+            {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); setIsUserAccountModalOpen(true); }}
+                className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔐</span>
+                  <span>จัดการบัญชีผู้ใช้งานระบบ (OWNER & HEAD ADMIN)</span>
+                </div>
+                <span>➔</span>
+              </button>
+            )}
+
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onResetDemo(); }}
+                className="text-[11px] text-rose-400 hover:text-rose-300 underline"
+              >
+                🔄 รีเซ็ตข้อมูลตัวอย่าง
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onLogout(); }}
+                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 font-bold"
+              >
+                <span>🚪 ออกจากระบบ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Account Management Modal for OWNER & HEAD ADMIN */}
       <UserAccountManagementModal
