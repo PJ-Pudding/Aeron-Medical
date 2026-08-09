@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>AERON - Error Diagnostics</title>
+  <script src="./libs/react.min.js"></script>
+  <script src="./libs/react-dom.min.js"></script>
+  <script src="./libs/babel.min.js"></script>
+  <style>
+    body { background: #0f172a; color: #e2e8f0; font-family: monospace; padding: 20px; }
+    #log { white-space: pre-wrap; font-size: 12px; }
+    .ok { color: #34d399; }
+    .err { color: #f87171; background: #1e0a0a; padding: 4px 8px; border-left: 3px solid #f87171; }
+    .info { color: #60a5fa; }
+  </style>
+</head>
+<body>
+<h2 style="color:#a3e635">🔍 AERON System Diagnostics</h2>
+<div id="log"></div>
+
+<script>
+function log(msg, type) {
+  var el = document.getElementById('log');
+  var line = document.createElement('div');
+  line.className = type || 'info';
+  line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  el.appendChild(line);
+}
+
+window.onerror = function(msg, src, line, col, err) {
+  log('GLOBAL ERROR: ' + msg + ' (line ' + line + ')', 'err');
+  if (err && err.stack) {
+    log(err.stack, 'err');
+  }
+};
+
+log('React loaded: ' + (typeof React !== 'undefined' ? React.version : 'NOT FOUND'), typeof React !== 'undefined' ? 'ok' : 'err');
+log('ReactDOM loaded: ' + (typeof ReactDOM !== 'undefined' ? 'YES' : 'NOT FOUND'), typeof ReactDOM !== 'undefined' ? 'ok' : 'err');
+log('Babel loaded: ' + (typeof Babel !== 'undefined' ? Babel.version : 'NOT FOUND'), typeof Babel !== 'undefined' ? 'ok' : 'err');
+
+log('Testing minimal React render...', 'info');
+try {
+  var div = document.createElement('div');
+  document.body.appendChild(div);
+  var root = ReactDOM.createRoot(div);
+  root.render(React.createElement('span', {style:{color:'#34d399'}}, '✅ React render OK'));
+  log('React render: OK', 'ok');
+} catch(e) {
+  log('React render FAILED: ' + e.message, 'err');
+}
+
+log('Testing Babel JSX transpile...', 'info');
+try {
+  var code = '<div className="test">Hello</div>';
+  var result = Babel.transform(code, { presets: ['react'] });
+  log('Babel JSX transpile: OK (' + result.code.length + ' chars out)', 'ok');
+} catch(e) {
+  log('Babel transpile FAILED: ' + e.message, 'err');
+}
+
+log('Loading initialData.js...', 'info');
+var s1 = document.createElement('script');
+s1.src = './js/initialData.js';
+s1.onload = function() { log('initialData.js loaded OK. INITIAL_PROJECTS: ' + (window.INITIAL_PROJECTS ? window.INITIAL_PROJECTS.length : 'undefined'), 'ok'); };
+s1.onerror = function() { log('initialData.js FAILED to load', 'err'); };
+document.body.appendChild(s1);
+
+setTimeout(function() {
+  log('Loading app.js via Babel (this may take 10-30 seconds for 400KB file)...', 'info');
+  var s2 = document.createElement('script');
+  s2.setAttribute('type', 'text/babel');
+  s2.setAttribute('data-presets', 'react');
+  s2.src = './js/app.js';
+  s2.onerror = function(e) { log('app.js FAILED to load: ' + JSON.stringify(e), 'err'); };
+  
+  // Timeout check
+  var timeout = setTimeout(function() {
+    log('⚠️ app.js still not done after 60s - possible Babel compile error or very slow CPU', 'err');
+  }, 60000);
+  
+  // Listen for Babel done
+  var origRender = ReactDOM.createRoot;
+  document.body.appendChild(s2);
+  log('app.js script tag injected, Babel compiling...', 'info');
+}, 500);
+</script>
+</body>
+</html>

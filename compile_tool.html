@@ -1,0 +1,21 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<script src='file:///d:/Team Projects/libs/babel.min.js'></script>
+</head>
+<body>
+<script>
+window.compileResult = '';
+try {
+  var req = new XMLHttpRequest();
+  req.open('GET', 'file:///d:/Team Projects/js/app.js', false);
+  req.send();
+  var code = req.responseText;
+  var res = Babel.transform(code, { presets: ['react'] });
+  window.compileResult = res.code;
+} catch (e) {
+  window.compileResult = 'ERROR: ' + e.message + ' (line ' + (e.loc ? e.loc.line : '') + ')';
+}
+</script>
+</body>
+</html>

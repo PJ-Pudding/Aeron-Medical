@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AERON MEDICAL - ระบบติดตามโครงการราชการ &amp; โรงพยาบาล</title>
+  
+  <!-- Google Fonts: Prompt & Inter for Premium Thai Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Prompt', 'Inter', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',500:'#6366f1',600:'#4f46e5',700:'#4338ca',900:'#312e81' },
+            gov: { gold:'#f59e0b',blue:'#0284c7',emerald:'#059669',rose:'#e11d48',purple:'#7c3aed' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM UMD - Local -->
+  <script src="./libs/react.min.js"></script>
+  <script src="./libs/react-dom.min.js"></script>
+  
+  <!-- Chart.js - Local -->
+  <script src="./libs/chart.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="./css/styles.css" />
+
+  <!-- Global High-Contrast Pure White Native Datepicker Calendar Indicator Fix -->
+  <style>
+    input[type="date"] {
+      color-scheme: dark !important;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1) brightness(1000%) !important;
+      -webkit-filter: invert(1) brightness(1000%) !important;
+      cursor: pointer !important;
+      opacity: 1 !important;
+      display: inline-block !important;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      filter: invert(1) brightness(2000%) !important;
+      transform: scale(1.15);
+      transition: transform 0.15s ease-in-out;
+    }
+  </style>
+
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      var el = document.getElementById('error-box');
+      if (el) {
+        el.style.display = 'block';
+        el.innerHTML += '<div>❌ JS Error: ' + msg + ' (line ' + line + ')</div>';
+      }
+      console.error('Global error:', msg, 'line:', line, err);
+    };
+  </script>
+</head>
+<body class="h-full bg-slate-950 font-sans text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Error Notification Overlay (Only visible if runtime error occurs) -->
+  <div id="error-box" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a0000;color:#f87171;padding:16px;font-family:monospace;font-size:12px;border-bottom:2px solid #f87171;max-height:200px;overflow:auto;"></div>
+
+  <div id="root" class="min-h-full flex flex-col">
+    <!-- Initial Loading Screen (Replaced when React mounts instantly) -->
+    <div id="loading-screen" class="flex-1 flex flex-col items-center justify-center min-h-screen p-6 text-center">
+      <div class="bg-white p-3 rounded-2xl shadow-2xl mb-4 border-2 border-slate-700 animate-bounce">
+        <img src="./assets/logo.jpg" alt="AERON MEDICAL Logo" class="h-16 w-16 object-contain" />
+      </div>
+      <h2 className="text-xl font-bold text-white tracking-wide">AERON MEDICAL</h2>
+      <p className="text-xs text-slate-400 mt-1">กำลังโหลดระบบติดตามโครงการราชการ &amp; โรงพยาบาล...</p>
+    </div>
+  </div>
+
+  <script src="./js/initialData.js"></script>
+  <script src="./js/app.compiled.js"></script>
+  <script>
+    if (window.App && typeof ReactDOM !== 'undefined') {
+      const rootElement = document.getElementById('root');
+      if (rootElement) {
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(window.App));
+      }
+    }
+  </script>
+</body>
+</html>

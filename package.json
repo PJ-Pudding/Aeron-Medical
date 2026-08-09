@@ -1,0 +1,13 @@
+{
+  "name": "aeron-team-project",
+  "version": "1.0.0",
+  "description": "AERON Medical - Team Task Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "node build.js"
+  },
+  "keywords": ["aeron", "medical", "task-management"],
+  "author": "",
+  "license": "ISC"
+}
