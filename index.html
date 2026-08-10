@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th" class="h-full bg-slate-900 text-slate-100">
+<html lang="th" class="min-h-full bg-slate-900 text-slate-100">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -36,7 +36,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom CSS with Cache Buster -->
-  <link rel="stylesheet" href="./css/styles.css?v=2.5.3" />
+  <link rel="stylesheet" href="./css/styles.css?v=2.5.5" />
 
   <!-- Global High-Contrast Pure White Native Datepicker Calendar Indicator Fix -->
   <style>
@@ -49,6 +49,7 @@
       cursor: pointer !important;
       opacity: 1 !important;
       display: inline-block !important;
+      padding: 2px !important;
     }
     input[type="date"]::-webkit-calendar-picker-indicator:hover {
       filter: invert(2000%) !important;
@@ -68,7 +69,7 @@
     };
   </script>
 </head>
-<body class="h-full bg-slate-950 font-sans text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
+<body class="min-h-full bg-slate-950 font-sans text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
 
   <!-- Error Notification Overlay (Only visible if runtime error occurs) -->
   <div id="error-box" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a0000;color:#f87171;padding:16px;font-family:monospace;font-size:12px;border-bottom:2px solid #f87171;max-height:200px;overflow:auto;"></div>
@@ -84,8 +85,8 @@
     </div>
   </div>
 
-  <script src="./js/initialData.js?v=2.5.4"></script>
-  <script src="./js/app.compiled.js?v=2.5.4"></script>
+  <script src="./js/initialData.js?v=2.5.5"></script>
+  <script src="./js/app.compiled.js?v=2.5.5"></script>
   <script>
     (function initApp() {
       function mount() {
