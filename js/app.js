@@ -29,7 +29,7 @@ function formatShortCurrency(amount) {
   return Number(amount).toLocaleString('th-TH') + ' ฿';
 };
 
-// Helper: API Sync to backend endpoint /api/save-db
+// Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
 async function syncToDB(tableName, data) {
   try {
     await fetch(`/api/save-db?table=${tableName}`, {
@@ -40,6 +40,20 @@ async function syncToDB(tableName, data) {
   } catch (err) {
     console.warn('API Sync notice:', err.message);
   }
+}
+
+// Helper: Load latest data from Cloud DB / Local API
+async function loadFromDB(tableName, defaultVal) {
+  try {
+    const res = await fetch(`/api/load-db?table=${tableName}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data) return data;
+    }
+  } catch (err) {
+    console.warn(`[Load DB] Notice for ${tableName}:`, err.message);
+  }
+  return defaultVal;
 }
 
 
@@ -470,6 +484,54 @@ function Header({
   onOpenKanbanModal = () => {} 
 }) {
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
+  const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState({
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    isSyncing: false,
+    lastSyncTime: null,
+    message: ''
+  });
+
+  const triggerCloudSync = async () => {
+    setCloudStatus(prev => ({ ...prev, isSyncing: true }));
+    try {
+      const res = await fetch('/api/sync-all-to-cloud', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setCloudStatus({
+          isOnline: true,
+          isSyncing: false,
+          lastSyncTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          message: `ซิงค์สำเร็จ (${data.syncedCount || 15} ตาราง)`
+        });
+      } else {
+        setCloudStatus(prev => ({ ...prev, isSyncing: false }));
+      }
+    } catch (err) {
+      setCloudStatus(prev => ({ ...prev, isOnline: false, isSyncing: false }));
+    }
+  };
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setCloudStatus(prev => ({ ...prev, isOnline: true }));
+      triggerCloudSync();
+    };
+    const handleOffline = () => {
+      setCloudStatus(prev => ({ ...prev, isOnline: false }));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check on mount
+    triggerCloudSync();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleSelectViewChange = (newView) => {
     let targetTab = 'dashboard';
@@ -656,11 +718,11 @@ function Header({
               <span className="absolute left-2.5 top-2 text-slate-500 text-xs">🔍</span>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            {/* Desktop Action Buttons (Hidden on Mobile) */}
+            <div className="hidden lg:flex items-center gap-2">
               <button
                 onClick={onOpenNewModal}
-                className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs py-2 px-3.5 rounded-xl shadow-md shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-95"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs py-2 px-3.5 rounded-xl shadow-md shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-95"
               >
                 <span className="text-base font-bold leading-none">+</span>
                 <span>เพิ่มโครงการ</span>
@@ -716,21 +778,67 @@ function Header({
                 </button>
               )}
 
-              {/* User Profile & Role Badge Switcher */}
+              {/* ☁️ Cloud Sync Status & Manual Re-sync Button */}
+              <button
+                onClick={triggerCloudSync}
+                disabled={cloudStatus.isSyncing}
+                className={`flex items-center gap-1.5 p-2 px-2.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                  cloudStatus.isSyncing
+                    ? 'bg-indigo-950/70 border-indigo-500/50 text-indigo-300 animate-pulse'
+                    : cloudStatus.isOnline
+                    ? 'bg-emerald-950/60 hover:bg-emerald-900/80 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-950/60 hover:bg-amber-900/80 border-amber-500/40 text-amber-300'
+                }`}
+                title={cloudStatus.isOnline ? `คลิกเพื่อซิงค์ข้อมูลกับ Supabase Cloud ทันที (ล่าสุด: ${cloudStatus.lastSyncTime || 'เรียบร้อย'})` : 'ออฟไลน์: ข้อมูลจะบันทึกในเครื่อง และซิงค์ขึ้น Cloud อัตโนมัติเมื่อต่อเน็ต'}
+              >
+                {cloudStatus.isSyncing ? (
+                  <>
+                    <span className="animate-spin text-xs">🔄</span>
+                    <span className="inline text-[11px]">กำลังซิงค์...</span>
+                  </>
+                ) : cloudStatus.isOnline ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                    <span className="text-xs">☁️</span>
+                    <span className="inline text-[11px] font-bold">Cloud Synced</span>
+                    {cloudStatus.lastSyncTime && <span className="hidden 2xl:inline text-[10px] text-emerald-400/80 font-mono">({cloudStatus.lastSyncTime})</span>}
+                  </>
+                ) : (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+                    <span className="text-xs">📴</span>
+                    <span className="inline text-[11px] font-bold text-amber-300">Offline</span>
+                  </>
+                )}
+              </button>
+
+              {/* User Profile & Role Badge Switcher + Direct Logout Button */}
               <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
                 {currentUser ? (
-                  <button
-                    onClick={onOpenLoginModal}
-                    className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 p-1.5 px-2.5 rounded-xl border border-slate-700 text-xs transition-all active:scale-95 group"
-                    title="คลิกเพื่อสลับสิทธิ์การใช้งาน / เปลี่ยนบทบาทผู้ใช้"
-                  >
-                    <span className="text-base">{currentUser.avatar || '👤'}</span>
-                    <div className="text-left hidden lg:block">
-                      <div className="font-bold text-white leading-none text-[11px]">{currentUser.name.split(' ')[0]}</div>
-                      <div className="text-[9.5px] font-mono text-emerald-300 font-bold">{currentUser.role}</div>
-                    </div>
-                    <span className="text-[10px] text-slate-400 group-hover:text-white">🔒 สลับสิทธิ์</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={onOpenLoginModal}
+                      className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 p-1.5 px-2.5 rounded-xl border border-slate-700 text-xs transition-all active:scale-95 group"
+                      title="คลิกเพื่อสลับสิทธิ์การใช้งาน / เปลี่ยนบทบาทผู้ใช้"
+                    >
+                      <span className="text-base">{currentUser.avatar || '👤'}</span>
+                      <div className="text-left">
+                        <div className="font-bold text-white leading-none text-[11px]">{currentUser.name.split(' ')[0]}</div>
+                        <div className="text-[9.5px] font-mono text-emerald-300 font-bold">{currentUser.role}</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400 group-hover:text-white">🔒 สลับ</span>
+                    </button>
+
+                    {/* 🚪 Dedicated Desktop Logout Button */}
+                    <button
+                      onClick={onLogout}
+                      className="p-2 px-2.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1 active:scale-95"
+                      title="ออกจากระบบ (Logout) และกลับสู่หน้า Login"
+                    >
+                      <span>🚪</span>
+                      <span className="hidden xl:inline">ออกจากระบบ</span>
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={onOpenLoginModal}
@@ -740,6 +848,48 @@ function Header({
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* 📱 Mobile Action & Quick Menu Controls (Visible on Mobile/Tablet < lg) */}
+            <div className="lg:hidden flex items-center gap-1.5 w-full justify-between pt-1 border-t border-slate-800/80">
+              <button
+                onClick={onOpenNewModal}
+                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs py-2 px-2.5 rounded-xl shadow-md active:scale-95 touch-manipulation"
+              >
+                <span className="text-sm font-bold">+</span>
+                <span>เพิ่มงาน</span>
+              </button>
+
+              {/* Mobile Cloud Status Pill */}
+              <button
+                onClick={triggerCloudSync}
+                disabled={cloudStatus.isSyncing}
+                className={`p-2 px-2 rounded-xl border text-xs font-semibold flex items-center gap-1 active:scale-95 ${
+                  cloudStatus.isOnline ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+                }`}
+                title="คลิกเพื่อซิงค์ข้อมูลกับ Cloud"
+              >
+                <span>{cloudStatus.isSyncing ? '🔄' : cloudStatus.isOnline ? '☁️' : '📴'}</span>
+              </button>
+
+              {/* Mobile Action Sheet Trigger */}
+              <button
+                onClick={() => setIsMobileActionSheetOpen(true)}
+                className="p-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95 touch-manipulation"
+              >
+                <span>⚡ เมนู</span>
+              </button>
+
+              {/* Mobile Direct Logout Button */}
+              {currentUser && (
+                <button
+                  onClick={onLogout}
+                  className="p-2 px-2.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95"
+                  title="ออกจากระบบ (Logout)"
+                >
+                  <span>🚪 ออก</span>
+                </button>
+              )}
             </div>
 
           </div>
@@ -970,6 +1120,111 @@ function Header({
 
       </div>
 
+      {/* 📱 Mobile Quick Action Bottom Sheet */}
+      {isMobileActionSheetOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <h3 className="font-bold text-white text-sm">เมนูจัดการด่วน (Quick Actions)</h3>
+              </div>
+              <button
+                onClick={() => setIsMobileActionSheetOpen(false)}
+                className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs"
+              >
+                ✕ ปิด
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
+                className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">➕</span>
+                <span className="font-bold text-xs text-white">เพิ่มโครงการ</span>
+                <span className="text-[10px] text-emerald-300">สร้างโครงการใหม่</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenDemoModal(); }}
+                className="p-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">🧪</span>
+                <span className="font-bold text-xs text-white">จองเครื่อง Demo</span>
+                <span className="text-[10px] text-purple-300">ลงคิวทดสอบสินค้า</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenRepairModal(); }}
+                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">🔧</span>
+                <span className="font-bold text-xs text-white">แจ้งส่งซ่อม</span>
+                <span className="text-[10px] text-rose-300">เปิดใบงานซ่อมบำรุง</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); exportToCSV(); }}
+                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">📥</span>
+                <span className="font-bold text-xs text-white">ส่งออก CSV</span>
+                <span className="text-[10px] text-slate-400">ดาวน์โหลดรายงาน</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenMemberModal(); }}
+                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">👥</span>
+                <span className="font-bold text-xs text-white">จัดการทีม</span>
+                <span className="text-[10px] text-slate-400">รายชื่อสมาชิก Sales</span>
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); triggerCloudSync(); }}
+                className="p-3 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+              >
+                <span className="text-xl">☁️</span>
+                <span className="font-bold text-xs text-white">ซิงค์ Cloud ทันที</span>
+                <span className="text-[10px] text-teal-300">{cloudStatus.isSyncing ? 'กำลังซิงค์...' : 'อัปเดต Supabase'}</span>
+              </button>
+            </div>
+
+            {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); setIsUserAccountModalOpen(true); }}
+                className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔐</span>
+                  <span>จัดการบัญชีผู้ใช้งานระบบ (OWNER & HEAD ADMIN)</span>
+                </div>
+                <span>➔</span>
+              </button>
+            )}
+
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onResetDemo(); }}
+                className="text-[11px] text-rose-400 hover:text-rose-300 underline"
+              >
+                🔄 รีเซ็ตข้อมูลตัวอย่าง
+              </button>
+
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onLogout(); }}
+                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 font-bold"
+              >
+                <span>🚪 ออกจากระบบ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* User Account Management Modal for OWNER & HEAD ADMIN */}
       <UserAccountManagementModal
         isOpen={isUserAccountModalOpen}
@@ -987,6 +1242,7 @@ function Header({
 function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   const [username, setUsername] = useState('owner');
   const [password, setPassword] = useState('123456');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [accountsList, setAccountsList] = useState(() => {
@@ -1002,11 +1258,9 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
         token: `aeron_jwt_token_${(demoUser.role || 'SALES').toLowerCase()}_${Date.now()}`,
         loginTime: new Date().toISOString()
       };
-      localStorage.setItem('aeron_auth_user', JSON.stringify(authPayload));
-      localStorage.setItem('aeron_jwt_token', authPayload.token);
       setLoading(false);
       onLoginSuccess(authPayload);
-    }, 150);
+    }, 120);
   };
 
   const handleResetDefaultAccounts = () => {
@@ -1040,147 +1294,180 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
           token: `aeron_jwt_token_${(foundUser.role || 'SALES').toLowerCase()}_${Date.now()}`,
           loginTime: new Date().toISOString()
         };
-        localStorage.setItem('aeron_auth_user', JSON.stringify(authPayload));
-        localStorage.setItem('aeron_jwt_token', authPayload.token);
         setLoading(false);
         onLoginSuccess(authPayload);
       } else {
         setLoading(false);
-        setErrorMsg('ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาตรวจสอบชื่อผู้ใช้ หรือกดปุ่มกู้คืนบัญชีตั้งต้นด้านล่าง');
+        setErrorMsg('ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาตรวจสอบชื่อผู้ใช้ หรือเลือกเข้าใช้งานด่วน');
       }
-    }, 200);
+    }, 150);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-slate-950 overflow-y-auto ${isSwitching ? 'backdrop-blur-md bg-slate-950/90' : 'min-h-screen'}`}>
+      
+      {/* Background Decorative Glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Main Container: Auto-scales from 280px narrow cover screens up to 900px Vivo X Fold 3 Pro & Tablets */}
+      <div className="relative bg-slate-900/95 border border-slate-700/80 w-full max-w-sm sm:max-w-xl md:max-w-2xl lg:max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[96vh] backdrop-blur-xl">
         
-        {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex items-center justify-between">
+        {/* Header with Branding */}
+        <div className="p-4 sm:p-6 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 p-0.5 shadow-lg shadow-emerald-600/30 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-xl">
-                🛡️
-              </div>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white p-1 shadow-lg shadow-emerald-500/20 border-2 border-slate-700 flex items-center justify-center flex-shrink-0">
+              <img 
+                src="./assets/logo.jpg" 
+                onError={(e) => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=AERON&background=4f46e5&color=fff&size=128'; }}
+                alt="AERON MEDICAL Logo" 
+                className="h-full w-full object-contain rounded-xl"
+              />
             </div>
-            <div>
-              <h2 className="text-lg font-black text-white flex items-center gap-2">
-                <span>AERON MEDICAL Authentication</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
-                  v2.5 RBAC
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-base sm:text-lg font-black tracking-wider leading-tight">
+                  <span className="bg-gradient-to-r from-[#a3e635] via-[#65a30d] to-[#16a34a] bg-clip-text text-transparent font-extrabold">AERON </span>
+                  <span className="text-white font-bold">MEDICAL</span>
+                </h1>
+                <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                  v2.5
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400">ระบบลงชื่อเข้าใช้งานและกำหนดสิทธิ์ตามบทบาทองค์กร</p>
+              </div>
+              <p className="text-[11px] sm:text-xs text-indigo-200/90 font-medium">ระบบเข้าสู่ระบบเพื่อความปลอดภัย (Authentication Portal)</p>
             </div>
           </div>
 
           {isSwitching && (
-            <button onClick={onClose} className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-xs">
+            <button 
+              onClick={onClose} 
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-sm transition-colors"
+              title="ปิดหน้าต่างสลับสิทธิ์"
+            >
               ✕
             </button>
           )}
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        {/* Content Body: Adaptive 1-column on narrow cover screens, 2-column on Vivo X Fold 3 Pro / Tablets */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
           
-          {/* Quick Role Switcher (1-Click Demo Testing) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                <span>⚡</span> <span>เลือกเข้าใช้งานด่วนตามบทบาท (Quick Role Switcher):</span>
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto">
-              {(accountsList || []).map(u => {
-                const config = (window.ROLES_PERMISSIONS && window.ROLES_PERMISSIONS[u.role]) || {};
-                return (
-                  <button
-                    key={u.id}
-                    onClick={() => handleQuickLogin(u)}
-                    disabled={loading}
-                    className="p-3 bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-600 rounded-2xl text-left transition-all group flex items-center gap-3 active:scale-95"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-xl border border-slate-800 group-hover:border-emerald-500/50 flex-shrink-0">
-                      {u.avatar || '👤'}
-                    </div>
-                    <div className="overflow-hidden space-y-0.5">
-                      <div className="text-xs font-bold text-white truncate flex items-center gap-1">
-                        <span>{u.name}</span>
-                      </div>
-                      <div className={`text-[10px] font-mono font-semibold px-2 py-0.2 rounded border inline-block ${config.badgeColor || 'bg-slate-800 text-slate-300'}`}>
-                        {u.role}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-800"></div>
-            <span className="flex-shrink mx-3 text-[11px] text-slate-500 font-mono">หรือลงชื่อเข้าใช้ด้วยบัญชี</span>
-            <div className="flex-grow border-t border-slate-800"></div>
-          </div>
-
-          {/* Form Login */}
-          <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-            {errorMsg && (
-              <div className="p-3 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs flex items-center gap-2">
-                <span>⚠️</span> <span>{errorMsg}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 items-start">
+            
+            {/* Column 1: Quick Role Switcher (1-Click Login for Demo/Testing) */}
+            <div className="space-y-3 bg-slate-950/50 p-3.5 sm:p-4 rounded-2xl border border-slate-800/80">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] sm:text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>⚡</span> <span>เลือกเข้าใช้งานด่วน (Quick Login):</span>
+                </span>
               </div>
-            )}
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">ชื่อผู้ใช้ (Username / Role ID)</label>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="เช่น owner, sales_somchai, messenger..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-mono outline-none focus:border-indigo-500 transition-colors"
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-2 max-h-56 md:max-h-72 overflow-y-auto p-0.5">
+                {(accountsList || []).map(u => {
+                  const config = (window.ROLES_PERMISSIONS && window.ROLES_PERMISSIONS[u.role]) || {};
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => handleQuickLogin(u)}
+                      disabled={loading}
+                      className="p-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 rounded-xl text-left transition-all group flex items-center gap-2.5 active:scale-95 touch-manipulation"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-950 flex items-center justify-center text-base border border-slate-800 group-hover:border-emerald-500/50 flex-shrink-0">
+                        {u.avatar || '👤'}
+                      </div>
+                      <div className="overflow-hidden space-y-0.5 min-w-0 flex-1">
+                        <div className="text-xs font-bold text-white truncate">
+                          {u.name}
+                        </div>
+                        <div className={`text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded border inline-block ${config.badgeColor || 'bg-slate-800 text-slate-300'}`}>
+                          {u.role}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">รหัสผ่าน (Password)</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-mono outline-none focus:border-indigo-500 transition-colors"
-              />
+            {/* Column 2: Standard Username & Password Form */}
+            <div className="space-y-4 bg-slate-950/50 p-3.5 sm:p-4 rounded-2xl border border-slate-800/80">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                <span>🔑</span>
+                <span>กรอก Username & Password:</span>
+              </div>
+
+              <form onSubmit={handleFormSubmit} className="space-y-3.5">
+                {errorMsg && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs flex items-center gap-2">
+                    <span>⚠️</span> <span>{errorMsg}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[11px] sm:text-xs text-slate-300">ชื่อผู้ใช้ (Username)</label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="เช่น owner, sales_somchai, messenger..."
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-base sm:text-xs text-white font-mono outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-[11px] sm:text-xs text-slate-300">รหัสผ่าน (Password)</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[11px] text-indigo-400 hover:text-indigo-300"
+                    >
+                      {showPassword ? '🙈 ซ่อน' : '👁️ แสดงรหัส'}
+                    </button>
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-base sm:text-xs text-white font-mono outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm sm:text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 active:scale-95 touch-manipulation"
+                >
+                  {loading ? (
+                    <span>⌛ กำลังตรวจสอบสิทธิ์...</span>
+                  ) : (
+                    <>
+                      <span>🔓 เข้าสู่ระบบ (Log In)</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultAccounts}
+                    className="text-[10px] text-slate-400 hover:text-amber-300 underline transition-colors"
+                  >
+                    🔄 รีเซ็ตกู้คืนบัญชีผู้ใช้งานตั้งต้น (รหัสเริ่มต้น: 123456)
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span>⌛ กำลังยืนยันสิทธิ์...</span>
-              ) : (
-                <>
-                  <span>🔓 เข้าสู่ระบบ (Log In)</span>
-                </>
-              )}
-            </button>
+          </div>
 
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={handleResetDefaultAccounts}
-                className="text-[11px] text-slate-400 hover:text-amber-300 underline transition-colors"
-              >
-                🔄 รีเซ็ตกู้คืนบัญชีผู้ใช้งานตั้งต้น (Default Accounts: owner / 123456)
-              </button>
-            </div>
-          </form>
+          <div className="text-center pt-2 text-[10.5px] text-slate-500">
+            🛡️ ระบบรักษาความปลอดภัยข้อมูลองค์กร AERON MEDICAL (Thailand)
+          </div>
 
         </div>
 
@@ -1206,67 +1493,110 @@ function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOC
     { id: 'accounting', label: 'Accounting', icon: '🧾', badge: null, desc: 'ลงบันทึกรายรับ-รายจ่าย & งบการเงิน' }
   ];
 
+  const accessibleItems = menuItems.filter(item => currentUser && checkTabAccess(currentUser, item.id));
+
   return (
-    <aside className="sticky top-0 z-40 h-screen w-16 bg-slate-900/95 border-r border-slate-800/80 flex flex-col justify-between items-center py-4 flex-shrink-0 backdrop-blur-md">
-      
-      {/* Top Logo & Expand Drawer Button */}
-      <div className="flex flex-col items-center gap-3">
-        <button
-          onClick={onOpenFullDrawer}
-          className="bg-white p-1 rounded-xl shadow-lg border border-slate-700 hover:scale-110 transition-transform w-10 h-10 flex items-center justify-center overflow-hidden group relative"
-          title="เปิดเมนูป๊อปอัปแบบขยาย (Pop-up Full Menu)"
-        >
-          <img src="./assets/logo.jpg" alt="AERON Logo" className="h-full w-full object-contain" />
-        </button>
+    <>
+      {/* 📌 Desktop Left Slim Icon Sidebar Rail (Hidden on Mobile) */}
+      <aside className="hidden md:flex sticky top-0 z-40 h-screen w-16 bg-slate-900/95 border-r border-slate-800/80 flex-col justify-between items-center py-4 flex-shrink-0 backdrop-blur-md">
+        
+        {/* Top Logo & Expand Drawer Button */}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={onOpenFullDrawer}
+            className="bg-white p-1 rounded-xl shadow-lg border border-slate-700 hover:scale-110 transition-transform w-10 h-10 flex items-center justify-center overflow-hidden group relative"
+            title="เปิดเมนูป๊อปอัปแบบขยาย (Pop-up Full Menu)"
+          >
+            <img 
+              src="./assets/logo.jpg" 
+              onError={(e) => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=AERON&background=4f46e5&color=fff&size=128'; }}
+              alt="AERON Logo" 
+              className="h-full w-full object-contain" 
+            />
+          </button>
 
-        <div className="w-8 h-[1px] bg-slate-800/80 my-1" />
+          <div className="w-8 h-[1px] bg-slate-800/80 my-1" />
 
-        {/* Vertical List of 8 Icon Menu Buttons */}
-        <nav className="flex flex-col gap-2">
-          {menuItems.filter(item => currentUser && checkTabAccess(currentUser, item.id)).map(item => {
-            const isActive = activeTab === item.id;
-            return (
-              <div key={item.id} className="relative group">
-                <button
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl transition-all relative ${
-                    isActive
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/40 scale-105 border border-emerald-400/40'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-                  }`}
-                >
-                  <span>{item.icon}</span>
+          {/* Vertical List of Icon Menu Buttons */}
+          <nav className="flex flex-col gap-2">
+            {accessibleItems.map(item => {
+              const isActive = activeTab === item.id;
+              return (
+                <div key={item.id} className="relative group">
+                  <button
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl transition-all relative ${
+                      isActive
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/40 scale-105 border border-emerald-400/40'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <span>{item.icon}</span>
 
-                  {/* Notification Badge Dot */}
-                  {item.badge !== null && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center shadow-md animate-pulse">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
+                    {/* Notification Badge Dot */}
+                    {item.badge !== null && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center shadow-md animate-pulse">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
 
-                {/* Pop-up Hover Tooltip Badge */}
-                <div className="absolute left-14 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl shadow-xl z-50 whitespace-nowrap animate-modal pointer-events-none">
-                  <div className="text-left">
-                    <div className="text-xs font-bold text-white leading-none">{item.label}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                  {/* Pop-up Hover Tooltip Badge */}
+                  <div className="absolute left-14 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl shadow-xl z-50 whitespace-nowrap animate-modal pointer-events-none">
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-white leading-none">{item.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </nav>
-      </div>
+              );
+            })}
+          </nav>
+        </div>
 
-      {/* Bottom Menu Drawer Toggle Icon */}
-      <button
-        onClick={onOpenFullDrawer}
-        className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold transition-all shadow-md"
-        title="เปิดเมนูป๊อปอัปแบบขยาย (Pop-up Full Menu)"
-      >
-        <span>☰</span>
-      </button>
-    </aside>
+        {/* Bottom Menu Drawer Toggle Icon */}
+        <button
+          onClick={onOpenFullDrawer}
+          className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold transition-all shadow-md active:scale-95"
+          title="เปิดเมนูป๊อปอัปแบบขยาย (Pop-up Full Menu)"
+        >
+          <span>☰</span>
+        </button>
+      </aside>
+
+      {/* 📱 Mobile Bottom Navigation Bar (Visible only on Mobile & Tablet < md) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-xl flex items-center justify-around py-1.5 px-2 shadow-2xl">
+        {accessibleItems.slice(0, 4).map(item => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                isActive ? 'text-emerald-400 font-bold bg-slate-800/60' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="text-lg leading-tight">{item.icon}</span>
+              <span className="text-[10px] truncate max-w-[60px]">{item.label}</span>
+              {item.badge !== null && (
+                <span className="absolute top-0.5 right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center shadow">
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {/* More Menu Drawer Trigger */}
+        <button
+          onClick={onOpenFullDrawer}
+          className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl text-slate-400 hover:text-white active:scale-95 transition-all"
+        >
+          <span className="text-lg leading-tight">☰</span>
+          <span className="text-[10px]">เมนู</span>
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -2064,7 +2394,17 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
       });
     }
 
+    const handleResize = () => {
+      if (chartInstanceWorkload.current) chartInstanceWorkload.current.resize();
+      if (chartInstanceStage.current) chartInstanceStage.current.resize();
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       if (chartInstanceWorkload.current) chartInstanceWorkload.current.destroy();
       if (chartInstanceStage.current) chartInstanceStage.current.destroy();
     };
@@ -14713,15 +15053,8 @@ function App() {
 
 
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
-  // --- Auth & RBAC State ---
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_auth_user');
-      return saved ? JSON.parse(saved) : DEMO_USERS[0];
-    } catch (e) {
-      return DEMO_USERS[0];
-    }
-  });
+  // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
@@ -14741,6 +15074,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('aeron_auth_user');
     localStorage.removeItem('aeron_jwt_token');
+    sessionStorage.clear();
     setCurrentUser(null);
     setIsLoginModalOpen(true);
   };
@@ -15441,6 +15775,16 @@ function App() {
       setFdaRegistrations(window.INITIAL_FDA_REGISTRATIONS || []);
     }
   };
+
+  // 🔒 Security Guard: If not logged in, enforce Full-Screen Login Screen
+  if (!currentUser) {
+    return (
+      <LoginModal 
+        onLoginSuccess={handleLoginSuccess}
+        isSwitching={false}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">

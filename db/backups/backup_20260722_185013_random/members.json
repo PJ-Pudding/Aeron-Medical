@@ -1,0 +1,5 @@
+﻿[
+  { "id": "m1", "name": "à¸ªà¸¡à¸Šà¸²à¸¢ à¸Šà¸™à¸°à¸¨à¸¶à¸", "role": "Senior Sales Executive", "avatar": "ðŸ‘¨â€ðŸ’¼", "phone": "081-234-5678", "email": "somchai@aeronmedical.co.th" },
+  { "id": "m2", "name": "à¸ªà¸¡à¸«à¸à¸´à¸‡ à¹ƒà¸ˆà¸”à¸µ", "role": "Key Account Manager", "avatar": "ðŸ‘©â€ðŸ’¼", "phone": "089-876-5432", "email": "somying@aeronmedical.co.th" },
+  { "id": "m3", "name": "à¸­à¸™à¸±à¸™à¸•à¹Œ à¸ªà¸¸à¸‚à¹€à¸ªà¸£à¸´à¸", "role": "Government Specialist", "avatar": "ðŸ‘¨â€âš•ï¸", "phone": "086-555-4321", "email": "anan@aeronmedical.co.th" }
+]

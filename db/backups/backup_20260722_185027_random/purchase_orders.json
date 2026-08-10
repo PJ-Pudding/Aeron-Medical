@@ -1,0 +1,19 @@
+﻿[
+  {
+    "id": "po-2026-104",
+    "poNumber": "PO-2026-104",
+    "projectId": "proj-101",
+    "hospitalName": "à¹‚à¸£à¸‡à¸žà¸¢à¸²à¸šà¸²à¸¥à¸¨à¸´à¸£à¸´à¸£à¸²à¸Š",
+    "productName": "AERON Cardio 12L-AI",
+    "quantity": 5,
+    "vendorName": "Mindray Medical Singapore",
+    "vendorCountry": "à¸ªà¸´à¸‡à¸„à¹‚à¸›à¸£à¹Œ",
+    "unitPriceUSD": 12000,
+    "exchangeRateTHB": 36.5,
+    "totalAmountTHB": 2190000,
+    "poDate": "2026-06-01",
+    "expectedDelivery": "2026-07-25",
+    "status": "à¸œà¸¥à¸´à¸•à¹€à¸ªà¸£à¹‡à¸ˆà¹à¸¥à¹‰à¸§ à¸£à¸­à¸ªà¹ˆà¸‡",
+    "notes": "à¸ªà¸±à¹ˆà¸‡à¸‹à¸·à¹‰à¸­à¸¥à¹‡à¸­à¸•à¹ƒà¸«à¸à¹ˆà¸ªà¸³à¸«à¸£à¸±à¸š à¸£à¸ž.à¸¨à¸´à¸£à¸´à¸£à¸²à¸Š"
+  }
+]

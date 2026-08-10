@@ -5,7 +5,10 @@ echo ====================================================
 echo  🔄 Reverting Codebase to Last Verified Checkpoint...
 echo ====================================================
 
-node "d:\Team Projects\revert.js"
+node "%~dp0revert.js"
+if %ERRORLEVEL% NEQ 0 (
+    "C:\Users\phons\AppData\Local\ms-playwright-go\1.57.0\node.exe" "%~dp0revert.js"
+)
 
 echo.
 pause

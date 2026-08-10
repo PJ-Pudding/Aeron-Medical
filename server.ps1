@@ -1,7 +1,7 @@
 # Simple & Robust PowerShell HTTP Web Server for AERON MEDICAL
 $port = 8085
 $rootDir = $PSScriptRoot
-if (-not $rootDir) { $rootDir = "d:\Team Projects" }
+if (-not $rootDir) { $rootDir = (Get-Location).Path }
 
 # Auto-cleanup previous background server instances running server.ps1
 $currentPid = $PID

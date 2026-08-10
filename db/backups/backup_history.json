@@ -1,0 +1,50 @@
+﻿[
+    {
+        "backupType":  "midnight",
+        "status":  "SUCCESS",
+        "timestamp":  "2026-07-22T18:50:12.3795094+07:00",
+        "folderName":  "backup_20260722_185012_midnight",
+        "filesBackedUp":  [
+                              "fda_registrations.json",
+                              "members.json",
+                              "products.json",
+                              "projects.json",
+                              "purchase_orders.json",
+                              "repair_tickets.json",
+                              "shipments.json",
+                              "sold_products.json"
+                          ]
+    },
+    {
+        "backupType":  "midnight",
+        "status":  "SUCCESS",
+        "timestamp":  "2026-07-22T18:50:26.3952183+07:00",
+        "folderName":  "backup_20260722_185026_midnight",
+        "filesBackedUp":  [
+                              "fda_registrations.json",
+                              "members.json",
+                              "products.json",
+                              "projects.json",
+                              "purchase_orders.json",
+                              "repair_tickets.json",
+                              "shipments.json",
+                              "sold_products.json"
+                          ]
+    },
+    {
+        "backupType":  "random",
+        "status":  "SUCCESS",
+        "timestamp":  "2026-07-22T18:50:27.6448910+07:00",
+        "folderName":  "backup_20260722_185027_random",
+        "filesBackedUp":  [
+                              "fda_registrations.json",
+                              "members.json",
+                              "products.json",
+                              "projects.json",
+                              "purchase_orders.json",
+                              "repair_tickets.json",
+                              "shipments.json",
+                              "sold_products.json"
+                          ]
+    }
+]

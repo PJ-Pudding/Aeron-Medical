@@ -5,9 +5,9 @@ echo ====================================================
 echo  🚀 Starting AERON MEDICAL Web Server...
 echo ====================================================
 
-node "d:\Team Projects\server.js"
+node "%~dp0server.js"
 if %ERRORLEVEL% NEQ 0 (
-    powershell -ExecutionPolicy Bypass -File "d:\Team Projects\server.ps1"
+    powershell -ExecutionPolicy Bypass -File "%~dp0server.ps1"
 )
 
 pause
