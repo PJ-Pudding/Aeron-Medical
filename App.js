@@ -111,15 +111,8 @@ function App() {
 
 
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
-  // --- Auth & RBAC State: Mandatory Login Protection ---
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
@@ -139,6 +132,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('aeron_auth_user');
     localStorage.removeItem('aeron_jwt_token');
+    sessionStorage.clear();
     setCurrentUser(null);
     setIsLoginModalOpen(true);
   };

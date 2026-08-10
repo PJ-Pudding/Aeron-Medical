@@ -112,8 +112,61 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
   /* Safe padding for bottom navigation bar on mobile */
   body {
-    padding-bottom: 72px;
+    padding-bottom: 76px;
   }
+}
+
+/* 📱 Foldable & Tablet Responsive Enhancements (Vivo X Fold 3 Pro, Galaxy Z Fold/Flip, Pixel Fold, iPads) */
+
+/* 1. Ultra-Narrow Folded Cover Displays (<= 340px) */
+@media (max-width: 340px) {
+  body {
+    font-size: 13px;
+  }
+  .glass-panel, .glass-card {
+    padding: 0.625rem !important;
+  }
+  h1 {
+    font-size: 1rem !important;
+  }
+  h2 {
+    font-size: 0.9rem !important;
+  }
+}
+
+/* 2. Unfolded Foldable Displays (Vivo X Fold 3 Pro 8.03", Galaxy Z Fold) & Tablets (600px - 950px) */
+@media (min-width: 600px) and (max-width: 950px) {
+  .foldable-grid-2col {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+  .foldable-compact-table {
+    font-size: 11.5px !important;
+  }
+}
+
+/* 3. Safe Area Insets for Edge-to-Edge Displays & Camera Cutouts */
+@supports (padding: max(0px)) {
+  body {
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+  .safe-bottom-nav {
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* 4. Touch Snap Scrolling */
+.touch-snap-container {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+.touch-snap-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 /* Touch manipulation & clean mobile taps */
