@@ -42,6 +42,8 @@ function Header({
 }) {
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollYRef = useRef(0);
   const [cloudStatus, setCloudStatus] = useState({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSyncing: false,
@@ -69,7 +71,35 @@ function Header({
     }
   };
 
+  // 📱 Smart Auto-Hide Header on Scroll Down (Expands viewport on Mobile, Foldables, Tablets)
   useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+          const diff = currentScrollY - lastScrollYRef.current;
+
+          // Always show when near the very top (<= 40px)
+          if (currentScrollY <= 40) {
+            setShowHeader(true);
+          } else if (diff > 10 && currentScrollY > 60) {
+            // Scrolling down -> hide header smoothly
+            setShowHeader(false);
+          } else if (diff < -10) {
+            // Scrolling up -> show header smoothly
+            setShowHeader(true);
+          }
+
+          lastScrollYRef.current = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
     const handleOnline = () => {
       setCloudStatus(prev => ({ ...prev, isOnline: true }));
       triggerCloudSync();
@@ -85,6 +115,7 @@ function Header({
     triggerCloudSync();
 
     return () => {
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -145,7 +176,9 @@ function Header({
   };
 
   return (
-    <header className="sticky top-0 z-30 glass-panel border-b border-slate-800">
+    <header className={`sticky top-0 z-30 glass-panel border-b border-slate-800 transition-all duration-300 ease-in-out transform ${
+      showHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
+    }`}>
       <div className="px-4 py-3 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           
@@ -369,21 +402,33 @@ function Header({
                 )}
               </button>
 
-              {/* User Profile & Role Badge Switcher */}
+              {/* User Profile & Role Badge Switcher + Direct Logout Button */}
               <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
                 {currentUser ? (
-                  <button
-                    onClick={onOpenLoginModal}
-                    className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 p-1.5 px-2.5 rounded-xl border border-slate-700 text-xs transition-all active:scale-95 group"
-                    title="คลิกเพื่อสลับสิทธิ์การใช้งาน / เปลี่ยนบทบาทผู้ใช้"
-                  >
-                    <span className="text-base">{currentUser.avatar || '👤'}</span>
-                    <div className="text-left">
-                      <div className="font-bold text-white leading-none text-[11px]">{currentUser.name.split(' ')[0]}</div>
-                      <div className="text-[9.5px] font-mono text-emerald-300 font-bold">{currentUser.role}</div>
-                    </div>
-                    <span className="text-[10px] text-slate-400 group-hover:text-white">🔒 สลับสิทธิ์</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={onOpenLoginModal}
+                      className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 p-1.5 px-2.5 rounded-xl border border-slate-700 text-xs transition-all active:scale-95 group"
+                      title="คลิกเพื่อสลับสิทธิ์การใช้งาน / เปลี่ยนบทบาทผู้ใช้"
+                    >
+                      <span className="text-base">{currentUser.avatar || '👤'}</span>
+                      <div className="text-left">
+                        <div className="font-bold text-white leading-none text-[11px]">{currentUser.name.split(' ')[0]}</div>
+                        <div className="text-[9.5px] font-mono text-emerald-300 font-bold">{currentUser.role}</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400 group-hover:text-white">🔒 สลับ</span>
+                    </button>
+
+                    {/* 🚪 Dedicated Desktop Logout Button */}
+                    <button
+                      onClick={onLogout}
+                      className="p-2 px-2.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1 active:scale-95"
+                      title="ออกจากระบบ (Logout) และกลับสู่หน้า Login"
+                    >
+                      <span>🚪</span>
+                      <span className="hidden xl:inline">ออกจากระบบ</span>
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={onOpenLoginModal}
@@ -402,14 +447,14 @@ function Header({
                 className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs py-2 px-2.5 rounded-xl shadow-md active:scale-95 touch-manipulation"
               >
                 <span className="text-sm font-bold">+</span>
-                <span>เพิ่มโครงการ</span>
+                <span>เพิ่มงาน</span>
               </button>
 
               {/* Mobile Cloud Status Pill */}
               <button
                 onClick={triggerCloudSync}
                 disabled={cloudStatus.isSyncing}
-                className={`p-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1 active:scale-95 ${
+                className={`p-2 px-2 rounded-xl border text-xs font-semibold flex items-center gap-1 active:scale-95 ${
                   cloudStatus.isOnline ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
                 }`}
                 title="คลิกเพื่อซิงค์ข้อมูลกับ Cloud"
@@ -420,19 +465,19 @@ function Header({
               {/* Mobile Action Sheet Trigger */}
               <button
                 onClick={() => setIsMobileActionSheetOpen(true)}
-                className="p-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 touch-manipulation"
+                className="p-2 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95 touch-manipulation"
               >
-                <span>⚡ จัดการ</span>
+                <span>⚡ เมนู</span>
               </button>
 
-              {/* Mobile User Profile Button */}
+              {/* Mobile Direct Logout Button */}
               {currentUser && (
                 <button
-                  onClick={onOpenLoginModal}
-                  className="p-1.5 px-2 bg-slate-900 border border-slate-700 rounded-xl text-xs flex items-center gap-1 active:scale-95"
+                  onClick={onLogout}
+                  className="p-2 px-2.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95"
+                  title="ออกจากระบบ (Logout)"
                 >
-                  <span className="text-base">{currentUser.avatar || '👤'}</span>
-                  <span className="text-[10px] font-bold text-emerald-300 font-mono">{currentUser.role.substring(0, 5)}</span>
+                  <span>🚪 ออก</span>
                 </button>
               )}
             </div>
