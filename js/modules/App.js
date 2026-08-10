@@ -111,15 +111,8 @@ function App() {
 
 
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
-  // --- Auth & RBAC State ---
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_auth_user');
-      return saved ? JSON.parse(saved) : DEMO_USERS[0];
-    } catch (e) {
-      return DEMO_USERS[0];
-    }
-  });
+  // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
@@ -139,6 +132,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('aeron_auth_user');
     localStorage.removeItem('aeron_jwt_token');
+    sessionStorage.clear();
     setCurrentUser(null);
     setIsLoginModalOpen(true);
   };
@@ -840,6 +834,16 @@ function App() {
     }
   };
 
+  // 🔒 Security Guard: If not logged in, enforce Full-Screen Login Screen
+  if (!currentUser) {
+    return (
+      <LoginModal 
+        onLoginSuccess={handleLoginSuccess}
+        isSwitching={false}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
       
@@ -869,7 +873,7 @@ function App() {
       />
 
       {/* Right Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 flex flex-col">
         <Header 
         currentUser={currentUser}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
@@ -912,8 +916,8 @@ function App() {
         onOpenFDAModal={() => { setEditingFDA(null); setIsFDAModalOpen(true); }}
       />
 
-      {/* Main Content Body */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12 overflow-y-auto">
+      {/* Main Content Body: Natural document flow with no isolated scroll lock */}
+      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12">
           
           {/* TAB 1: Dashboard */}
           {activeSidebarTab === 'dashboard' && checkTabAccess(currentUser?.role, 'dashboard') && (

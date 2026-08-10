@@ -23,7 +23,7 @@ function formatShortCurrency(amount) {
   return Number(amount).toLocaleString('th-TH') + ' ฿';
 };
 
-// Helper: API Sync to backend endpoint /api/save-db
+// Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
 async function syncToDB(tableName, data) {
   try {
     await fetch(`/api/save-db?table=${tableName}`, {
@@ -34,6 +34,20 @@ async function syncToDB(tableName, data) {
   } catch (err) {
     console.warn('API Sync notice:', err.message);
   }
+}
+
+// Helper: Load latest data from Cloud DB / Local API
+async function loadFromDB(tableName, defaultVal) {
+  try {
+    const res = await fetch(`/api/load-db?table=${tableName}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data) return data;
+    }
+  } catch (err) {
+    console.warn(`[Load DB] Notice for ${tableName}:`, err.message);
+  }
+  return defaultVal;
 }
 
 

@@ -485,6 +485,8 @@ function Header({
 }) {
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollYRef = useRef(0);
   const [cloudStatus, setCloudStatus] = useState({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSyncing: false,
@@ -588,14 +590,14 @@ function Header({
   };
 
   return (
-    <header className="sticky top-0 z-30 glass-panel border-b border-slate-800">
-      <div className="px-4 py-3 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <header className="relative glass-panel border-b border-slate-800">
+      <div className="px-3 py-2 sm:px-6 sm:py-3">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           
-          {/* Title & Company Logo */}
+          {/* Title & Company Logo (Compact & Sleek for Mobile, Foldables & Tablets) */}
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3.5">
-              <div className="bg-white p-1.5 rounded-2xl shadow-xl shadow-emerald-500/20 border-2 border-slate-700/80 flex items-center justify-center h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 overflow-hidden transition-transform hover:scale-105">
+            <div className="flex items-center gap-2.5 sm:gap-3.5">
+              <div className="bg-white p-1 rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-500/20 border-2 border-slate-700/80 flex items-center justify-center h-10 w-10 sm:h-14 sm:w-14 flex-shrink-0 overflow-hidden">
                 <img 
                   src="./assets/logo.jpg" 
                   alt="AERON MEDICAL Logo" 
@@ -603,7 +605,7 @@ function Header({
                 />
               </div>
               <div className="space-y-0.5">
-                <h1 className="text-base sm:text-xl font-black tracking-wider leading-tight font-sans flex items-center gap-1.5">
+                <h1 className="text-sm sm:text-lg font-black tracking-wider leading-tight font-sans flex items-center gap-1.5">
                   <span className="bg-gradient-to-r from-[#a3e635] via-[#65a30d] to-[#16a34a] bg-clip-text text-transparent font-extrabold drop-shadow">
                     AERON
                   </span>
@@ -611,10 +613,10 @@ function Header({
                     MEDICAL
                   </span>
                 </h1>
-                <div className="text-xs sm:text-sm font-semibold text-indigo-200/90 tracking-wide">
+                <div className="text-[11px] sm:text-xs font-semibold text-indigo-200/90 tracking-wide">
                   Project Tracker
                 </div>
-                <p className="text-[11px] text-slate-400 font-normal">ระบบติดตามงานขายและโครงการราชการ / โรงพยาบาล</p>
+                <p className="text-[10px] text-slate-400 font-normal hidden sm:block">ระบบติดตามงานขายและโครงการราชการ / โรงพยาบาล</p>
               </div>
             </div>
           </div>
@@ -15815,7 +15817,7 @@ function App() {
       />
 
       {/* Right Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 flex flex-col">
         <Header 
         currentUser={currentUser}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
@@ -15858,8 +15860,8 @@ function App() {
         onOpenFDAModal={() => { setEditingFDA(null); setIsFDAModalOpen(true); }}
       />
 
-      {/* Main Content Body */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12 overflow-y-auto">
+      {/* Main Content Body: Natural document flow with no isolated scroll lock */}
+      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12">
           
           {/* TAB 1: Dashboard */}
           {activeSidebarTab === 'dashboard' && checkTabAccess(currentUser?.role, 'dashboard') && (

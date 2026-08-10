@@ -131,7 +131,17 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
       });
     }
 
+    const handleResize = () => {
+      if (chartInstanceWorkload.current) chartInstanceWorkload.current.resize();
+      if (chartInstanceStage.current) chartInstanceStage.current.resize();
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       if (chartInstanceWorkload.current) chartInstanceWorkload.current.destroy();
       if (chartInstanceStage.current) chartInstanceStage.current.destroy();
     };
