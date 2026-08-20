@@ -41,7 +41,6 @@ function Header({
   onOpenKanbanModal = () => {},
   onOpenUserAccountModal = () => {}
 }) {
-  const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollYRef = useRef(0);
@@ -330,7 +329,7 @@ function Header({
 
               {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
                 <button
-                  onClick={() => { if (onOpenUserAccountModal) onOpenUserAccountModal(); setIsUserAccountModalOpen(true); }}
+                  onClick={() => { if (onOpenUserAccountModal) onOpenUserAccountModal(); }}
                   className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 p-2 px-2.5 rounded-xl border border-amber-500/40 text-xs font-bold transition-all shadow-sm flex items-center gap-1"
                   title="ระบบสร้าง & จัดการบัญชีผู้ใช้งาน (OWNER & HEAD ADMIN)"
                 >
@@ -755,7 +754,7 @@ function Header({
 
             {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
               <button
-                onClick={() => { setIsMobileActionSheetOpen(false); if (onOpenUserAccountModal) onOpenUserAccountModal(); setIsUserAccountModalOpen(true); }}
+                onClick={() => { setIsMobileActionSheetOpen(false); if (onOpenUserAccountModal) onOpenUserAccountModal(); }}
                 className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
               >
                 <div className="flex items-center gap-2">
@@ -784,13 +783,6 @@ function Header({
           </div>
         </div>
       )}
-
-      {/* User Account Management Modal for OWNER & HEAD ADMIN */}
-      <UserAccountManagementModal
-        isOpen={isUserAccountModalOpen}
-        onClose={() => setIsUserAccountModalOpen(false)}
-        currentUser={currentUser}
-      />
     </header>
   );
 }
