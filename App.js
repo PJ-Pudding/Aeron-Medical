@@ -95,7 +95,13 @@ function App() {
   const [transactions, setTransactions] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_accounting_txns');
-      return saved ? JSON.parse(saved) : (window.INITIAL_ACCOUNTING_TRANSACTIONS || []);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
+          return parsed;
+        }
+      }
+      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
     } catch(e) { return window.INITIAL_ACCOUNTING_TRANSACTIONS || []; }
   });
   // Thai FDA Registrations State
@@ -113,8 +119,8 @@ function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
   // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
   const [currentUser, setCurrentUser] = useState(null);
-
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
 
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
@@ -873,10 +879,11 @@ function App() {
       />
 
       {/* Right Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 flex flex-col">
         <Header 
         currentUser={currentUser}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onOpenUserAccountModal={() => setIsUserAccountModalOpen(true)}
         onLogout={handleLogout}
         activeSidebarTab={activeSidebarTab}
         setActiveSidebarTab={setActiveSidebarTab}
@@ -916,8 +923,8 @@ function App() {
         onOpenFDAModal={() => { setEditingFDA(null); setIsFDAModalOpen(true); }}
       />
 
-      {/* Main Content Body */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12 overflow-y-auto">
+      {/* Main Content Body: Natural document flow with no isolated scroll lock */}
+      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12">
           
           {/* TAB 1: Dashboard */}
           {activeSidebarTab === 'dashboard' && checkTabAccess(currentUser?.role, 'dashboard') && (
@@ -1441,6 +1448,15 @@ function App() {
           members={members}
           onSave={handleSaveAttendance}
           onClose={() => setIsAttendanceModalOpen(false)}
+        />
+      )}
+
+      {/* User Account Management Modal (Root Level - Top Z-Index 1000) */}
+      {isUserAccountModalOpen && (
+        <UserAccountManagementModal
+          isOpen={isUserAccountModalOpen}
+          onClose={() => setIsUserAccountModalOpen(false)}
+          currentUser={currentUser}
         />
       )}
 

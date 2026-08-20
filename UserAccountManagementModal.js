@@ -203,7 +203,7 @@ function UserAccountManagementModal({ isOpen, onClose, currentUser, onAccountsUp
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 w-screen h-screen flex flex-col overflow-hidden animate-fade-in text-slate-100 font-sans">
+    <div className="fixed inset-0 z-[1000] bg-slate-950 w-screen h-screen flex flex-col overflow-hidden animate-fade-in text-slate-100 font-sans">
       
       {/* Top Header Bar - Fixed 100% */}
       <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-amber-950/40 border-b border-slate-800 flex items-center justify-between flex-shrink-0 w-full shadow-lg">
