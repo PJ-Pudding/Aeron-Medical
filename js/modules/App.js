@@ -95,7 +95,13 @@ function App() {
   const [transactions, setTransactions] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_accounting_txns');
-      return saved ? JSON.parse(saved) : (window.INITIAL_ACCOUNTING_TRANSACTIONS || []);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
+          return parsed;
+        }
+      }
+      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
     } catch(e) { return window.INITIAL_ACCOUNTING_TRANSACTIONS || []; }
   });
   // Thai FDA Registrations State
@@ -113,8 +119,8 @@ function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
   // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
   const [currentUser, setCurrentUser] = useState(null);
-
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
 
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
@@ -877,6 +883,7 @@ function App() {
         <Header 
         currentUser={currentUser}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onOpenUserAccountModal={() => setIsUserAccountModalOpen(true)}
         onLogout={handleLogout}
         activeSidebarTab={activeSidebarTab}
         setActiveSidebarTab={setActiveSidebarTab}
@@ -1441,6 +1448,15 @@ function App() {
           members={members}
           onSave={handleSaveAttendance}
           onClose={() => setIsAttendanceModalOpen(false)}
+        />
+      )}
+
+      {/* User Account Management Modal (Root Level - Top Z-Index 1000) */}
+      {isUserAccountModalOpen && (
+        <UserAccountManagementModal
+          isOpen={isUserAccountModalOpen}
+          onClose={() => setIsUserAccountModalOpen(false)}
+          currentUser={currentUser}
         />
       )}
 
