@@ -65,7 +65,7 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-slate-950 overflow-y-auto ${isSwitching ? 'backdrop-blur-md bg-slate-950/90' : 'min-h-screen'}`}>
+    <div className={`fixed inset-0 z-[1000] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-slate-950 overflow-y-auto ${isSwitching ? 'backdrop-blur-md bg-slate-950/90' : 'min-h-screen'}`}>
       
       {/* Background Decorative Glows */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
