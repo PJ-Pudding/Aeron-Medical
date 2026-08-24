@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/SoldProductsView.js
 
-function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail }) {
+function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
   const [filterYear, setFilterYear] = useState('all');
   const [filterSales, setFilterSales] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -162,6 +162,15 @@ function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset
                 <option key={m.id} value={m.name}>{m.name}</option>
               ))}
             </select>
+
+            <button
+              onClick={() => onOpenReport && onOpenReport('warranty_expiry_matrix')}
+              className="px-3 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+              title="เปิดรายงานสัญญาประกันและเครื่องใกล้หมดประกัน"
+            >
+              <span>🛡️</span>
+              <span>รายงานประกัน & MA</span>
+            </button>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 // MODULE: mod07_finance/CostCalculationView.js
 
-function CostCalculationView({ costCalculations = [], projects = [], members = [], onOpenNewCalc, onEditCalc, onDeleteCalc }) {
+function CostCalculationView({ costCalculations = [], projects = [], members = [], onOpenNewCalc, onEditCalc, onDeleteCalc, onOpenReport }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('excel'); // 'excel' | 'list'
@@ -195,6 +195,15 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
               </button>
             )}
           </div>
+
+          <button
+            onClick={() => onOpenReport && onOpenReport('cost_margin_sheet')}
+            className="px-3.5 py-2 bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-2xl shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+            title="ออกรายงานโครงสร้างต้นทุนและส่งออก Excel"
+          >
+            <span>📑</span>
+            <span>รายงาน Cost Sheet</span>
+          </button>
 
           <button
             onClick={() => onOpenNewCalc(null)}

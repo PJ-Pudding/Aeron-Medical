@@ -39,7 +39,9 @@ function Header({
   onOpenShipmentModal = () => {}, 
   onOpenFDAModal = () => {},
   onOpenKanbanModal = () => {},
-  onOpenUserAccountModal = () => {}
+  onOpenUserAccountModal = () => {},
+  alerts = [],
+  onOpenNotificationModal = () => {}
 }) {
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
@@ -110,7 +112,7 @@ function Header({
 
     setActiveView(newView);
 
-    if (newView === 'manager') {
+    if (newView === 'manager' || newView === 'dashboard_classic' || newView === 'dashboard_manager' || newView === 'dashboard_ceo' || newView === 'dashboard_cfo') {
       setActiveSidebarTab('dashboard');
     } else if (newView === 'kanban_all') {
       setActiveSidebarTab('project');
@@ -190,7 +192,12 @@ function Header({
                 className="bg-slate-800 text-slate-100 font-semibold py-1.5 px-2.5 rounded-lg border-0 focus:ring-2 focus:ring-indigo-500 cursor-pointer outline-none"
               >
                 {(!currentUser || checkTabAccess(currentUser.role, 'dashboard')) && (
-                  <option value="manager">📊 ภาพรวมหัวหน้างาน (Executive Overview)</option>
+                  <>
+                    <option value="dashboard_classic">📊 ภาพรวมองค์กรดั้งเดิม (Classic All-in-One Overview)</option>
+                    <option value="dashboard_ceo">👑 แดชบอร์ด CEO (ภาพรวมยุทธศาสตร์ & ยอดขาย)</option>
+                    <option value="dashboard_cfo">💰 แดชบอร์ด CFO (สภาพคล่อง, ทุนสั่งของ & Margin)</option>
+                    <option value="dashboard_manager">🎯 แดชบอร์ด Manager (ปฏิบัติการ, คิวเดโม่ & ชิปปิ้ง)</option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'project')) && (
                   <option value="kanban_all">📋 Kanban Board รวมทุกโครงการ (All Projects Kanban)</option>
@@ -336,6 +343,21 @@ function Header({
                   <span>🔐 จัดการบัญชี</span>
                 </button>
               )}
+
+              {/* 🔔 Smart Notification Action Center Button */}
+              <button
+                onClick={onOpenNotificationModal}
+                className="relative bg-slate-900 hover:bg-slate-800 text-slate-200 p-2 px-2.5 rounded-xl border border-slate-700 hover:border-slate-500 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 group active:scale-95"
+                title="ศูนย์แจ้งเตือนงานคงค้าง (Smart Action Center)"
+              >
+                <span className="text-sm group-hover:scale-110 transition-transform">🔔</span>
+                <span className="hidden xl:inline text-[11px] font-semibold text-slate-300">แจ้งเตือน</span>
+                {alerts && alerts.length > 0 && (
+                  <span className="flex h-5 min-w-[20px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-extrabold items-center justify-center shadow-md shadow-rose-600/50 animate-pulse">
+                    {alerts.length > 99 ? '99+' : alerts.length}
+                  </span>
+                )}
+              </button>
 
               {/* ☁️ Cloud Sync Status & Manual Re-sync Button */}
               <button
@@ -485,7 +507,7 @@ function Header({
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🚚 ติดตามการขนส่ง ({activeShipmentCount})
+              🚢 ติดตามการ Import ({activeShipmentCount})
             </button>
 
             <button
@@ -547,8 +569,19 @@ function Header({
         {activeSidebarTab === 'report' && (
           <div className="flex items-center gap-2 flex-shrink-0 w-full">
             <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>📜 ทะเบียน & Audit Logs:</span>
+              <span>📊 รายงาน & เอกสาร:</span>
             </span>
+
+            <button
+              onClick={() => setReportSubView('hub')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📊 ศูนย์รวมรายงานทุกระบบ (All Reports Hub)
+            </button>
 
             <button
               onClick={() => setReportSubView('fda_registration')}
@@ -697,6 +730,22 @@ function Header({
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNotificationModal(); }}
+                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation relative"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xl">🔔</span>
+                  {alerts && alerts.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                      {alerts.length} งาน
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-xs text-white">ศูนย์แจ้งเตือน</span>
+                <span className="text-[10px] text-rose-300">งานค้าง & ลงต้นทุน</span>
+              </button>
+
               <button
                 onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
                 className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"

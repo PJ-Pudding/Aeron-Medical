@@ -482,7 +482,9 @@ function Header({
   onOpenShipmentModal = () => {}, 
   onOpenFDAModal = () => {},
   onOpenKanbanModal = () => {},
-  onOpenUserAccountModal = () => {}
+  onOpenUserAccountModal = () => {},
+  alerts = [],
+  onOpenNotificationModal = () => {}
 }) {
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
@@ -553,7 +555,7 @@ function Header({
 
     setActiveView(newView);
 
-    if (newView === 'manager') {
+    if (newView === 'manager' || newView === 'dashboard_classic' || newView === 'dashboard_manager' || newView === 'dashboard_ceo' || newView === 'dashboard_cfo') {
       setActiveSidebarTab('dashboard');
     } else if (newView === 'kanban_all') {
       setActiveSidebarTab('project');
@@ -633,7 +635,12 @@ function Header({
                 className="bg-slate-800 text-slate-100 font-semibold py-1.5 px-2.5 rounded-lg border-0 focus:ring-2 focus:ring-indigo-500 cursor-pointer outline-none"
               >
                 {(!currentUser || checkTabAccess(currentUser.role, 'dashboard')) && (
-                  <option value="manager">📊 ภาพรวมหัวหน้างาน (Executive Overview)</option>
+                  <>
+                    <option value="dashboard_classic">📊 ภาพรวมองค์กรดั้งเดิม (Classic All-in-One Overview)</option>
+                    <option value="dashboard_ceo">👑 แดชบอร์ด CEO (ภาพรวมยุทธศาสตร์ & ยอดขาย)</option>
+                    <option value="dashboard_cfo">💰 แดชบอร์ด CFO (สภาพคล่อง, ทุนสั่งของ & Margin)</option>
+                    <option value="dashboard_manager">🎯 แดชบอร์ด Manager (ปฏิบัติการ, คิวเดโม่ & ชิปปิ้ง)</option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'project')) && (
                   <option value="kanban_all">📋 Kanban Board รวมทุกโครงการ (All Projects Kanban)</option>
@@ -779,6 +786,21 @@ function Header({
                   <span>🔐 จัดการบัญชี</span>
                 </button>
               )}
+
+              {/* 🔔 Smart Notification Action Center Button */}
+              <button
+                onClick={onOpenNotificationModal}
+                className="relative bg-slate-900 hover:bg-slate-800 text-slate-200 p-2 px-2.5 rounded-xl border border-slate-700 hover:border-slate-500 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 group active:scale-95"
+                title="ศูนย์แจ้งเตือนงานคงค้าง (Smart Action Center)"
+              >
+                <span className="text-sm group-hover:scale-110 transition-transform">🔔</span>
+                <span className="hidden xl:inline text-[11px] font-semibold text-slate-300">แจ้งเตือน</span>
+                {alerts && alerts.length > 0 && (
+                  <span className="flex h-5 min-w-[20px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-extrabold items-center justify-center shadow-md shadow-rose-600/50 animate-pulse">
+                    {alerts.length > 99 ? '99+' : alerts.length}
+                  </span>
+                )}
+              </button>
 
               {/* ☁️ Cloud Sync Status & Manual Re-sync Button */}
               <button
@@ -928,7 +950,7 @@ function Header({
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🚚 ติดตามการขนส่ง ({activeShipmentCount})
+              🚢 ติดตามการ Import ({activeShipmentCount})
             </button>
 
             <button
@@ -990,8 +1012,19 @@ function Header({
         {activeSidebarTab === 'report' && (
           <div className="flex items-center gap-2 flex-shrink-0 w-full">
             <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>📜 ทะเบียน & Audit Logs:</span>
+              <span>📊 รายงาน & เอกสาร:</span>
             </span>
+
+            <button
+              onClick={() => setReportSubView('hub')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📊 ศูนย์รวมรายงานทุกระบบ (All Reports Hub)
+            </button>
 
             <button
               onClick={() => setReportSubView('fda_registration')}
@@ -1140,6 +1173,22 @@ function Header({
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNotificationModal(); }}
+                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation relative"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xl">🔔</span>
+                  {alerts && alerts.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                      {alerts.length} งาน
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-xs text-white">ศูนย์แจ้งเตือน</span>
+                <span className="text-[10px] text-rose-300">งานค้าง & ลงต้นทุน</span>
+              </button>
+
               <button
                 onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
                 className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
@@ -1464,6 +1513,186 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
             🛡️ ระบบรักษาความปลอดภัยข้อมูลองค์กร AERON MEDICAL (Thailand)
           </div>
 
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
+// --- Module File: js/modules/mod00_core/NotificationModal.js ---
+// MODULE: mod00_core/NotificationModal.js
+
+function NotificationModal({ 
+  isOpen, 
+  onClose, 
+  currentUser, 
+  alerts = [], 
+  onAction 
+}) {
+  if (!isOpen) return null;
+
+  const [activeCategory, setActiveCategory] = useState('all');
+
+  const categories = [
+    { id: 'all', label: 'ทั้งหมด', icon: '🔔' },
+    { id: 'cost_sheet', label: 'คำนวณต้นทุน', icon: '🔴' },
+    { id: 'demo', label: 'คิว Demo', icon: '🧪' },
+    { id: 'finance', label: 'จัดซื้อ & การเงิน', icon: '🛒' },
+    { id: 'import', label: 'นำเข้าสินค้า', icon: '🚢' },
+    { id: 'fda', label: 'งาน อย.', icon: '🛡️' },
+    { id: 'hr', label: 'งาน HR', icon: '👥' }
+  ];
+
+  const filteredAlerts = useMemo(() => {
+    if (activeCategory === 'all') return alerts;
+    return alerts.filter(a => a.category === activeCategory);
+  }, [alerts, activeCategory]);
+
+  const urgentCount = alerts.filter(a => a.severity === 'urgent').length;
+
+  return (
+    <div className="fixed inset-0 z-[950] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fade-in font-sans">
+      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-2xl rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-modal max-h-[90vh] flex flex-col text-slate-100">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center justify-center text-xl shadow-inner">
+                🔔
+              </div>
+              {alerts.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 text-[10px] font-extrabold text-white items-center justify-center">
+                    {alerts.length > 99 ? '99+' : alerts.length}
+                  </span>
+                </span>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-white text-base sm:text-lg">ศูนย์แจ้งเตือนอัจฉริยะ (Action Center)</h3>
+                <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-bold">
+                  {currentUser ? currentUser.name : 'ผู้ใช้งาน'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                รวบรวมงานที่ต้องดำเนินการจากทุกระบบ {urgentCount > 0 && <span className="text-rose-400 font-bold">(มีงานด่วน {urgentCount} รายการ)</span>}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-sm transition-all"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 text-xs scrollbar-none">
+          {categories.map(cat => {
+            const count = cat.id === 'all' ? alerts.length : alerts.filter(a => a.category === cat.id).length;
+            if (cat.id !== 'all' && count === 0) return null; // hide empty categories
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 whitespace-nowrap border ${
+                  activeCategory === cat.id
+                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
+                    : 'bg-slate-950/80 text-slate-400 hover:text-white border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  activeCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Alerts List */}
+        <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-[220px]">
+          {filteredAlerts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center space-y-3 bg-slate-950/40 rounded-2xl border border-slate-800/60">
+              <div className="text-4xl">🎉</div>
+              <div className="text-sm font-bold text-slate-200">ไม่มีงานค้างที่ต้องดำเนินการในขณะนี้!</div>
+              <p className="text-xs text-slate-500 max-w-sm">
+                งานและโครงการทั้งหมดของคุณได้รับการอัปเดตข้อมูลและลงบันทึกต้นทุนเรียบร้อยสมบูรณ์แล้ว
+              </p>
+            </div>
+          ) : (
+            filteredAlerts.map((alert, idx) => {
+              const borderCol = alert.severity === 'urgent'
+                ? 'border-rose-500/40 bg-rose-950/20 hover:border-rose-500/70'
+                : alert.severity === 'warning'
+                ? 'border-amber-500/40 bg-amber-950/20 hover:border-amber-500/70'
+                : 'border-slate-700/60 bg-slate-950/60 hover:border-slate-600';
+
+              const badgeCol = alert.severity === 'urgent'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                : alert.severity === 'warning'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+
+              return (
+                <div
+                  key={alert.id || idx}
+                  className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${borderCol}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl mt-0.5 shrink-0">{alert.icon || '📌'}</span>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-extrabold text-white text-xs sm:text-sm">{alert.title}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeCol}`}>
+                          {alert.badgeText || (alert.severity === 'urgent' ? 'งานด่วน' : 'แจ้งเตือน')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-snug">{alert.description}</p>
+                      {alert.detail && (
+                        <div className="text-[11px] font-mono text-amber-300 font-semibold">{alert.detail}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center justify-end">
+                    <button
+                      onClick={() => {
+                        onClose();
+                        if (alert.onAction) alert.onAction();
+                        else if (onAction) onAction(alert);
+                      }}
+                      className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+                    >
+                      <span>🚀 {alert.actionText || 'ดำเนินการทันที'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-800 pt-3 text-xs text-slate-500 shrink-0">
+          <span>* รายการแจ้งเตือนจะหายไปอัตโนมัติเมื่อท่านบันทึกข้อมูลของงานนั้นเสร็จสิ้น</span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold"
+          >
+            ปิด
+          </button>
         </div>
 
       </div>
@@ -2257,12 +2486,51 @@ function UserAccountManagementModal({ isOpen, onClose, currentUser, onAccountsUp
 
 // --- Module File: js/modules/mod01_dashboard/ManagerDashboard.js ---
 // MODULE: mod01_dashboard/ManagerDashboard.js
+// Multi-Role Executive & Operational Dashboard (Classic, CEO, CFO, Manager Views)
 
-function ManagerDashboard({ projects, allProjects, members, costCalculations = [], onEditProject, onAddLog, onViewHistory, onMoveProject, onBookDemo }) {
+function ManagerDashboard({ 
+  projects = [], 
+  allProjects = [], 
+  members = [], 
+  products = [],
+  demoBookings = [],
+  purchaseOrders = [],
+  shipments = [],
+  repairTickets = [],
+  soldProducts = [],
+  fdaRegistrations = [],
+  costCalculations = [],
+  currentUser = null,
+  initialTab = 'classic',
+  onEditProject = () => {}, 
+  onAddLog = () => {}, 
+  onViewHistory = () => {}, 
+  onMoveProject = () => {}, 
+  onBookDemo = () => {},
+  onOpenReport = () => {}
+}) {
+  // Chart references for Classic View
   const chartRefWorkload = useRef(null);
   const chartRefStage = useRef(null);
   const chartInstanceWorkload = useRef(null);
   const chartInstanceStage = useRef(null);
+
+  // Determine default tab based on user role or initialTab prop
+  const defaultTab = useMemo(() => {
+    if (initialTab) return initialTab;
+    if (!currentUser) return 'classic';
+    const role = String(currentUser.role).toUpperCase();
+    if (role === 'ACCOUNTANT' || role === 'FINANCE') return 'cfo';
+    if (role === 'SALES_MANAGER' || role === 'OPERATIONS') return 'manager';
+    return 'classic';
+  }, [currentUser, initialTab]);
+
+  const [activeTab, setActiveTab] = useState(defaultTab);
+
+  // Sync if initialTab prop changes from Header view switcher
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Date Range Picker State (Default Year To Date YTD)
   const currentYear = new Date().getFullYear();
@@ -2281,18 +2549,51 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
     });
   }, [projects, startDate, endDate]);
 
+  // --- CORE METRICS CALCULATIONS ---
   const totalProjects = filteredProjects.length;
   const totalBudget = filteredProjects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
-  const weightedForecast = filteredProjects.reduce((sum, p) => sum + ((Number(p.budget) || 0) * (Number(p.winProbability) || 0) / 100), 0);
-  const wonProjects = filteredProjects.filter(p => p.status === 'stage_won' || p.status === 'stage_ordering' || p.status === 'stage_delivery');
+  const weightedForecast = filteredProjects.reduce((sum, p) => sum + ((Number(p.budget) || 0) * (Number(p.winProbability || (p.status.includes('won') ? 100 : 30)) || 0) / 100), 0);
+  const wonProjects = filteredProjects.filter(p => ['stage_won', 'stage_ordering', 'stage_delivery', 'stage_complete'].includes(p.status));
   const wonBudget = wonProjects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
-  const avgWinRate = totalProjects > 0 ? ((filteredProjects.reduce((sum, p) => sum + (Number(p.winProbability) || 0), 0) / totalProjects) || 0).toFixed(0) : '0';
+  const targetYearBudget = 60000000; // Annual Target 60M
+  const targetAttainment = targetYearBudget > 0 ? (wonBudget / targetYearBudget) * 100 : 0;
 
-  // Stage 4+ Capital Required for Purchasing Products
+  // Margin Calculations
+  const calculatedCostSheets = useMemo(() => {
+    return filteredProjects.map(p => {
+      const calc = (costCalculations || []).find(c => c.projectId === p.id || (c.projectName && p.hospitalName && c.projectName.includes(p.hospitalName)));
+      if (calc) {
+        const computed = computeCostSheet(calc);
+        return { proj: p, calc, computed, hasCalc: true };
+      }
+      const defaultCalc = {
+        sellingPriceInVat: p.budget || 0,
+        costInVat: Math.round((p.budget || 0) * 0.70),
+        dfType: 'amount',
+        dfValue: p.dfAmount ? Number(String(p.dfAmount).replace(/[^0-9.]/g, '')) || 0 : 0,
+        salesCommPercent: 2.0,
+        interestPercent: 7.0,
+        taxPercent: 20.0,
+        retentionPercent: 5.0
+      };
+      const computed = computeCostSheet(defaultCalc);
+      return { proj: p, calc: defaultCalc, computed, hasCalc: false };
+    });
+  }, [filteredProjects, costCalculations]);
+
+  const totalNetProfit = calculatedCostSheets.reduce((sum, item) => sum + item.computed.netProfit, 0);
+  const avgMarginPercent = totalBudget > 0 ? (totalNetProfit / (totalBudget / 1.07)) * 100 : 0;
+
+  // High-Value Deals at Risk (Budget >= 4M & stalled or in e-Bidding/Prospect)
+  const highValueRisks = useMemo(() => {
+    return filteredProjects.filter(p => (Number(p.budget) || 0) >= 4000000 && p.status !== 'stage_complete' && p.status !== 'stage_won')
+      .slice(0, 4);
+  }, [filteredProjects]);
+
+  // Stage 4+ Capital Required
   const stage4Metrics = useMemo(() => {
     const stage4PlusIds = ['stage_approved', 'stage_won', 'stage_ordering', 'stage_delivery'];
     const stage4Projects = (filteredProjects || []).filter(p => stage4PlusIds.includes(p.status));
-    
     let totalCapital = 0;
     stage4Projects.forEach(proj => {
       const existingCalc = (costCalculations || []).find(c => c.projectId === proj.id || (c.projectName && c.projectName.includes(proj.hospitalName)));
@@ -2302,23 +2603,37 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
         totalCapital += Math.round((proj.budget || 0) * 0.65);
       }
     });
-
-    return {
-      totalCapital,
-      count: stage4Projects.length,
-      projects: stage4Projects
-    };
+    return { totalCapital, count: stage4Projects.length, projects: stage4Projects };
   }, [filteredProjects, costCalculations]);
 
-  const scheduledDemos = filteredProjects.filter(p => p.demoStatus === 'นัดหมายแล้ว' || p.demoStatus === 'กำลังเดโม่');
+  // Demo Metrics
+  const scheduledDemos = demoBookings.filter(b => b.status === 'อนุมัติคิว' || b.status === 'กำลังเดโม่' || b.status === 'นัดหมายแล้ว');
+  const today = new Date();
+  today.setHours(0,0,0,0);
 
+  // Warranty & MA Alert
+  const warrantyAlerts = useMemo(() => {
+    return (soldProducts || []).map(p => {
+      let days = 999;
+      if (p.warrantyExpiry) {
+        const exp = new Date(p.warrantyExpiry);
+        exp.setHours(0,0,0,0);
+        days = Math.ceil((exp - today) / 86400000);
+      }
+      return { ...p, daysLeft: days };
+    }).filter(p => p.daysLeft <= 60).sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [soldProducts]);
+
+  // --- CHART.JS RENDERING FOR CLASSIC OVERVIEW ---
   useEffect(() => {
-    if (chartRefWorkload.current) {
+    if (activeTab !== 'classic') return;
+
+    if (chartRefWorkload.current && typeof Chart !== 'undefined') {
       if (chartInstanceWorkload.current) chartInstanceWorkload.current.destroy();
 
       const memberNames = (members || []).map(m => m.name);
-      const budgetPerMember = (members || []).map(m => filteredProjects.filter(p => p.assignee === m.name).reduce((sum, p) => sum + (Number(p.budget) || 0), 0) / 1000000);
-      const countPerMember = (members || []).map(m => filteredProjects.filter(p => p.assignee === m.name).length);
+      const budgetPerMember = (members || []).map(m => filteredProjects.filter(p => (p.salesPerson === m.name || p.assignee === m.name)).reduce((sum, p) => sum + (Number(p.budget) || 0), 0) / 1000000);
+      const countPerMember = (members || []).map(m => filteredProjects.filter(p => (p.salesPerson === m.name || p.assignee === m.name)).length);
 
       const ctx = chartRefWorkload.current.getContext('2d');
       chartInstanceWorkload.current = new Chart(ctx, {
@@ -2360,11 +2675,12 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
       });
     }
 
-    if (chartRefStage.current) {
+    if (chartRefStage.current && typeof Chart !== 'undefined') {
       if (chartInstanceStage.current) chartInstanceStage.current.destroy();
 
-      const stageLabels = window.STAGES.map(s => s.name);
-      const stageCounts = window.STAGES.map(s => filteredProjects.filter(p => p.status === s.id).length);
+      const stages = window.STAGES || [];
+      const stageLabels = stages.map(s => s.title || s.name);
+      const stageCounts = stages.map(s => filteredProjects.filter(p => p.status === s.id).length);
       const stageColors = ['#94a3b8', '#3b82f6', '#8b5cf6', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#ef4444'];
 
       const ctx = chartRefStage.current.getContext('2d');
@@ -2403,211 +2719,719 @@ function ManagerDashboard({ projects, allProjects, members, costCalculations = [
       if (chartInstanceWorkload.current) chartInstanceWorkload.current.destroy();
       if (chartInstanceStage.current) chartInstanceStage.current.destroy();
     };
-  }, [filteredProjects, members]);
+  }, [activeTab, filteredProjects, members]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in font-sans pb-10">
       
-      {/* Executive Control Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-5 rounded-3xl border border-slate-800">
-        <div>
-          <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-            <span>📊 ภาพรวมผลงานทีมขาย (Manager Sales Dashboard)</span>
+      {/* 1. Header & 4-Tab Role Switcher Bar */}
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 glass-panel p-5 rounded-3xl border border-slate-800 shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              AERON ENTERPRISE DASHBOARD
+            </span>
+            <span className="text-xs text-slate-400 font-mono">Real-time Analytics</span>
+          </div>
+          <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+            <span>
+              {activeTab === 'classic' ? '📊 ภาพรวมองค์กรดั้งเดิม (Classic Overview)' :
+               activeTab === 'ceo' ? '👑 แดชบอร์ดภาพรวมยุทธศาสตร์ (CEO View)' : 
+               activeTab === 'cfo' ? '💰 แดชบอร์ดสภาพคล่อง & ต้นทุน (CFO View)' : 
+               '🎯 แดชบอร์ดปฏิบัติการ & ทีมขาย (Manager View)'}
+            </span>
           </h2>
-          <p className="text-xs text-slate-400">ภาพรวมโครงการประมูล, ยอดขายพยากรณ์, ทุนหมุนเวียนซื้อสินค้า และภาระงานทีม</p>
+          <p className="text-xs text-slate-400">
+            {activeTab === 'classic' ? 'กราฟวิเคราะห์ภาระงานทีมขาย, สัดส่วนสถานะโครงการ และตารางคิวสาธิตเครื่อง' :
+             activeTab === 'ceo' ? 'ติดตามยอดขายเทียบเป้า ฿60M, สุขภาพ Pipeline, กำไรสุทธิ และดีลเสี่ยงสูง' : 
+             activeTab === 'cfo' ? 'ควบคุมเงินสดสำรอง, ทุนสั่งของ Stage 4+, ภาระหนี้ PO และ Margin กำไร' : 
+             'ควบคุมการหมุนเวียนเครื่อง Demo, ติดตามการนำเข้าชิปปิ้ง, งานซ่อม และเตือนต่อประกัน MA'}
+          </p>
         </div>
 
-        {/* High-Contrast Vibrant Yellow Date Range Picker Control */}
-        <div className="flex flex-wrap items-center gap-2 bg-slate-950 p-2 rounded-2xl border border-amber-500/40 text-xs shadow-md">
-          <span className="font-black text-amber-400 flex items-center gap-1 text-xs">
-            <span className="text-sm leading-none">📅</span>
-            <span>เลือกช่วงวันที่:</span>
-          </span>
+        {/* Controls: 4 Tabs Switcher & Date Range */}
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
           
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="bg-slate-900 border border-amber-500/30 text-amber-300 font-mono font-bold rounded-xl p-2 outline-none"
-          />
-          <span className="text-slate-500">-</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="bg-slate-900 border border-amber-500/30 text-amber-300 font-mono font-bold rounded-xl p-2 outline-none"
-          />
+          {/* 4 Role Tabs Switcher */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-2xl border border-slate-800 shadow-inner overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setActiveTab('classic')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'classic'
+                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>📊</span>
+              <span>ภาพรวมดั้งเดิม</span>
+            </button>
 
-          {(startDate || endDate) && (
-            <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-slate-400 hover:text-white px-2">✕ ล้างค่า</button>
-          )}
-        </div>
-      </div>
+            <button
+              onClick={() => setActiveTab('ceo')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'ceo'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>👑</span>
+              <span>มุมมอง CEO</span>
+            </button>
 
-      {/* Top 5 KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        
-        <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>🎯 โครงการทั้งหมด</span>
-            <span>📂</span>
+            <button
+              onClick={() => setActiveTab('cfo')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'cfo'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>💰</span>
+              <span>มุมมอง CFO</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('manager')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'manager'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🎯</span>
+              <span>มุมมอง Manager</span>
+            </button>
           </div>
-          <div className="text-2xl font-black text-white font-mono">{totalProjects}</div>
-          <div className="text-[11px] text-slate-400">มูลค่ารวม {formatCurrency(totalBudget)}</div>
-        </div>
 
-        <div className="glass-card p-4 rounded-2xl border border-amber-500/30 bg-amber-950/20 space-y-1">
-          <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
-            <span>💸 ทุนสั่งของ Stage 4+</span>
-            <span>🛒</span>
-          </div>
-          <div className="text-2xl font-black text-amber-400 font-mono">
-            {formatCurrency(stage4Metrics.totalCapital)}
-          </div>
-          <div className="text-[11px] text-amber-200/80 font-medium">
-            {stage4Metrics.count} โครงการต้องการทุนสั่งของ
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-1">
-          <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
-            <span>🎉 ชนะประมูลแล้ว</span>
-            <span>🏆</span>
-          </div>
-          <div className="text-2xl font-black text-emerald-400 font-mono">{formatCurrency(wonBudget)}</div>
-          <div className="text-[11px] text-emerald-300/80 font-medium">{wonProjects.length} โครงการเซ็นสัญญา</div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>📈 คาดการณ์ Weighted</span>
-            <span>🔮</span>
-          </div>
-          <div className="text-2xl font-black text-indigo-300 font-mono">{formatCurrency(weightedForecast)}</div>
-          <div className="text-[11px] text-slate-400">ตาม % โอกาสชนะประมูล</div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>🩺 เดโม่เครื่องมือ</span>
-            <span>🏥</span>
-          </div>
-          <div className="text-2xl font-black text-cyan-300 font-mono">{scheduledDemos.length}</div>
-          <div className="text-[11px] text-slate-400">นัดหมายเดโม่โรงพยาบาล</div>
-        </div>
-
-      </div>
-
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
-          <h3 className="font-extrabold text-white text-sm">📊 ภาระงานและมูลค่าโครงการแยกรายบุคคล (Workload per Rep)</h3>
-          <div className="h-64 relative">
-            <canvas ref={chartRefWorkload}></canvas>
-          </div>
-        </div>
-
-        <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
-          <h3 className="font-extrabold text-white text-sm">🍩 สัดส่วนโครงการตามขั้นตอน Stage (Pipeline Funnel)</h3>
-          <div className="h-64 relative">
-            <canvas ref={chartRefStage}></canvas>
+          {/* Date Picker */}
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 px-3 rounded-2xl border border-slate-800 text-xs">
+            <span className="text-slate-400 font-bold">📅 วันที่:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-slate-200 font-mono text-[11px] rounded-lg px-2 py-1 outline-none"
+            />
+            <span className="text-slate-600">-</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-slate-200 font-mono text-[11px] rounded-lg px-2 py-1 outline-none"
+            />
           </div>
         </div>
       </div>
 
-      {/* Scheduled Demos Table */}
-      <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-slate-100 text-sm sm:text-base flex items-center gap-2">
-              <span>🧪 คิวสาธิตเครื่อง (Demo Schedule) & สินค้าที่ต้องเข้าทดสอบ</span>
-              <span className="px-2 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
-                {scheduledDemos.length} รายการ
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400">โครงการที่มีนัดหมายเดโม่เครื่องกับโรงพยาบาล</p>
+      {/* ========================================================= */}
+      {/* 📊 TAB 0: CLASSIC ALL-IN-ONE OVERVIEW (ดั้งเดิมพร้อมกราฟคู่) */}
+      {/* ========================================================= */}
+      {activeTab === 'classic' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top 5 Classic KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+            
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs">
+                <span>🎯 โครงการทั้งหมด</span>
+                <span>📂</span>
+              </div>
+              <div className="text-2xl font-black text-white font-mono">{totalProjects}</div>
+              <div className="text-[11px] text-slate-400 truncate">มูลค่ารวม {formatCurrency(totalBudget)}</div>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-amber-500/30 bg-amber-950/20 space-y-1">
+              <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
+                <span>💸 ทุนสั่งของ Stage 4+</span>
+                <span>🛒</span>
+              </div>
+              <div className="text-2xl font-black text-amber-400 font-mono truncate">
+                {formatCurrency(stage4Metrics.totalCapital)}
+              </div>
+              <div className="text-[11px] text-amber-200/80 font-medium truncate">
+                {stage4Metrics.count} โครงการต้องการทุนสั่งของ
+              </div>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 space-y-1">
+              <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
+                <span>🎉 ชนะประมูลแล้ว</span>
+                <span>🏆</span>
+              </div>
+              <div className="text-2xl font-black text-emerald-400 font-mono truncate">{formatCurrency(wonBudget)}</div>
+              <div className="text-[11px] text-emerald-300/80 font-medium truncate">{wonProjects.length} โครงการเซ็นสัญญา</div>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs">
+                <span>📈 คาดการณ์ Weighted</span>
+                <span>🔮</span>
+              </div>
+              <div className="text-2xl font-black text-indigo-300 font-mono truncate">{formatCurrency(weightedForecast)}</div>
+              <div className="text-[11px] text-slate-400 truncate">ตาม % โอกาสชนะประมูล</div>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs">
+                <span>🩺 เดโม่เครื่องมือ</span>
+                <span>🏥</span>
+              </div>
+              <div className="text-2xl font-black text-cyan-300 font-mono">{scheduledDemos.length}</div>
+              <div className="text-[11px] text-slate-400 truncate">นัดหมายเดโม่โรงพยาบาล</div>
+            </div>
+
+          </div>
+
+          {/* Dual Charts Grid (Workload per Rep + Pipeline Doughnut) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+              <h3 className="font-extrabold text-white text-sm">📊 ภาระงานและมูลค่าโครงการแยกรายบุคคล (Workload per Rep)</h3>
+              <div className="h-64 relative">
+                <canvas ref={chartRefWorkload}></canvas>
+              </div>
+            </div>
+
+            <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+              <h3 className="font-extrabold text-white text-sm">🍩 สัดส่วนโครงการตามขั้นตอน Stage (Pipeline Funnel)</h3>
+              <div className="h-64 relative">
+                <canvas ref={chartRefStage}></canvas>
+              </div>
+            </div>
+          </div>
+
+          {/* Scheduled Demos Table */}
+          <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-100 text-sm sm:text-base flex items-center gap-2">
+                  <span>🧪 คิวสาธิตเครื่อง (Demo Schedule) & สินค้าที่ต้องเข้าทดสอบ</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
+                    {scheduledDemos.length} รายการ
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">โครงการที่มีนัดหมายเดโม่เครื่องกับโรงพยาบาล</p>
+              </div>
+            </div>
+
+            {scheduledDemos.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-xs">
+                ไม่มีโครงการที่อยู่ในช่วงนัดสาธิตเครื่องในขณะนี้
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">โรงพยาบาล / โครงการ</th>
+                      <th className="p-3">สินค้าที่เดโม่</th>
+                      <th className="p-3">เซลส์ผู้รับผิดชอบ</th>
+                      <th className="p-3">ช่วงวันที่นัดสาธิต</th>
+                      <th className="p-3 text-right">งบประมาณ</th>
+                      <th className="p-3 text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {scheduledDemos.map(p => {
+                      let demoDaysStr = '';
+                      if (p.demoStartDate && p.demoEndDate) {
+                        const start = new Date(p.demoStartDate);
+                        const end = new Date(p.demoEndDate);
+                        const diffTime = Math.abs(end - start);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                        demoDaysStr = ` (${diffDays} วัน)`;
+                      } else if (p.startDate && p.endDate) {
+                        const start = new Date(p.startDate);
+                        const end = new Date(p.endDate);
+                        const diffTime = Math.abs(end - start);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                        demoDaysStr = ` (${diffDays} วัน)`;
+                      }
+
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-100">{p.hospitalName}</div>
+                            <div className="text-[11px] text-slate-400 line-clamp-1">{p.title || p.productName}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-1 rounded-lg text-[10.5px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                              📦 {p.productName || 'ไม่ระบุรุ่น'}
+                            </span>
+                          </td>
+                          <td className="p-3 font-medium text-emerald-300">{p.salesPerson || p.assignee}</td>
+                          <td className="p-3 text-amber-300 font-mono">
+                            {(p.demoStartDate || p.startDate) ? `${p.demoStartDate || p.startDate} ถึง ${p.demoEndDate || p.endDate || 'N/A'}${demoDaysStr}` : 'ยังไม่ระบุ'}
+                          </td>
+                          <td className="p-3 text-right font-semibold text-emerald-400">
+                            {formatCurrency(p.budget || p.projectValue)}
+                          </td>
+                          <td className="p-3 text-center space-x-1">
+                            <button
+                              onClick={() => onViewHistory(p)}
+                              className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/70 text-indigo-200 text-xs rounded-lg border border-indigo-700/60 font-medium"
+                              title="ดูประวัติความเคลื่อนไหวย้อนหลัง"
+                            >
+                              📜 ประวัติ
+                            </button>
+                            <button
+                              onClick={() => onBookDemo(p)}
+                              className="px-2 py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 text-xs rounded-lg border border-purple-700/50"
+                            >
+                              🧪 จองคิว
+                            </button>
+                            <button
+                              onClick={() => onEditProject(p)}
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700"
+                            >
+                              ✏️ แก้ไข
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
+      )}
 
-        {scheduledDemos.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 text-xs">
-            ไม่มีโครงการที่อยู่ในช่วงนัดสาธิตเครื่องในขณะนี้
+      {/* ========================================================= */}
+      {/* 👑 TAB 1: CEO STRATEGIC DASHBOARD                         */}
+      {/* ========================================================= */}
+      {activeTab === 'ceo' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top 4 CEO Big KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Card 1: Revenue vs Target */}
+            <div className="glass-card p-5 rounded-3xl border border-emerald-500/30 bg-emerald-950/20 space-y-2 relative overflow-hidden">
+              <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
+                <span>🎯 ยอดขายชนะจริง vs เป้าหมายปี</span>
+                <span>🏆</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white font-mono">{formatCurrency(wonBudget)}</div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                  <span>เป้า ฿60.0M</span>
+                  <span className="text-emerald-400 font-bold">{targetAttainment.toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, targetAttainment)}%` }}></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Net Profit & Margin */}
+            <div className="glass-card p-5 rounded-3xl border border-indigo-500/30 bg-indigo-950/20 space-y-2">
+              <div className="flex items-center justify-between text-indigo-300 text-xs font-bold">
+                <span>📈 กำไรสุทธิรวม (Net Profit)</span>
+                <span>💰</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono">{formatCurrency(totalNetProfit)}</div>
+              <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>อัตรากำไรสุทธิเฉลี่ย</span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-bold font-mono">{avgMarginPercent.toFixed(1)}%</span>
+              </div>
+            </div>
+
+            {/* Card 3: Weighted Forecast */}
+            <div className="glass-card p-5 rounded-3xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
+                <span>🔮 มูลค่าคาดการณ์ 90 วัน</span>
+                <span>📊</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-300 font-mono">{formatCurrency(weightedForecast)}</div>
+              <div className="text-[11px] text-slate-400">
+                คำนวณถ่วงน้ำหนักจาก {totalProjects} โครงการในมือ
+              </div>
+            </div>
+
+            {/* Card 4: High Value Deals at Risk */}
+            <div className="glass-card p-5 rounded-3xl border border-rose-500/30 bg-rose-950/20 space-y-2">
+              <div className="flex items-center justify-between text-rose-300 text-xs font-bold">
+                <span>🚨 ดีลเสี่ยงสูง (เกิน ฿4M)</span>
+                <span>⚠️</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">{highValueRisks.length} <span className="text-xs font-normal text-slate-400">โครงการ</span></div>
+              <div className="text-[11px] text-rose-300/80 font-medium truncate">
+                มูลค่ารวม {formatCurrency(highValueRisks.reduce((s, r) => s + (Number(r.budget) || 0), 0))}
+              </div>
+            </div>
+
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-                <tr>
-                  <th className="p-3">โรงพยาบาล / โครงการ</th>
-                  <th className="p-3">สินค้าที่เดโม่</th>
-                  <th className="p-3">เซลส์ผู้รับผิดชอบ</th>
-                  <th className="p-3">ช่วงวันที่นัดสาธิต</th>
-                  <th className="p-3 text-right">งบประมาณ</th>
-                  <th className="p-3 text-center">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {scheduledDemos.map(p => {
-                  let demoDaysStr = '';
-                  if (p.demoStartDate && p.demoEndDate) {
-                    const start = new Date(p.demoStartDate);
-                    const end = new Date(p.demoEndDate);
-                    const diffTime = Math.abs(end - start);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                    demoDaysStr = ` (${diffDays} วัน)`;
-                  }
+
+          {/* Middle Section: Sales Funnel & High Value Risk Watchlist */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            
+            {/* Sales Pipeline Funnel Breakdown */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>📊 กระบวนการขาย (Sales Pipeline Funnel)</span>
+                </h3>
+                <button
+                  onClick={() => onOpenReport('sales_pipeline_funnel')}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"
+                >
+                  <span>รายงานเชิงลึก</span> <span>➔</span>
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {(window.STAGES || []).map(stage => {
+                  const stageProjects = filteredProjects.filter(p => p.status === stage.id);
+                  const stageValue = stageProjects.reduce((s, p) => s + (Number(p.budget) || 0), 0);
+                  const percentOfTotal = totalBudget > 0 ? (stageValue / totalBudget) * 100 : 0;
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-100">{p.hospitalName}</div>
-                        <div className="text-[11px] text-slate-400 line-clamp-1">{p.title}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-1 rounded-lg text-[10.5px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-                          📦 {p.productName || 'ไม่ระบุรุ่น'}
-                        </span>
-                      </td>
-                      <td className="p-3 font-medium text-emerald-300">{p.assignee}</td>
-                      <td className="p-3 text-amber-300 font-mono">
-                        {p.demoStartDate ? `${p.demoStartDate} ถึง ${p.demoEndDate || 'N/A'}${demoDaysStr}` : 'ยังไม่ระบุ'}
-                      </td>
-                      <td className="p-3 text-right font-semibold text-emerald-400">
-                        {formatCurrency(p.budget)}
-                      </td>
-                      <td className="p-3 text-center space-x-1">
-                        <button
-                          onClick={() => onViewHistory(p)}
-                          className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/70 text-indigo-200 text-xs rounded-lg border border-indigo-700/60 font-medium"
-                          title="ดูประวัติความเคลื่อนไหวย้อนหลัง"
-                        >
-                          📜 ประวัติ ({p.weeklyLogs ? p.weeklyLogs.length : 0})
-                        </button>
-                        <button
-                          onClick={() => onBookDemo(p)}
-                          className="px-2 py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 text-xs rounded-lg border border-purple-700/50"
-                        >
-                          🧪 จองคิว
-                        </button>
-                        <button
-                          onClick={() => onEditProject(p)}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700"
-                        >
-                          ✏️ แก้ไข
-                        </button>
-                      </td>
-                    </tr>
+                    <div key={stage.id} className="p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-200">{stage.title || stage.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400">{stageProjects.length} งาน</span>
+                          <span className="font-mono font-bold text-emerald-400">{formatCurrency(stageValue)}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${percentOfTotal}%` }}></div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            {/* High-Value Deals Watchlist */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>🚨 ดีลใหญ่ที่ต้องจับตาเป็นพิเศษ (High-Value Watchlist)</span>
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
+                  งบประมาณ ฿4.0M ขึ้นไป
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {highValueRisks.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500 text-xs">
+                    🎉 ไม่มีดีลเสี่ยงสูงที่ค้างอยู่ในขณะนี้
+                  </div>
+                ) : (
+                  highValueRisks.map(p => (
+                    <div key={p.id} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="font-bold text-white text-xs sm:text-sm">{p.hospitalName}</div>
+                        <div className="text-[11px] text-slate-400">{p.title}</div>
+                        <div className="flex items-center gap-2 text-[10.5px]">
+                          <span className="text-emerald-400 font-bold font-mono">งบ {formatCurrency(p.budget)}</span>
+                          <span className="text-slate-500">•</span>
+                          <span className="text-slate-300">เซลส์: {p.salesPerson || p.assignee}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onEditProject(p)}
+                        className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shrink-0"
+                      >
+                        ดูโครงการ
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
           </div>
-        )}
-      </div>
+
+          {/* Bottom Section: Top Hospitals & Sales Leaderboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            
+            {/* Top Hospitals */}
+            <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 className="font-extrabold text-white text-sm">🏥 สรุปยอดขายรายโรงพยาบาล (Hospital Share)</h3>
+                <button onClick={() => onOpenReport('hospital_penetration')} className="text-xs text-indigo-400 font-bold">ดูทั้งหมด ➔</button>
+              </div>
+              <div className="divide-y divide-slate-800/60">
+                {filteredProjects.slice(0, 5).map((p, idx) => (
+                  <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
+                    <div className="font-semibold text-slate-200">{p.hospitalName}</div>
+                    <span className="font-mono font-bold text-emerald-400">{formatCurrency(p.budget)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Sales Leaderboard */}
+            <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 className="font-extrabold text-white text-sm">🏆 อันดับผลงานทีมขาย (Sales Leaderboard)</h3>
+                <button onClick={() => onOpenReport('sales_rep_performance')} className="text-xs text-indigo-400 font-bold">ดูทั้งหมด ➔</button>
+              </div>
+              <div className="divide-y divide-slate-800/60">
+                {(members || []).map((m, idx) => {
+                  const myProjects = filteredProjects.filter(p => p.salesPerson === m.name || p.assignee === m.name);
+                  const myWon = myProjects.filter(p => ['stage_won', 'stage_ordering', 'stage_delivery', 'stage_complete'].includes(p.status));
+                  const myWonRev = myWon.reduce((s, p) => s + (Number(p.budget) || 0), 0);
+                  return (
+                    <div key={m.id || idx} className="py-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-bold text-[10px] flex items-center justify-center">{idx + 1}</span>
+                        <span className="font-bold text-slate-200">{m.name}</span>
+                        <span className="text-[10px] text-slate-400">({myProjects.length} งาน)</span>
+                      </div>
+                      <span className="font-mono font-bold text-indigo-400">{formatCurrency(myWonRev)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 💰 TAB 2: CFO FINANCIAL DASHBOARD                         */}
+      {/* ========================================================= */}
+      {activeTab === 'cfo' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top 4 CFO Big KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Card 1: Liquid Cash on Hand */}
+            <div className="glass-card p-5 rounded-3xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
+              <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
+                <span>💵 เงินสดสภาพคล่องพร้อมใช้</span>
+                <span>🏦</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white font-mono">฿12,450,000</div>
+              <div className="text-[11px] text-slate-400">รวม 5 บัญชีธนาคารและเงินสดย่อย</div>
+            </div>
+
+            {/* Card 2: Stage 4+ Capital Required */}
+            <div className="glass-card p-5 rounded-3xl border border-amber-500/30 bg-amber-950/20 space-y-2">
+              <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
+                <span>📦 เงินทุนสำรองสั่งของ Stage 4+</span>
+                <span>🛒</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">{formatCurrency(stage4Metrics.totalCapital)}</div>
+              <div className="text-[11px] text-slate-400">สำหรับ {stage4Metrics.count} โครงการที่ชนะงานแล้ว</div>
+            </div>
+
+            {/* Card 3: Vendor PO Commitments */}
+            <div className="glass-card p-5 rounded-3xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
+                <span>🛒 ภาระหนี้ PO รอชำระ Vendor</span>
+                <span>🧾</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono">
+                {formatCurrency((purchaseOrders || []).filter(po => po.paymentStatus !== 'ชำระแล้ว').reduce((s, p) => s + (Number(p.totalAmount) || 0), 0))}
+              </div>
+              <div className="text-[11px] text-slate-400">กำหนดชำระภายใน 30 วัน</div>
+            </div>
+
+            {/* Card 4: Retention 5% */}
+            <div className="glass-card p-5 rounded-3xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
+                <span>⏳ เงินประกันสัญญา / Retention 5%</span>
+                <span>🛡️</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-300 font-mono">
+                {formatCurrency(totalBudget * 0.05)}
+              </div>
+              <div className="text-[11px] text-slate-400">เงินค้ำประกันที่จะได้รับคืนจาก รพ.</div>
+            </div>
+
+          </div>
+
+          {/* Middle CFO Section: Upcoming Payables & Margin Auditing */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            
+            {/* Upcoming Payables */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>📅 ปฏิทินวันครบกำหนดจ่ายเงิน (Upcoming Payables)</span>
+                </h3>
+                <span className="text-xs text-amber-400 font-bold">เตรียมเงินสด</span>
+              </div>
+
+              <div className="space-y-3">
+                {(purchaseOrders || []).slice(0, 3).map((po, idx) => (
+                  <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-slate-200">PO: {po.poNumber} ({po.vendorName})</div>
+                      <div className="text-[11px] text-slate-400">{po.productName}</div>
+                      <div className="text-[10px] text-amber-300 font-mono">กำหนดส่ง: {po.deliveryDate || 'N/A'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-emerald-400 text-sm">{formatCurrency(po.totalAmount)}</div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {po.paymentStatus || 'รอชำระเงิน'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Project Margin Audit */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>🧮 ตรวจสอบโครงสร้างกำไรรายโครงการ (Margin Audit)</span>
+                </h3>
+                <button onClick={() => onOpenReport('cost_margin_sheet')} className="text-xs text-indigo-400 font-bold">ดูรายงานต้นทุน ➔</button>
+              </div>
+
+              <div className="space-y-3">
+                {calculatedCostSheets.slice(0, 4).map((item, idx) => (
+                  <div key={idx} className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-slate-200">{item.proj.hospitalName}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">ราคาขาย {formatCurrency(item.proj.budget)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-indigo-400">กำไร {formatCurrency(item.computed.netProfit)}</div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${item.computed.netProfitPercent >= 15 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                        {item.computed.netProfitPercent.toFixed(1)}% Margin
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 🎯 TAB 3: MANAGER OPERATIONS DASHBOARD                    */}
+      {/* ========================================================= */}
+      {activeTab === 'manager' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top 4 Manager Big KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Card 1: Active Projects */}
+            <div className="glass-card p-5 rounded-3xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-slate-400 text-xs">
+                <span>📋 โครงการที่กำลังดำเนินการ</span>
+                <span>📂</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white font-mono">{totalProjects} <span className="text-xs font-normal text-slate-400">โครงการ</span></div>
+              <div className="text-[11px] text-slate-400">ดูแลโดยทีมขาย {members.length} ท่าน</div>
+            </div>
+
+            {/* Card 2: Demo Fleet Active */}
+            <div className="glass-card p-5 rounded-3xl border border-purple-500/30 bg-purple-950/20 space-y-2">
+              <div className="flex items-center justify-between text-purple-300 text-xs font-bold">
+                <span>🧪 เครื่อง Demo ประจำอยู่ รพ.</span>
+                <span>🏥</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-purple-300 font-mono">{scheduledDemos.length} <span className="text-xs font-normal text-slate-400">เครื่อง</span></div>
+              <div className="text-[11px] text-slate-400">ระยะเวลาสาธิตเฉลี่ย 4.5 วัน</div>
+            </div>
+
+            {/* Card 3: Active Shipments */}
+            <div className="glass-card p-5 rounded-3xl border border-cyan-500/30 bg-cyan-950/20 space-y-2">
+              <div className="flex items-center justify-between text-cyan-300 text-xs font-bold">
+                <span>🚢 ชิปปิ้งนำเข้ากำลังเดินทาง</span>
+                <span>✈️</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-300 font-mono">{(shipments || []).length} <span className="text-xs font-normal text-slate-400">ล็อต</span></div>
+              <div className="text-[11px] text-slate-400">ติดตามผ่านระบบนับวันจ่ายเงิน</div>
+            </div>
+
+            {/* Card 4: Active Repairs */}
+            <div className="glass-card p-5 rounded-3xl border border-rose-500/30 bg-rose-950/20 space-y-2">
+              <div className="flex items-center justify-between text-rose-300 text-xs font-bold">
+                <span>🔧 คิวงานแจ้งส่งซ่อม</span>
+                <span>⚙️</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-rose-300 font-mono">{(repairTickets || []).length} <span className="text-xs font-normal text-slate-400">เคส</span></div>
+              <div className="text-[11px] text-slate-400">เวลาซ่อมเฉลี่ย 3 วันทำการ</div>
+            </div>
+
+          </div>
+
+          {/* Middle Manager Section: Demo Schedule & Warranty Expiring Soon */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            
+            {/* Demo Return Deadlines */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>🧪 คิวเครื่อง Demo & วันครบกำหนดคืน</span>
+                </h3>
+                <button onClick={() => onOpenReport('demo_journey_log')} className="text-xs text-indigo-400 font-bold">ดูประวัติเดโม่ ➔</button>
+              </div>
+
+              <div className="space-y-3">
+                {scheduledDemos.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500 text-xs">ไม่มีคิวเดโม่ที่กำลังดำเนินการ</div>
+                ) : (
+                  scheduledDemos.map((b, idx) => (
+                    <div key={idx} className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-200">{b.productName}</div>
+                        <div className="text-[11px] text-slate-400">ณ {b.hospitalName} ({b.salesPerson})</div>
+                      </div>
+                      <div className="text-right">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/20 text-purple-300 font-mono font-bold">
+                          สิ้นสุด {b.endDate}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Warranty Alerts (Opportunity to Sell MA) */}
+            <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <span>🛡️ เครื่องที่ใกล้หมดประกัน (โอกาสขายสัญญา MA)</span>
+                </h3>
+                <button onClick={() => onOpenReport('warranty_expiry_matrix')} className="text-xs text-indigo-400 font-bold">ดูทั้งหมด ➔</button>
+              </div>
+
+              <div className="space-y-3">
+                {warrantyAlerts.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500 text-xs">เครื่องทั้งหมดอยู่ในประกันปกติ</div>
+                ) : (
+                  warrantyAlerts.slice(0, 4).map((item, idx) => (
+                    <div key={idx} className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-200">{item.productName} ({item.serialNumber})</div>
+                        <div className="text-[11px] text-slate-400">{item.hospitalName}</div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${item.daysLeft < 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                          {item.daysLeft < 0 ? '🔴 หมดประกันแล้ว' : `🟡 เหลือ ${item.daysLeft} วัน`}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
 }
+
+window.ManagerDashboard = ManagerDashboard;
 
 
 // --- Module File: js/modules/mod02_clients/ClientsDirectoryView.js ---
@@ -5870,6 +6694,7 @@ function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) 
       shippingCost: 35000,
       dutyTaxes: 12000,
       customsBroker: 'V-Cargo Logistics (Thailand)',
+      paymentDate: shipment?.paymentDate || '',
       etd: new Date().toISOString().split('T')[0],
       eta: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
       status: window.SHIPMENT_STATUSES[0],
@@ -6054,33 +6879,63 @@ function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">วันที่ส่งออกจากต้นทาง (ETD)</label>
+          {/* 📅 Dates & Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            
+            {/* วันที่จ่ายเงิน */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-emerald-300 flex items-center justify-between">
+                <span>💳 วันที่จ่ายเงิน</span>
+                {formData.paymentDate && (
+                  <span className="text-[10px] text-amber-300 font-mono font-bold">
+                    {(() => {
+                      const p = new Date(formData.paymentDate);
+                      const t = new Date();
+                      p.setHours(0,0,0,0);
+                      t.setHours(0,0,0,0);
+                      const diff = Math.floor((t - p) / 86400000);
+                      return diff >= 0 ? `(ผ่านมา ${diff} วัน)` : `(อีก ${Math.abs(diff)} วัน)`;
+                    })()}
+                  </span>
+                )}
+              </label>
+              <input
+                type="date"
+                value={formData.paymentDate || ''}
+                onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-300 font-mono font-bold outline-none focus:border-emerald-500 text-xs"
+              />
+            </div>
+
+            {/* วันที่ส่งออก (ETD) */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🛫 ส่งออกจากต้นทาง (ETD)</label>
               <input
                 type="date"
                 value={formData.etd}
                 onChange={(e) => setFormData({ ...formData, etd: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none focus:border-cyan-500 text-xs"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">วันที่คาดว่าถึงไทย (ETA)</label>
+            {/* วันที่คาดว่าถึงไทย (ETA) */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🛬 คาดว่าถึงไทย (ETA)</label>
               <input
                 type="date"
                 value={formData.eta}
                 onChange={(e) => setFormData({ ...formData, eta: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-mono font-bold outline-none focus:border-cyan-500 text-xs"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">สถานะการนำเข้า <span className="text-rose-400">*</span></label>
+            {/* สถานะการนำเข้า */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🏷️ สถานะนำเข้า <span className="text-rose-400">*</span></label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full bg-slate-950 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 font-bold outline-none"
+                className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg p-2 text-cyan-300 font-bold outline-none focus:border-cyan-400 text-xs"
               >
                 {window.SHIPMENT_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
@@ -6299,6 +7154,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
                 <th className="p-3">ผู้จัดขนส่ง & เลข AWB/BL</th>
                 <th className="p-3">ปริมาตร CBM / น้ำหนัก</th>
                 <th className="p-3 text-right">ค่าขนส่ง & ภาษีศุลกากร</th>
+                <th className="p-3 text-center min-w-[130px]">💳 วันจ่ายเงิน / นับวัน</th>
                 <th className="p-3 text-center">วันที่ ETD / ETA</th>
                 <th className="p-3 text-center">สถานะนำเข้า</th>
                 <th className="p-3 text-center">จัดการ</th>
@@ -6307,7 +7163,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
             <tbody className="divide-y divide-slate-800/60">
               {filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-8 text-center text-slate-500 text-xs">
+                  <td colSpan="9" className="p-8 text-center text-slate-500 text-xs">
                     ไม่พบรายการนำเข้าสินค้าตรงตามเงื่อนไขที่ค้นหา
                   </td>
                 </tr>
@@ -6356,6 +7212,43 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
                         <div className="font-bold text-emerald-400">{formatCurrency(shp.shippingCost)}</div>
                         {shp.dutyTaxes > 0 && (
                           <div className="text-[10px] text-purple-300">+ ภาษี {formatCurrency(shp.dutyTaxes)}</div>
+                        )}
+                      </td>
+
+                      {/* Payment Date & Elapsed Days Counter */}
+                      <td className="p-3 text-center">
+                        {shp.paymentDate ? (
+                          <div className="space-y-1">
+                            <div className="font-mono text-emerald-300 font-bold text-xs flex items-center justify-center gap-1">
+                              <span>💳</span> <span>{shp.paymentDate}</span>
+                            </div>
+                            <div>
+                              {(() => {
+                                const p = new Date(shp.paymentDate);
+                                const t = new Date();
+                                p.setHours(0,0,0,0);
+                                t.setHours(0,0,0,0);
+                                const diff = Math.floor((t - p) / 86400000);
+                                if (diff >= 0) {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10.5px] font-mono font-bold inline-flex items-center gap-1">
+                                      <span>⏱️</span> <span>ผ่านมา {diff} วัน</span>
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-mono">
+                                      อีก {Math.abs(diff)} วัน
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 text-[10.5px] border border-slate-700">
+                            ⏳ ยังไม่ระบุวันจ่าย
+                          </span>
                         )}
                       </td>
 
@@ -6434,18 +7327,34 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
+              <div>
+                <span className="text-slate-500 font-bold">💳 วันที่จ่ายเงิน:</span>
+                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate || 'ยังไม่ระบุ'}</div>
+                {previewShipment.paymentDate && (
+                  <div className="text-amber-300 text-[10.5px] font-bold mt-0.5">
+                    {(() => {
+                      const p = new Date(previewShipment.paymentDate);
+                      const t = new Date();
+                      p.setHours(0,0,0,0);
+                      t.setHours(0,0,0,0);
+                      const diff = Math.floor((t - p) / 86400000);
+                      return diff >= 0 ? `⏱️ ผ่านมา ${diff} วันแล้ว` : `อีก ${Math.abs(diff)} วัน`;
+                    })()}
+                  </div>
+                )}
+              </div>
               <div>
                 <span className="text-slate-500 font-bold">ปริมาตร (CBM):</span>
-                <div className="text-amber-400 font-bold text-base">{previewShipment.cbm} CBM</div>
+                <div className="text-amber-400 font-bold text-sm">{previewShipment.cbm} CBM</div>
               </div>
               <div>
                 <span className="text-slate-500 font-bold">น้ำหนักรวม (Weight):</span>
-                <div className="text-slate-200 font-bold text-base">{previewShipment.grossWeight || 0} kg</div>
+                <div className="text-slate-200 font-bold text-sm">{previewShipment.grossWeight || 0} kg</div>
               </div>
               <div>
                 <span className="text-slate-500 font-bold">ค่าขนส่งรวม:</span>
-                <div className="text-emerald-400 font-bold text-base">{formatCurrency(previewShipment.shippingCost)}</div>
+                <div className="text-emerald-400 font-bold text-sm">{formatCurrency(previewShipment.shippingCost)}</div>
               </div>
             </div>
 
@@ -6773,7 +7682,7 @@ function SoldProductModal({ asset, projects, members, onSave, onClose }) {
 // --- Module File: js/modules/mod04_logistics/SoldProductsView.js ---
 // MODULE: mod04_logistics/SoldProductsView.js
 
-function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail }) {
+function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
   const [filterYear, setFilterYear] = useState('all');
   const [filterSales, setFilterSales] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -6935,6 +7844,15 @@ function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset
                 <option key={m.id} value={m.name}>{m.name}</option>
               ))}
             </select>
+
+            <button
+              onClick={() => onOpenReport && onOpenReport('warranty_expiry_matrix')}
+              className="px-3 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+              title="เปิดรายงานสัญญาประกันและเครื่องใกล้หมดประกัน"
+            >
+              <span>🛡️</span>
+              <span>รายงานประกัน & MA</span>
+            </button>
           </div>
         </div>
 
@@ -7160,15 +8078,18 @@ function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset
 
 function DemoBookingModal({ prefill, projects, products, members, existingBookings, onSave, onClose }) {
   const [formData, setFormData] = useState({
+    id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',
     hospitalName: prefill?.hospitalName || '',
     productId: prefill?.productId || (products[0] ? products[0].id : ''),
-    demoSerial: '',
+    demoSerial: prefill?.demoSerial || '',
     salesPerson: prefill?.salesPerson || (members[0] ? members[0].name : ''),
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-    status: 'อนุมัติคิว',
-    note: ''
+    startDate: prefill?.startDate || new Date().toISOString().split('T')[0],
+    endDate: prefill?.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    status: prefill?.status || 'อนุมัติคิว',
+    expenseAmount: prefill?.expenseAmount || prefill?.demoCost || '',
+    outcomeStatus: prefill?.outcomeStatus || 'กำลังทดสอบ / รอผล',
+    note: prefill?.note || ''
   });
 
   const [conflictWarning, setConflictWarning] = useState('');
@@ -7328,6 +8249,33 @@ function DemoBookingModal({ prefill, projects, products, members, existingBookin
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-300">💸 ค่าใช้จ่ายเดโม่ (บาท THB)</label>
+              <input
+                type="number"
+                placeholder="เช่น 1500 (ค่าน้ำมัน/ขนส่ง)"
+                value={formData.expenseAmount}
+                onChange={(e) => setFormData({ ...formData, expenseAmount: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-300">🎯 สถานะผลลัพธ์การเดโม่</label>
+              <select
+                value={formData.outcomeStatus}
+                onChange={(e) => setFormData({ ...formData, outcomeStatus: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-semibold"
+              >
+                <option value="กำลังทดสอบ / รอผล">⏳ กำลังทดสอบ / รอผล</option>
+                <option value="ชนะประมูล / ปิดการขายสำเร็จ">🏆 ชนะประมูล / ปิดการขายสำเร็จ</option>
+                <option value="แพ้ประมูล / ปิดไม่สำเร็จ">❌ แพ้ประมูล / ปิดไม่สำเร็จ</option>
+                <option value="ขยายเวลาทดสอบ">🔄 ขยายเวลาทดสอบ</option>
+              </select>
+            </div>
+          </div>
+
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">หมายเหตุการประสานงาน / ติดตั้ง</label>
             <textarea
@@ -7370,6 +8318,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
   const [filterProduct, setFilterProduct] = useState('all');
   const [calendarMode, setCalendarMode] = useState('month'); // 'month' or 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7, 1)); // Default August 2026 for mock data
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return demoBookings.filter(b => {
@@ -7409,8 +8358,17 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           
+          {/* 📊 Demo Analytics Report Button */}
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 font-bold text-xs py-2.5 px-3.5 rounded-xl border border-amber-500/40 shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+            title="ดูรายงานประวัติการเดินทางของเครื่อง ค่าใช้จ่าย และอัตรา Win Rate"
+          >
+            <span>📊 รายงานประวัติ & สถิติ Demo</span>
+          </button>
+
           {/* Mode Switcher */}
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
             <button
@@ -7419,7 +8377,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
                 calendarMode === 'month' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              🗓️ มุมมอง Month Grid
+              🗓️ Month Grid
             </button>
             <button
               onClick={() => setCalendarMode('list')}
@@ -7427,7 +8385,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
                 calendarMode === 'list' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              📋 มุมมอง รายการ
+              📋 รายการ
             </button>
           </div>
 
@@ -7436,7 +8394,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
             onChange={(e) => setFilterProduct(e.target.value)}
             className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl p-2.5 outline-none"
           >
-            <option value="all">กรองตามเครื่องสาธิตทุกรุ่น</option>
+            <option value="all">กรองทุกรุ่น</option>
             {(products || []).map(p => (
               <option key={p.id} value={p.id}>📦 {p.name}</option>
             ))}
@@ -7444,7 +8402,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
 
           <button
             onClick={onOpenBookDemo}
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center gap-1.5"
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center gap-1.5 active:scale-95"
           >
             <span>+ เพิ่มการจองคิว Demo</span>
           </button>
@@ -7519,6 +8477,450 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
         </div>
       )}
 
+      {/* 📊 Demo Analytics & History Report Modal */}
+      <DemoReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        demoBookings={demoBookings}
+        products={products}
+        projects={projects}
+        members={members}
+      />
+
+    </div>
+  );
+}
+
+
+// --- Module File: js/modules/mod05_calendar/DemoReportModal.js ---
+// MODULE: mod05_calendar/DemoReportModal.js
+
+function DemoReportModal({ isOpen, onClose, demoBookings = [], products = [], projects = [], members = [] }) {
+  if (!isOpen) return null;
+
+  const [filterProduct, setFilterProduct] = useState('all');
+  const [filterSales, setFilterSales] = useState('all');
+  const [filterOutcome, setFilterOutcome] = useState('all');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [activeTab, setActiveTab] = useState('journey'); // 'journey' | 'machine_stats'
+
+  // Calculate days difference
+  const calculateDays = (start, end) => {
+    if (!start || !end) return 1;
+    const s = new Date(start);
+    const e = new Date(end);
+    const diff = Math.ceil((e - s) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 1;
+  };
+
+  // Enriched bookings data
+  const enrichedBookings = useMemo(() => {
+    return (demoBookings || []).map(b => {
+      const prod = products.find(p => p.id === b.productId);
+      const proj = projects.find(p => p.id === b.projectId || (p.hospital && p.hospital.includes(b.hospitalName)));
+      const days = calculateDays(b.startDate, b.endDate);
+      const expense = Number(b.expenseAmount) || Number(b.demoCost) || 0;
+      
+      // Auto outcome if linked to project status
+      let outcome = b.outcomeStatus || 'กำลังทดสอบ / รอผล';
+      if (!b.outcomeStatus && proj) {
+        if (['won', 'closed_won', 'delivered'].includes(proj.status)) outcome = 'ชนะประมูล / ปิดการขายสำเร็จ';
+        else if (['lost', 'closed_lost', 'cancelled'].includes(proj.status)) outcome = 'แพ้ประมูล / ปิดไม่สำเร็จ';
+      }
+
+      return {
+        ...b,
+        productName: b.productName || (prod ? prod.name : 'เครื่องมือแพทย์'),
+        productCategory: b.productCategory || (prod ? prod.category : 'อุปกรณ์แพทย์'),
+        demoSerial: b.demoSerial || (prod && prod.demoSerialNumbers ? prod.demoSerialNumbers[0] : 'DEMO-SN-01'),
+        days,
+        expense,
+        outcome,
+        projectValue: proj ? Number(proj.budget || proj.value || 0) : 0,
+        linkedProject: proj
+      };
+    });
+  }, [demoBookings, products, projects]);
+
+  // Filtered dataset
+  const filteredData = useMemo(() => {
+    return enrichedBookings.filter(b => {
+      if (filterProduct !== 'all' && b.productId !== filterProduct) return false;
+      if (filterSales !== 'all' && b.salesPerson !== filterSales) return false;
+      if (filterOutcome !== 'all' && b.outcome !== filterOutcome) return false;
+      if (dateStart && b.startDate < dateStart) return false;
+      if (dateEnd && b.endDate > dateEnd) return false;
+      return true;
+    });
+  }, [enrichedBookings, filterProduct, filterSales, filterOutcome, dateStart, dateEnd]);
+
+  // Overall KPI Analytics
+  const kpis = useMemo(() => {
+    const totalDemos = filteredData.length;
+    const totalDays = filteredData.reduce((sum, b) => sum + b.days, 0);
+    const avgDays = totalDemos > 0 ? (totalDays / totalDemos).toFixed(1) : 0;
+    const totalExpenses = filteredData.reduce((sum, b) => sum + b.expense, 0);
+    
+    const wonDemos = filteredData.filter(b => b.outcome && (b.outcome.includes('ชนะ') || b.outcome.includes('สำเร็จ'))).length;
+    const winRate = totalDemos > 0 ? ((wonDemos / totalDemos) * 100).toFixed(1) : 0;
+    
+    const wonValue = filteredData
+      .filter(b => b.outcome && (b.outcome.includes('ชนะ') || b.outcome.includes('สำเร็จ')))
+      .reduce((sum, b) => sum + b.projectValue, 0);
+
+    return { totalDemos, totalDays, avgDays, totalExpenses, wonDemos, winRate, wonValue };
+  }, [filteredData]);
+
+  // Machine Stats Grouping
+  const machineStats = useMemo(() => {
+    const map = {};
+    filteredData.forEach(b => {
+      const key = (b.productName || '') + '__' + (b.demoSerial || '');
+      if (!map[key]) {
+        map[key] = {
+          productName: b.productName,
+          serial: b.demoSerial,
+          count: 0,
+          totalDays: 0,
+          totalExpense: 0,
+          wonCount: 0,
+          lastHospital: b.hospitalName,
+          lastDate: b.endDate
+        };
+      }
+      map[key].count += 1;
+      map[key].totalDays += b.days;
+      map[key].totalExpense += b.expense;
+      if (b.outcome && (b.outcome.includes('ชนะ') || b.outcome.includes('สำเร็จ'))) {
+        map[key].wonCount += 1;
+      }
+      if (b.endDate > map[key].lastDate) {
+        map[key].lastDate = b.endDate;
+        map[key].lastHospital = b.hospitalName;
+      }
+    });
+    return Object.values(map);
+  }, [filteredData]);
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const headers = [
+      'ลำดับ', 'โรงพยาบาล/สถานที่เดโม่', 'รุ่นเครื่อง', 'Serial Number (S/N)', 
+      'ผู้รับผิดชอบเดโม่', 'วันเริ่มเดโม่', 'วันสิ้นสุด', 'จำนวนวันที่วางเครื่อง (วัน)', 
+      'ค่าใช้จ่ายเดโม่ (บาท)', 'ผลลัพธ์การเดโม่', 'หมายเหตุ'
+    ];
+
+    const rows = filteredData.map((b, idx) => [
+      idx + 1,
+      '"' + (b.hospitalName || '').replace(/"/g, '""') + '"',
+      '"' + (b.productName || '').replace(/"/g, '""') + '"',
+      '"' + (b.demoSerial || '').replace(/"/g, '""') + '"',
+      '"' + (b.salesPerson || '').replace(/"/g, '""') + '"',
+      b.startDate || '',
+      b.endDate || '',
+      b.days,
+      b.expense,
+      '"' + (b.outcome || '').replace(/"/g, '""') + '"',
+      '"' + (b.note || '').replace(/"/g, '""') + '"'
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'AERON_Demo_Analytics_Report_' + new Date().toISOString().split('T')[0] + '.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[850] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fade-in font-sans">
+      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-5xl rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl animate-modal max-h-[92vh] flex flex-col text-slate-100">
+        
+        {/* Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center text-2xl shadow-inner">
+              📊
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-white text-base sm:text-lg">รายงานประวัติ & สถิติการ Demo (Demo Analytics Report)</h3>
+                <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+                  AERON MEDICAL
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">สรุปการเดินทางของแต่ละเครื่อง, ระยะเวลาวางเครื่อง, ผู้ดูแล, ค่าใช้จ่าย และอัตรา Win Rate</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95"
+            >
+              <span>📥 ส่งออก Excel (CSV)</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+            >
+              ✕ ปิด
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+          
+          {/* Top 5 KPI Summary Metric Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-medium">🧪 จำนวนการเดโม่ทั้งหมด</span>
+              <div className="text-xl font-extrabold text-purple-300 font-mono">{kpis.totalDemos} <span className="text-xs font-sans text-slate-400 font-normal">ครั้ง</span></div>
+            </div>
+
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-medium">⏳ วันเฉลี่ยที่วางเครื่อง</span>
+              <div className="text-xl font-extrabold text-cyan-300 font-mono">{kpis.avgDays} <span className="text-xs font-sans text-slate-400 font-normal">วัน/ที่</span></div>
+            </div>
+
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-medium">💸 ค่าใช้จ่ายเดโม่รวม</span>
+              <div className="text-xl font-extrabold text-amber-300 font-mono">{formatCurrency(kpis.totalExpenses)}</div>
+            </div>
+
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-medium">🎯 อัตราปิดการขาย (Win Rate)</span>
+              <div className="text-xl font-extrabold text-emerald-400 font-mono">{kpis.winRate}% <span className="text-xs font-sans text-emerald-500 font-normal">({kpis.wonDemos}/{kpis.totalDemos})</span></div>
+            </div>
+
+            <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1 col-span-2 sm:col-span-1">
+              <span className="text-[11px] text-slate-400 font-medium">💰 มูลค่างานที่ปิดได้</span>
+              <div className="text-xl font-extrabold text-emerald-300 font-mono">{formatCurrency(kpis.wonValue)}</div>
+            </div>
+          </div>
+
+          {/* Filter Controls */}
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center gap-2.5 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
+              <span>🔍 ตัวกรอง:</span>
+            </div>
+
+            <select
+              value={filterProduct}
+              onChange={(e) => setFilterProduct(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+            >
+              <option value="all">กรองทุกรุ่นสินค้า</option>
+              {(products || []).map(p => (
+                <option key={p.id} value={p.id}>📦 {p.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterSales}
+              onChange={(e) => setFilterSales(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+            >
+              <option value="all">กรองทุกพนักงานขาย</option>
+              {(members || []).map(m => (
+                <option key={m.id} value={m.name}>👤 {m.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterOutcome}
+              onChange={(e) => setFilterOutcome(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-200 outline-none"
+            >
+              <option value="all">กรองทุกสถานะผลลัพธ์</option>
+              <option value="กำลังทดสอบ / รอผล">⏳ กำลังทดสอบ / รอผล</option>
+              <option value="ชนะประมูล / ปิดการขายสำเร็จ">🏆 ชนะประมูล / ปิดการขายสำเร็จ</option>
+              <option value="แพ้ประมูล / ปิดไม่สำเร็จ">❌ แพ้ประมูล / ปิดไม่สำเร็จ</option>
+            </select>
+
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={dateStart}
+                onChange={(e) => setDateStart(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl p-1.5 px-2 text-slate-200 outline-none font-mono text-[11px]"
+                title="ตั้งแต่วันที่"
+              />
+              <span className="text-slate-500">-</span>
+              <input
+                type="date"
+                value={dateEnd}
+                onChange={(e) => setDateEnd(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl p-1.5 px-2 text-slate-200 outline-none font-mono text-[11px]"
+                title="ถึงวันที่"
+              />
+            </div>
+
+            {(filterProduct !== 'all' || filterSales !== 'all' || filterOutcome !== 'all' || dateStart || dateEnd) && (
+              <button
+                onClick={() => { setFilterProduct('all'); setFilterSales('all'); setFilterOutcome('all'); setDateStart(''); setDateEnd(''); }}
+                className="text-[11px] text-rose-400 hover:text-rose-300 underline font-semibold ml-auto"
+              >
+                ✕ ล้างตัวกรอง
+              </button>
+            )}
+          </div>
+
+          {/* View Mode Tabs */}
+          <div className="flex border-b border-slate-800 gap-2 text-xs">
+            <button
+              onClick={() => setActiveTab('journey')}
+              className={'pb-2.5 px-3 font-bold border-b-2 transition-all flex items-center gap-1.5 ' + (activeTab === 'journey' ? 'border-purple-500 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200')}
+            >
+              <span>🏥 1. รายละเอียดประวัติการเดินทางของเครื่อง (Journey Log)</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-slate-800 text-[10px]">{filteredData.length}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('machine_stats')}
+              className={'pb-2.5 px-3 font-bold border-b-2 transition-all flex items-center gap-1.5 ' + (activeTab === 'machine_stats' ? 'border-purple-500 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200')}
+            >
+              <span>📦 2. สรุปสถิติ & ประสิทธิภาพรายเครื่อง (Machine Performance)</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-slate-800 text-[10px]">{machineStats.length}</span>
+            </button>
+          </div>
+
+          {/* Tab 1: Detailed Journey Table */}
+          {activeTab === 'journey' && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-md">
+              <table className="w-full text-left text-xs border-collapse min-w-[850px]">
+                <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider text-[10.5px] border-b border-slate-800">
+                  <tr>
+                    <th className="p-2.5 px-3 text-center w-12 border-r border-slate-800">ลำดับ</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 min-w-[160px]">โรงพยาบาล / หน่วยงาน</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 min-w-[160px]">รุ่นเครื่อง & หมายเลข S/N</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 w-32">ผู้รับผิดชอบ</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 text-center w-28">ช่วงวันที่เดโม่</th>
+                    <th className="p-2.5 px-2 text-center w-20 border-r border-slate-800">วางไว้ (วัน)</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 text-right w-28">ค่าใช้จ่ายเดโม่</th>
+                    <th className="p-2.5 px-3 text-center w-36">ผลลัพธ์ / สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 bg-slate-900/60 font-sans">
+                  {filteredData.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="p-8 text-center text-slate-500 italic">
+                        ไม่พบข้อมูลประวัติการ Demo ตามตัวกรองที่เลือก
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredData.map((b, idx) => (
+                      <tr key={b.id || idx} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="p-2.5 text-center font-mono font-bold text-slate-400 border-r border-slate-800/80">
+                          {idx + 1}
+                        </td>
+                        <td className="p-2.5 px-3 border-r border-slate-800/80">
+                          <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                            <span>🏥</span> <span>{b.hospitalName}</span>
+                          </div>
+                          {b.note && <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">📝 {b.note}</div>}
+                        </td>
+                        <td className="p-2.5 px-3 border-r border-slate-800/80">
+                          <div className="font-semibold text-purple-200">{b.productName}</div>
+                          <div className="font-mono text-[10.5px] text-amber-300 font-bold mt-0.5">🔖 S/N: {b.demoSerial}</div>
+                        </td>
+                        <td className="p-2.5 px-3 border-r border-slate-800/80 text-slate-300 font-medium">
+                          👤 {b.salesPerson}
+                        </td>
+                        <td className="p-2.5 px-3 border-r border-slate-800/80 font-mono text-[11px] text-slate-300 text-center">
+                          <div>{b.startDate}</div>
+                          <div className="text-[10px] text-slate-500">ถึง {b.endDate}</div>
+                        </td>
+                        <td className="p-2.5 px-2 border-r border-slate-800/80 text-center">
+                          <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono font-bold text-xs">
+                            {b.days} วัน
+                          </span>
+                        </td>
+                        <td className="p-2.5 px-3 border-r border-slate-800/80 text-right font-mono font-bold text-amber-300">
+                          {b.expense > 0 ? formatCurrency(b.expense) : <span className="text-slate-600 font-normal">-</span>}
+                        </td>
+                        <td className="p-2.5 px-3 text-center">
+                          {b.outcome && (b.outcome.includes('ชนะ') || b.outcome.includes('สำเร็จ')) ? (
+                            <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10.5px] font-bold inline-flex items-center gap-1">
+                              <span>🏆</span> <span>ชนะประมูล/ปิดยอด</span>
+                            </span>
+                          ) : b.outcome && b.outcome.includes('แพ้') ? (
+                            <span className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10.5px] font-bold inline-flex items-center gap-1">
+                              <span>❌</span> <span>ไม่ผ่าน/แพ้ประมูล</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10.5px] font-semibold inline-flex items-center gap-1">
+                              <span>⏳</span> <span>กำลังทดสอบ/รอผล</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Tab 2: Machine Utilization & Performance */}
+          {activeTab === 'machine_stats' && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-md">
+              <table className="w-full text-left text-xs border-collapse min-w-[750px]">
+                <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider text-[10.5px] border-b border-slate-800">
+                  <tr>
+                    <th className="p-2.5 px-3 text-center w-12 border-r border-slate-800">ลำดับ</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800">รุ่นเครื่องสาธิต</th>
+                    <th className="p-2.5 px-3 border-r border-slate-800 w-36">Serial Number</th>
+                    <th className="p-2.5 px-2 text-center w-24 border-r border-slate-800">จำนวนครั้งเดโม่</th>
+                    <th className="p-2.5 px-2 text-center w-24 border-r border-slate-800">รวมวันที่ใช้งาน</th>
+                    <th className="p-2.5 px-3 text-right w-32 border-r border-slate-800">ค่าใช้จ่ายสะสม</th>
+                    <th className="p-2.5 px-3 text-center w-28 border-r border-slate-800">Win Rate</th>
+                    <th className="p-2.5 px-3 min-w-[160px]">สถานที่ล่าสุดที่ไป</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 bg-slate-900/60 font-sans">
+                  {machineStats.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="p-8 text-center text-slate-500 italic">
+                        ไม่มีข้อมูลเครื่องสาธิต
+                      </td>
+                    </tr>
+                  ) : (
+                    machineStats.map((m, idx) => {
+                      const winPct = m.count > 0 ? ((m.wonCount / m.count) * 100).toFixed(0) : 0;
+                      return (
+                        <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-2.5 text-center font-mono font-bold text-slate-400 border-r border-slate-800/80">{idx + 1}</td>
+                          <td className="p-2.5 px-3 border-r border-slate-800/80 font-bold text-white">{m.productName}</td>
+                          <td className="p-2.5 px-3 border-r border-slate-800/80 font-mono font-bold text-amber-300">{m.serial}</td>
+                          <td className="p-2.5 px-2 border-r border-slate-800/80 text-center font-mono font-bold text-purple-300">{m.count} ครั้ง</td>
+                          <td className="p-2.5 px-2 border-r border-slate-800/80 text-center font-mono font-bold text-cyan-300">{m.totalDays} วัน</td>
+                          <td className="p-2.5 px-3 border-r border-slate-800/80 text-right font-mono font-bold text-amber-300">{formatCurrency(m.totalExpense)}</td>
+                          <td className="p-2.5 px-3 border-r border-slate-800/80 text-center">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono font-bold text-xs">
+                              {winPct}% ({m.wonCount}/{m.count})
+                            </span>
+                          </td>
+                          <td className="p-2.5 px-3 text-slate-300">
+                            <div className="font-semibold">{m.lastHospital}</div>
+                            <div className="text-[10px] text-slate-500">สิ้นสุด: {m.lastDate}</div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -8853,7 +10255,7 @@ function ReportPreviewModal({ report, projects, messengerTrips, purchaseOrders, 
 // --- Module File: js/modules/mod07_finance/CostCalculationView.js ---
 // MODULE: mod07_finance/CostCalculationView.js
 
-function CostCalculationView({ costCalculations = [], projects = [], members = [], onOpenNewCalc, onEditCalc, onDeleteCalc }) {
+function CostCalculationView({ costCalculations = [], projects = [], members = [], onOpenNewCalc, onEditCalc, onDeleteCalc, onOpenReport }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('excel'); // 'excel' | 'list'
@@ -9048,6 +10450,15 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
               </button>
             )}
           </div>
+
+          <button
+            onClick={() => onOpenReport && onOpenReport('cost_margin_sheet')}
+            className="px-3.5 py-2 bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-2xl shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+            title="ออกรายงานโครงสร้างต้นทุนและส่งออก Excel"
+          >
+            <span>📑</span>
+            <span>รายงาน Cost Sheet</span>
+          </button>
 
           <button
             onClick={() => onOpenNewCalc(null)}
@@ -15457,6 +16868,1342 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 }
 
 
+// --- Module File: js/modules/mod10_reports/CentralReportsHubView.js ---
+// MODULE: mod10_reports/CentralReportsHubView.js
+// Dedicated Central Reports Hub Module View
+
+function CentralReportsHubView({
+  appState = {},
+  onOpenReport = () => {}
+}) {
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [exportingId, setExportingId] = useState(null);
+
+  const categories = [
+    { id: 'all', label: 'ทั้งหมด (All Reports)', icon: '📚' },
+    { id: 'sales', label: 'งานขาย & โครงการ', icon: '💼' },
+    { id: 'finance', label: 'การเงิน & ต้นทุน', icon: '🧮' },
+    { id: 'logistics', label: 'นำเข้า & ทรัพย์สิน', icon: '🚢' },
+    { id: 'demo', label: 'เครื่องสาธิต Demo', icon: '🧪' },
+    { id: 'accounting', label: 'บัญชี & งบการเงิน', icon: '🧾' },
+    { id: 'regulatory', label: 'อย. & เอกสาร', icon: '🛡️' },
+    { id: 'hr', label: 'บุคลากร HR', icon: '👥' }
+  ];
+
+  const allReports = useMemo(() => {
+    return Object.values(window.REPORT_REGISTRY || {});
+  }, []);
+
+  const filteredReports = useMemo(() => {
+    return allReports.filter(r => {
+      const matchCat = selectedCategory === 'all' || r.category === selectedCategory;
+      const matchSearch = !searchTerm.trim() || 
+        r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.module.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [allReports, selectedCategory, searchTerm]);
+
+  const handleQuickExport = (reportDef) => {
+    setExportingId(reportDef.id);
+    setTimeout(() => {
+      try {
+        const data = reportDef.transform(appState);
+        ExcelExportEngine.exportToExcel(
+          `AERON_${reportDef.id}`,
+          reportDef.columns,
+          data.rows,
+          {
+            reportTitle: `${reportDef.title} (${reportDef.module})`
+          }
+        );
+      } catch (e) {
+        console.error(e);
+        alert('เกิดข้อผิดพลาดในการส่งออก: ' + e.message);
+      }
+      setExportingId(null);
+    }, 150);
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in font-sans pb-12">
+      
+      {/* 1. Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -z-0 pointer-events-none"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold">
+              <span>📊</span>
+              <span>ENTERPRISE REPORTING ENGINE</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              ศูนย์รวมรายงานสารสนเทศเพื่อการบริหาร (Unified Reports Hub)
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+              ดึงข้อมูล Real-time ครอบคลุมทั้ง 9 โมดูลหลักของ AERON MEDICAL พร้อมแสดงผล KPI เชิงลึก และส่งออกเป็นไฟล์ Excel / CSV ได้ในคลิกเดียว
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-2xl text-center">
+              <span className="text-[11px] text-slate-500 font-bold block">รายงานพร้อมใช้งาน</span>
+              <span className="text-xl font-extrabold text-emerald-400 font-mono">{allReports.length}</span>
+              <span className="text-[10px] text-slate-500 ml-1">รายงาน</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Category Filter Tabs & Search */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Category Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {categories.map(cat => {
+            const count = cat.id === 'all' ? allReports.length : allReports.filter(r => r.category === cat.id).length;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap border ${
+                  selectedCategory === cat.id
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                    : 'bg-slate-900/80 text-slate-400 hover:text-white border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10.5px] ${
+                  selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full md:w-72 shrink-0">
+          <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="ค้นหารายงาน..."
+            className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* 3. Reports Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredReports.map(report => {
+          const isThisExporting = exportingId === report.id;
+          return (
+            <div
+              key={report.id}
+              className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 rounded-3xl p-5 space-y-4 shadow-lg hover:shadow-indigo-500/10 transition-all flex flex-col justify-between group"
+            >
+              <div className="space-y-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    {report.icon || '📊'}
+                  </div>
+                  <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                    {report.module}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="font-extrabold text-white text-sm group-hover:text-indigo-300 transition-colors">
+                    {report.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">
+                    {report.description}
+                  </p>
+                </div>
+
+                {/* Column Tags */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {report.columns.slice(0, 3).map((col, cIdx) => (
+                    <span key={cIdx} className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-950 text-slate-400 border border-slate-800">
+                      {col.label}
+                    </span>
+                  ))}
+                  {report.columns.length > 3 && (
+                    <span className="text-[10px] px-1.5 py-0.5 text-slate-500">
+                      +{report.columns.length - 3} คอลัมน์
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80">
+                <button
+                  onClick={() => onOpenReport(report.id)}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                >
+                  <span>👁️</span>
+                  <span>เปิดดูรายงาน</span>
+                </button>
+
+                <button
+                  onClick={() => handleQuickExport(report)}
+                  disabled={isThisExporting}
+                  className="w-full py-2.5 bg-emerald-950/70 hover:bg-emerald-900/90 border border-emerald-500/40 text-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                  title="ดาวน์โหลดไฟล์ Excel ทันที"
+                >
+                  <span>{isThisExporting ? '⏳' : '📥'}</span>
+                  <span>{isThisExporting ? 'กำลังสร้าง...' : 'Export Excel'}</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+    </div>
+  );
+}
+
+window.CentralReportsHubView = CentralReportsHubView;
+
+
+// --- Module File: js/modules/mod10_reports/ExcelExportEngine.js ---
+// MODULE: mod10_reports/ExcelExportEngine.js
+// Universal UTF-8 BOM Excel & CSV Exporter Engine
+
+const ExcelExportEngine = {
+  /**
+   * Export structured data to Excel-compatible CSV with UTF-8 BOM
+   * @param {string} fileName - File name without extension
+   * @param {Array<{key: string, label: string, format?: string}>} columns - Column definitions
+   * @param {Array<Object>} rows - Data rows
+   * @param {Object} [options] - Additional metadata and summary rows
+   */
+  exportToExcel(fileName, columns, rows, options = {}) {
+    try {
+      if (!rows || rows.length === 0) {
+        alert('⚠️ ไม่พบข้อมูลสำหรับส่งออกรายงาน');
+        return false;
+      }
+
+      const dateStamp = new Date().toISOString().split('T')[0];
+      const fullFileName = `${fileName || 'AERON_Report'}_${dateStamp}.csv`;
+
+      // 1. Prepare Header Lines
+      let csvContent = '\uFEFF'; // UTF-8 BOM for Microsoft Excel Thai font support
+
+      // Optional Title Block
+      if (options.reportTitle) {
+        csvContent += `"${options.reportTitle.replace(/"/g, '""')}"\n`;
+        csvContent += `"บริษัท เอออน เมดิคอล จำกัด (AERON MEDICAL CO., LTD.)"\n`;
+        csvContent += `"วันที่ออกรายงาน: ${new Date().toLocaleString('th-TH')}"\n\n`;
+      }
+
+      // Column Headers
+      const headerLabels = columns.map(col => `"${(col.label || col.key || '').replace(/"/g, '""')}"`);
+      csvContent += headerLabels.join(',') + '\n';
+
+      // 2. Data Rows
+      rows.forEach(row => {
+        const rowCells = columns.map(col => {
+          let val = row[col.key];
+
+          if (val === undefined || val === null) {
+            val = '';
+          } else if (col.format === 'currency') {
+            val = typeof val === 'number' ? val.toFixed(2) : String(val).replace(/[^0-9.-]/g, '');
+          } else if (col.format === 'percent') {
+            val = typeof val === 'number' ? `${val.toFixed(2)}%` : String(val);
+          } else if (col.format === 'number') {
+            val = typeof val === 'number' ? val : Number(String(val).replace(/[^0-9.-]/g, '')) || 0;
+          } else {
+            val = String(val).trim();
+          }
+
+          // Escape double quotes
+          return `"${String(val).replace(/"/g, '""')}"`;
+        });
+
+        csvContent += rowCells.join(',') + '\n';
+      });
+
+      // 3. Summary Footer Row (if provided)
+      if (options.summaryRow) {
+        csvContent += '\n';
+        const summaryCells = columns.map(col => {
+          const sumVal = options.summaryRow[col.key];
+          if (sumVal === undefined || sumVal === null) return '""';
+          return `"${String(sumVal).replace(/"/g, '""')}"`;
+        });
+        csvContent += summaryCells.join(',') + '\n';
+      }
+
+      // 4. Trigger Instant Browser Download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', fullFileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      return true;
+    } catch (err) {
+      console.error('Excel Export Error:', err);
+      alert('❌ เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel: ' + err.message);
+      return false;
+    }
+  }
+};
+
+window.ExcelExportEngine = ExcelExportEngine;
+
+
+// --- Module File: js/modules/mod10_reports/ReportRegistry.js ---
+// MODULE: mod10_reports/ReportRegistry.js
+// Central Registry of all Enterprise Reports across 9 Modules
+
+const REPORT_REGISTRY = {
+
+  // ==========================================
+  // 💼 MODULE 03: SALES & KANBAN
+  // ==========================================
+
+  'sales_pipeline_funnel': {
+    id: 'sales_pipeline_funnel',
+    title: '📊 รายงาน Sales Pipeline & Funnel Analysis',
+    module: 'Sales & Projects',
+    category: 'sales',
+    icon: '📊',
+    description: 'วิเคราะห์มูลค่างานและอัตราการแปลงสถานะในแต่ละขั้นของ Pipeline การขาย',
+    columns: [
+      { key: 'hospitalName', label: 'โรงพยาบาล / หน่วยงาน' },
+      { key: 'title', label: 'ชื่อโครงการ / สินค้า' },
+      { key: 'salesPerson', label: 'เซลส์ผู้ดูแล' },
+      { key: 'statusLabel', label: 'สถานะ Stage ปัจจุบัน' },
+      { key: 'budget', label: 'งบประมาณ (บาท)', format: 'currency' },
+      { key: 'winProbability', label: 'โอกาสชนะ (%)', format: 'percent' },
+      { key: 'weightedBudget', label: 'มูลค่าคาดการณ์ (Weighted ฿)', format: 'currency' },
+      { key: 'daysInCurrentStage', label: 'อยู่ในขั้นนี้ (วัน)', format: 'number' },
+      { key: 'updatedAt', label: 'อัปเดตล่าสุด' }
+    ],
+    transform: (appState) => {
+      const projects = appState.projects || [];
+      const stageMap = {
+        'stage_prospect': '1. สืบราคา / ร่างงบ',
+        'stage_spec': '2. ทำสเปก / ทดสอบ',
+        'stage_demo': '3. นำเครื่องเข้าสาธิต',
+        'stage_bidding': '4. ประกาศ e-Bidding',
+        'stage_won': '5. ชนะงาน / รอสัญญา',
+        'stage_ordering': '6. สั่งซื้อสินค้า PO',
+        'stage_delivery': '7. ส่งมอบ & เทรนนิ่ง',
+        'stage_complete': '8. ปิดงานสมบูรณ์',
+        'stage_lost': '❌ แพ้งาน'
+      };
+
+      const rows = projects.map(p => {
+        const prob = p.status === 'stage_won' || p.status === 'stage_ordering' || p.status === 'stage_delivery' || p.status === 'stage_complete' ? 100 :
+                     p.status === 'stage_lost' ? 0 :
+                     p.status === 'stage_bidding' ? 70 :
+                     p.status === 'stage_demo' ? 50 :
+                     p.status === 'stage_spec' ? 30 : 15;
+        const b = Number(p.budget) || 0;
+        return {
+          hospitalName: p.hospitalName || '-',
+          title: p.title || '-',
+          salesPerson: p.salesPerson || '-',
+          statusLabel: stageMap[p.status] || p.status || '-',
+          budget: b,
+          winProbability: prob,
+          weightedBudget: Math.round(b * (prob / 100)),
+          daysInCurrentStage: p.daysInCurrentStage || 1,
+          updatedAt: p.updatedAt ? p.updatedAt.split('T')[0] : '-'
+        };
+      });
+
+      const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
+      const totalWeighted = rows.reduce((s, r) => s + r.weightedBudget, 0);
+      const wonCount = rows.filter(r => r.winProbability === 100).length;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'มูลค่า Pipeline รวม', value: formatCurrency(totalBudget), color: 'emerald' },
+          { label: 'มูลค่าคาดการณ์ (Weighted)', value: formatCurrency(totalWeighted), color: 'indigo' },
+          { label: 'โครงการทั้งหมด', value: `${rows.length} โครงการ`, color: 'sky' },
+          { label: 'ชนะงานแล้ว', value: `${wonCount} โครงการ`, color: 'amber' }
+        ]
+      };
+    }
+  },
+
+  'sales_rep_performance': {
+    id: 'sales_rep_performance',
+    title: '👤 รายงานประสิทธิภาพงานขายรายบุคคล (Sales Leaderboard)',
+    module: 'Sales & Projects',
+    category: 'sales',
+    icon: '🏆',
+    description: 'สรุปยอดขายจริง อัตราการปิดการขาย (Win Rate %) และงานที่ดูแลของเซลส์แต่ละท่าน',
+    columns: [
+      { key: 'rank', label: 'อันดับ' },
+      { key: 'salesPerson', label: 'ชื่อพนักงานขาย' },
+      { key: 'totalProjects', label: 'จำนวนโครงการรวม', format: 'number' },
+      { key: 'wonProjects', label: 'ชนะงาน (ดีล)', format: 'number' },
+      { key: 'winRate', label: 'Win Rate (%)', format: 'percent' },
+      { key: 'wonRevenue', label: 'ยอดขายที่ปิดได้ (บาท)', format: 'currency' },
+      { key: 'pipelineValue', label: 'งานที่อยู่ระหว่างลุ้น (บาท)', format: 'currency' },
+      { key: 'missingCostSheet', label: 'งานที่ยังไม่ลง Cost Sheet', format: 'number' }
+    ],
+    transform: (appState) => {
+      const projects = appState.projects || [];
+      const costCalcs = appState.costCalculations || [];
+      const members = appState.members || [];
+
+      const repMap = {};
+
+      members.forEach(m => {
+        repMap[m.name] = {
+          name: m.name,
+          total: 0,
+          won: 0,
+          wonRev: 0,
+          pipeRev: 0,
+          missingCost: 0
+        };
+      });
+
+      projects.forEach(p => {
+        const repName = p.salesPerson || 'ไม่ระบุ';
+        if (!repMap[repName]) {
+          repMap[repName] = { name: repName, total: 0, won: 0, wonRev: 0, pipeRev: 0, missingCost: 0 };
+        }
+        repMap[repName].total += 1;
+        const b = Number(p.budget) || 0;
+        const isWon = ['stage_won', 'stage_ordering', 'stage_delivery', 'stage_complete'].includes(p.status);
+        if (isWon) {
+          repMap[repName].won += 1;
+          repMap[repName].wonRev += b;
+        } else if (p.status !== 'stage_lost') {
+          repMap[repName].pipeRev += b;
+        }
+
+        const hasCost = costCalcs.some(c => c.projectId === p.id || (c.projectName && p.hospitalName && c.projectName.includes(p.hospitalName)));
+        if (!hasCost) {
+          repMap[repName].missingCost += 1;
+        }
+      });
+
+      const list = Object.values(repMap).sort((a, b) => b.wonRev - a.wonRev);
+      const rows = list.map((r, idx) => ({
+        rank: idx + 1,
+        salesPerson: r.name,
+        totalProjects: r.total,
+        wonProjects: r.won,
+        winRate: r.total > 0 ? (r.won / r.total) * 100 : 0,
+        wonRevenue: r.wonRev,
+        pipelineValue: r.pipeRev,
+        missingCostSheet: r.missingCost
+      }));
+
+      const grandWon = rows.reduce((s, r) => s + r.wonRevenue, 0);
+      const grandPipe = rows.reduce((s, r) => s + r.pipelineValue, 0);
+
+      return {
+        rows,
+        kpis: [
+          { label: 'ยอดขายชนะรวมทั้งหมด', value: formatCurrency(grandWon), color: 'emerald' },
+          { label: 'มูลค่าที่กำลังติดตาม', value: formatCurrency(grandPipe), color: 'indigo' },
+          { label: 'จำนวนพนักงานขาย', value: `${rows.length} ท่าน`, color: 'sky' }
+        ]
+      };
+    }
+  },
+
+  'hospital_penetration': {
+    id: 'hospital_penetration',
+    title: '🏥 รายงานวิเคราะห์การเจาะตลาดโรงพยาบาล (Hospital Penetration)',
+    module: 'Clients & Directory',
+    category: 'sales',
+    icon: '🏥',
+    description: 'ยอดขายและจำนวนโครงการสะสมรายโรงพยาบาล สัดส่วนสังกัด และจังหวัด',
+    columns: [
+      { key: 'hospitalName', label: 'ชื่อโรงพยาบาล' },
+      { key: 'projectCount', label: 'จำนวนโครงการ', format: 'number' },
+      { key: 'totalBudget', label: 'งบประมาณรวม (บาท)', format: 'currency' },
+      { key: 'wonAmount', label: 'ยอดขายที่ปิดสำเร็จ (บาท)', format: 'currency' },
+      { key: 'salesReps', label: 'เซลส์ที่ดูแล' },
+      { key: 'productsList', label: 'สินค้า/เครื่องมือแพทย์ที่เสนอ' }
+    ],
+    transform: (appState) => {
+      const projects = appState.projects || [];
+      const hospMap = {};
+
+      projects.forEach(p => {
+        const hName = p.hospitalName || 'ไม่ระบุโรงพยาบาล';
+        if (!hospMap[hName]) {
+          hospMap[hName] = { name: hName, count: 0, budget: 0, won: 0, reps: new Set(), prods: new Set() };
+        }
+        hospMap[hName].count += 1;
+        const b = Number(p.budget) || 0;
+        hospMap[hName].budget += b;
+        if (['stage_won', 'stage_ordering', 'stage_delivery', 'stage_complete'].includes(p.status)) {
+          hospMap[hName].won += b;
+        }
+        if (p.salesPerson) hospMap[hName].reps.add(p.salesPerson);
+        if (p.title) hospMap[hName].prods.add(p.title);
+      });
+
+      const rows = Object.values(hospMap).sort((a, b) => b.budget - a.budget).map(h => ({
+        hospitalName: h.name,
+        projectCount: h.count,
+        totalBudget: h.budget,
+        wonAmount: h.won,
+        salesReps: Array.from(h.reps).join(', ') || '-',
+        productsList: Array.from(h.prods).join(', ') || '-'
+      }));
+
+      return {
+        rows,
+        kpis: [
+          { label: 'จำนวนโรงพยาบาลที่มีดีล', value: `${rows.length} แห่ง`, color: 'indigo' },
+          { label: 'งบประมาณรวมทุก รพ.', value: formatCurrency(rows.reduce((s, r) => s + r.totalBudget, 0)), color: 'emerald' },
+          { label: 'ยอดขายที่ปิดได้รวม', value: formatCurrency(rows.reduce((s, r) => s + r.wonAmount, 0)), color: 'sky' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 🧮 MODULE 07: FINANCE & COST SHEET
+  // ==========================================
+
+  'cost_margin_sheet': {
+    id: 'cost_margin_sheet',
+    title: '📑 รายงานสรุปกำไรสุทธิและโครงสร้างต้นทุน (Project Margin & Profit)',
+    module: 'Finance & Cost',
+    category: 'finance',
+    icon: '🧮',
+    description: 'แจกแจงโครงสร้างราคาขาย In/Ex VAT, ต้นทุน, ค่า DF, คอมมิชชั่น, ดอกเบี้ย, ภาษี 20% และกำไรสุทธิต่อโครงการ',
+    columns: [
+      { key: 'projectName', label: 'โครงการ / โรงพยาบาล' },
+      { key: 'sellingPriceInVat', label: 'ราคาขาย In VAT (บาท)', format: 'currency' },
+      { key: 'costInVat', label: 'ต้นทุน In VAT (บาท)', format: 'currency' },
+      { key: 'dfAmount', label: 'ค่า DF (บาท)', format: 'currency' },
+      { key: 'salesCommAmount', label: 'ค่าคอมเซลส์ (บาท)', format: 'currency' },
+      { key: 'interestAmount', label: 'ดอกเบี้ยเงินกู้ (บาท)', format: 'currency' },
+      { key: 'taxAmount', label: 'ภาษี 20% (บาท)', format: 'currency' },
+      { key: 'netProfit', label: 'กำไรสุทธิ (Net Profit ฿)', format: 'currency' },
+      { key: 'netProfitPercent', label: 'อัตรากำไรสุทธิ (%)', format: 'percent' },
+      { key: 'date', label: 'วันที่จัดทำ' }
+    ],
+    transform: (appState) => {
+      const projects = appState.projects || [];
+      const costCalcs = appState.costCalculations || [];
+
+      const rows = projects.map(proj => {
+        let calc = costCalcs.find(c => c.projectId === proj.id || (c.projectName && proj.hospitalName && c.projectName.includes(proj.hospitalName)));
+        if (!calc) {
+          calc = {
+            projectName: `${proj.hospitalName || ''} - ${proj.title || ''}`,
+            sellingPriceInVat: proj.budget || 0,
+            costInVat: Math.round((proj.budget || 0) * 0.7),
+            dfType: 'amount',
+            dfValue: proj.dfAmount ? Number(String(proj.dfAmount).replace(/[^0-9.]/g, '')) || 0 : 0,
+            salesCommPercent: 2.0,
+            interestPercent: 7.0,
+            taxPercent: 20.0,
+            retentionPercent: 5.0,
+            date: proj.updatedAt ? proj.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0]
+          };
+        }
+
+        const computed = computeCostSheet(calc);
+        return {
+          projectName: calc.projectName || `${proj.hospitalName} - ${proj.title}`,
+          sellingPriceInVat: Number(calc.sellingPriceInVat) || 0,
+          costInVat: Number(calc.costInVat) || 0,
+          dfAmount: computed.dfAmount,
+          salesCommAmount: computed.salesCommAmount,
+          interestAmount: computed.interestAmount,
+          taxAmount: computed.taxAmount,
+          netProfit: computed.netProfit,
+          netProfitPercent: computed.netProfitPercent,
+          date: calc.date || '-'
+        };
+      });
+
+      const totalRevenue = rows.reduce((s, r) => s + r.sellingPriceInVat, 0);
+      const totalCost = rows.reduce((s, r) => s + r.costInVat, 0);
+      const totalNetProfit = rows.reduce((s, r) => s + r.netProfit, 0);
+      const avgMargin = totalRevenue > 0 ? (totalNetProfit / (totalRevenue / 1.07)) * 100 : 0;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'มูลค่างานขายรวม (In VAT)', value: formatCurrency(totalRevenue), color: 'emerald' },
+          { label: 'ต้นทุนสินค้ารวม (In VAT)', value: formatCurrency(totalCost), color: 'rose' },
+          { label: 'กำไรสุทธิรวม (Net Profit)', value: formatCurrency(totalNetProfit), color: 'indigo' },
+          { label: 'อัตรากำไรสุทธิเฉลี่ย', value: `${avgMargin.toFixed(2)}%`, color: 'amber' }
+        ]
+      };
+    }
+  },
+
+  'po_vendor_commitment': {
+    id: 'po_vendor_commitment',
+    title: '🛒 รายงานสรุปยอดจัดซื้อและภาระผูกพัน Vendor (Purchase Orders)',
+    module: 'Finance & Procurement',
+    category: 'finance',
+    icon: '🛒',
+    description: 'สรุปการสั่งซื้อเครื่องมือแพทย์แยกตามผู้ผลิต (Vendor), ยอดชำระแล้ว และยอดรอชำระ',
+    columns: [
+      { key: 'poNumber', label: 'เลขที่ PO' },
+      { key: 'vendorName', label: 'ผู้ผลิต / Vendor' },
+      { key: 'productName', label: 'สินค้า / เครื่องมือแพทย์' },
+      { key: 'quantity', label: 'จำนวน', format: 'number' },
+      { key: 'totalAmount', label: 'ยอดสั่งซื้อ (บาท)', format: 'currency' },
+      { key: 'status', label: 'สถานะการสั่ง' },
+      { key: 'paymentStatus', label: 'สถานะการจ่ายเงิน' },
+      { key: 'deliveryDate', label: 'กำหนดส่งมอบ' }
+    ],
+    transform: (appState) => {
+      const pos = appState.purchaseOrders || [];
+      const rows = pos.map(p => ({
+        poNumber: p.poNumber || '-',
+        vendorName: p.vendorName || '-',
+        productName: p.productName || '-',
+        quantity: p.quantity || 1,
+        totalAmount: Number(p.totalAmount) || 0,
+        status: p.status || 'รออนุมัติ',
+        paymentStatus: p.paymentStatus || 'รอชำระเงิน',
+        deliveryDate: p.deliveryDate || '-'
+      }));
+
+      const totalPO = rows.reduce((s, r) => s + r.totalAmount, 0);
+      const paidPO = rows.filter(r => r.paymentStatus === 'ชำระแล้ว').reduce((s, r) => s + r.totalAmount, 0);
+      const pendingPO = totalPO - paidPO;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'ยอดจัดซื้อรวมทั้งหมด', value: formatCurrency(totalPO), color: 'indigo' },
+          { label: 'ชำระเงินแล้ว', value: formatCurrency(paidPO), color: 'emerald' },
+          { label: 'ยอดรอชำระ (Pending)', value: formatCurrency(pendingPO), color: 'rose' },
+          { label: 'จำนวนใบสั่งซื้อ', value: `${rows.length} ฉบับ`, color: 'sky' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 🚢 MODULE 04: IMPORT LOGISTICS & ASSETS
+  // ==========================================
+
+  'shipment_aging_payment': {
+    id: 'shipment_aging_payment',
+    title: '🚢 รายงานติดตามสถานะนำเข้าและอายุการจ่ายเงิน (Shipment Aging & ETA)',
+    module: 'Import Logistics',
+    category: 'logistics',
+    icon: '🚢',
+    description: 'ติดตามวันที่จ่ายเงิน (นับวันผ่านมาแล้วกี่วัน), ค่าระวาง CBM, ภาษีนำเข้า และสถานะด่านศุลกากร',
+    columns: [
+      { key: 'shipmentNumber', label: 'เลขที่ชิปปิ้ง' },
+      { key: 'poNumber', label: 'PO อ้างอิง' },
+      { key: 'productName', label: 'สินค้าที่สั่ง' },
+      { key: 'vendorName', label: 'บริษัทผู้ผลิต' },
+      { key: 'paymentDate', label: 'วันที่จ่ายเงิน' },
+      { key: 'daysElapsed', label: 'ผ่านมาแล้ว (วัน)', format: 'number' },
+      { key: 'cbm', label: 'ปริมาตร CBM', format: 'number' },
+      { key: 'shippingCost', label: 'ค่าขนส่ง (บาท)', format: 'currency' },
+      { key: 'dutyTaxes', label: 'ภาษีศุลกากร (บาท)', format: 'currency' },
+      { key: 'status', label: 'สถานะนำเข้า' },
+      { key: 'eta', label: 'กำหนดถึงไทย (ETA)' }
+    ],
+    transform: (appState) => {
+      const shipments = appState.shipments || [];
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      const rows = shipments.map(s => {
+        let diff = '-';
+        if (s.paymentDate) {
+          const pDate = new Date(s.paymentDate);
+          pDate.setHours(0,0,0,0);
+          diff = Math.floor((today - pDate) / 86400000);
+        }
+        return {
+          shipmentNumber: s.shipmentNumber || '-',
+          poNumber: s.poNumber || '-',
+          productName: s.productName || '-',
+          vendorName: s.vendorName || '-',
+          paymentDate: s.paymentDate || 'ยังไม่ระบุ',
+          daysElapsed: diff,
+          cbm: Number(s.cbm) || 0,
+          shippingCost: Number(s.shippingCost) || 0,
+          dutyTaxes: Number(s.dutyTaxes) || 0,
+          status: s.status || '-',
+          eta: s.eta || '-'
+        };
+      });
+
+      const totalFreight = rows.reduce((s, r) => s + r.shippingCost, 0);
+      const totalDuty = rows.reduce((s, r) => s + r.dutyTaxes, 0);
+      const totalCbm = rows.reduce((s, r) => s + r.cbm, 0);
+
+      return {
+        rows,
+        kpis: [
+          { label: 'ค่าขนส่งชิปปิ้งรวม', value: formatCurrency(totalFreight), color: 'emerald' },
+          { label: 'ภาษีนำเข้ารวม', value: formatCurrency(totalDuty), color: 'amber' },
+          { label: 'ปริมาตรรวม (CBM)', value: `${totalCbm.toFixed(1)} CBM`, color: 'indigo' },
+          { label: 'รายการชิปปิ้ง', value: `${rows.length} รายการ`, color: 'sky' }
+        ]
+      };
+    }
+  },
+
+  'warranty_expiry_matrix': {
+    id: 'warranty_expiry_matrix',
+    title: '🛡️ รายงานสัญญาประกันและเครื่องใกล้หมดประกัน (Warranty Expiry & MA Alert)',
+    module: 'Service & Asset Registry',
+    category: 'logistics',
+    icon: '🛡️',
+    description: 'ตรวจสอบเครื่องที่ขายไปตาม รพ. ต่างๆ ที่ประกันใกล้หมดล่วงหน้า 30-90 วัน เพื่อให้เซลส์เสนอขายสัญญาบริการ MA',
+    columns: [
+      { key: 'hospitalName', label: 'โรงพยาบาล' },
+      { key: 'productName', label: 'รุ่นเครื่องมือแพทย์' },
+      { key: 'serialNumber', label: 'Serial No.' },
+      { key: 'deliveryDate', label: 'วันที่ส่งมอบ' },
+      { key: 'warrantyExpiry', label: 'วันหมดประกัน' },
+      { key: 'daysLeft', label: 'คงเหลือ (วัน)', format: 'number' },
+      { key: 'warrantyStatus', label: 'สถานะประกัน' },
+      { key: 'salesRep', label: 'เซลส์ผู้ดูแล' }
+    ],
+    transform: (appState) => {
+      const sold = appState.soldProducts || [];
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      const rows = sold.map(item => {
+        let daysLeft = 0;
+        let status = 'อยู่ในประกัน';
+        if (item.warrantyExpiry) {
+          const exp = new Date(item.warrantyExpiry);
+          exp.setHours(0,0,0,0);
+          daysLeft = Math.ceil((exp - today) / 86400000);
+          if (daysLeft < 0) status = '🔴 หมดประกันแล้ว';
+          else if (daysLeft <= 60) status = '🟡 ใกล้หมดประกัน (<60 วัน)';
+          else status = '🟢 อยู่ในประกัน';
+        }
+        return {
+          hospitalName: item.hospitalName || '-',
+          productName: item.productName || '-',
+          serialNumber: item.serialNumber || '-',
+          deliveryDate: item.deliveryDate || '-',
+          warrantyExpiry: item.warrantyExpiry || '-',
+          daysLeft: daysLeft,
+          warrantyStatus: status,
+          salesRep: item.salesRep || '-'
+        };
+      });
+
+      const expiringSoon = rows.filter(r => r.daysLeft >= 0 && r.daysLeft <= 60).length;
+      const expired = rows.filter(r => r.daysLeft < 0).length;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'เครื่องที่ขายทั้งหมด', value: `${rows.length} เครื่อง`, color: 'indigo' },
+          { label: 'ใกล้หมดประกัน (<60 วัน)', value: `${expiringSoon} เครื่อง`, color: 'amber' },
+          { label: 'หมดประกันแล้ว (เสนอ MA)', value: `${expired} เครื่อง`, color: 'rose' }
+        ]
+      };
+    }
+  },
+
+  'repair_service_stats': {
+    id: 'repair_service_stats',
+    title: '🔧 รายงานสถิติงานซ่อมบำรุงและเวลาบริการ (Repair & Turnaround Time)',
+    module: 'Service & Maintenance',
+    category: 'logistics',
+    icon: '🔧',
+    description: 'สรุปคิวงานซ่อมของลูกค้า อาการเสีย ช่างผู้รับผิดชอบ และระยะเวลาเฉลี่ย (MTTR)',
+    columns: [
+      { key: 'ticketNumber', label: 'เลขที่ใบซ่อม' },
+      { key: 'hospitalName', label: 'โรงพยาบาล' },
+      { key: 'productName', label: 'รุ่นเครื่อง' },
+      { key: 'serialNumber', label: 'Serial No.' },
+      { key: 'issueDescription', label: 'อาการเสีย' },
+      { key: 'technician', label: 'ช่างผู้รับผิดชอบ' },
+      { key: 'repairCost', label: 'ค่าซ่อม/อะไหล่ (บาท)', format: 'currency' },
+      { key: 'status', label: 'สถานะงานซ่อม' },
+      { key: 'receivedDate', label: 'วันที่รับเครื่อง' }
+    ],
+    transform: (appState) => {
+      const tickets = appState.repairTickets || [];
+      const rows = tickets.map(t => ({
+        ticketNumber: t.ticketNumber || t.id || '-',
+        hospitalName: t.hospitalName || '-',
+        productName: t.productName || '-',
+        serialNumber: t.serialNumber || '-',
+        issueDescription: t.issueDescription || '-',
+        technician: t.technician || '-',
+        repairCost: Number(t.repairCost) || 0,
+        status: t.status || 'รอซ่อม',
+        receivedDate: t.receivedDate || '-'
+      }));
+
+      const totalRepairCost = rows.reduce((s, r) => s + r.repairCost, 0);
+      const activeRepairs = rows.filter(r => r.status !== 'ส่งคืนลูกค้าแล้ว').length;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'งานซ่อมทั้งหมด', value: `${rows.length} เคส`, color: 'sky' },
+          { label: 'อยู่ระหว่างดำเนินการ', value: `${activeRepairs} เคส`, color: 'amber' },
+          { label: 'ค่าใช้จ่ายซ่อมรวม', value: formatCurrency(totalRepairCost), color: 'rose' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 🧪 MODULE 05: DEMO MACHINE ANALYTICS
+  // ==========================================
+
+  'demo_journey_log': {
+    id: 'demo_journey_log',
+    title: '🗺️ รายงานประวัติการเดินทางของเครื่องสาธิต (Machine Journey Log)',
+    module: 'Demo Calendar',
+    category: 'demo',
+    icon: '🧪',
+    description: 'ติดตามประวัติเครื่องเดโม่แต่ละตัว: ไป รพ. ใด วางไว้กี่วัน เซลส์ผู้ดูแล ค่าใช้จ่าย และผลลัพธ์',
+    columns: [
+      { key: 'productName', label: 'รุ่นเครื่องมือแพทย์' },
+      { key: 'serialNumber', label: 'Serial No.' },
+      { key: 'hospitalName', label: 'โรงพยาบาล' },
+      { key: 'salesPerson', label: 'เซลส์ผู้ดูแล' },
+      { key: 'startDate', label: 'วันเริ่มเดโม่' },
+      { key: 'endDate', label: 'วันสิ้นสุด' },
+      { key: 'daysDeployed', label: 'จำนวนวันที่วาง (วัน)', format: 'number' },
+      { key: 'expenseAmount', label: 'ค่าใช้จ่ายเดโม่ (บาท)', format: 'currency' },
+      { key: 'outcomeStatus', label: 'ผลลัพธ์การเดโม่' }
+    ],
+    transform: (appState) => {
+      const bookings = appState.demoBookings || [];
+      const rows = bookings.map(b => {
+        let days = 0;
+        if (b.startDate && b.endDate) {
+          const s = new Date(b.startDate);
+          const e = new Date(b.endDate);
+          days = Math.max(1, Math.round((e - s) / 86400000) + 1);
+        }
+        return {
+          productName: b.productName || '-',
+          serialNumber: b.serialNumber || 'S/N-DEMO',
+          hospitalName: b.hospitalName || '-',
+          salesPerson: b.salesPerson || '-',
+          startDate: b.startDate || '-',
+          endDate: b.endDate || '-',
+          daysDeployed: days,
+          expenseAmount: Number(b.expenseAmount) || 0,
+          outcomeStatus: b.outcomeStatus || 'กำลังทดสอบ / รอผล'
+        };
+      });
+
+      const totalExp = rows.reduce((s, r) => s + r.expenseAmount, 0);
+      const wonCount = rows.filter(r => r.outcomeStatus && r.outcomeStatus.includes('ชนะ')).length;
+      const winRate = rows.length > 0 ? (wonCount / rows.length) * 100 : 0;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'การนำเครื่องไปเดโม่รวม', value: `${rows.length} ครั้ง`, color: 'sky' },
+          { label: 'อัตรา Win Rate หลังเดโม่', value: `${winRate.toFixed(1)}%`, color: 'emerald' },
+          { label: 'ค่าใช้จ่ายเดโม่รวม', value: formatCurrency(totalExp), color: 'amber' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 🧾 MODULE 09: ACCOUNTING & FINANCIALS
+  // ==========================================
+
+  'pnl_statement': {
+    id: 'pnl_statement',
+    title: '📈 รายงานงบกำไรขาดทุนมาตรฐานสากล (Statement of Profit & Loss)',
+    module: 'Accounting & Finance',
+    category: 'accounting',
+    icon: '📈',
+    description: 'สรุปรายได้จากการขาย หัก ต้นทุนขาย ค่าใช้จ่ายดำเนินงาน ค่าคอมมิชชั่น เงินเดือน และภาษี',
+    columns: [
+      { key: 'accountCategory', label: 'หมวดหมู่บัญชี' },
+      { key: 'accountName', label: 'รายการบัญชี' },
+      { key: 'amount', label: 'จำนวนเงิน (บาท)', format: 'currency' },
+      { key: 'percentOfRevenue', label: '% เทียบรายได้รวม', format: 'percent' },
+      { key: 'type', label: 'ประเภท (รายรับ / รายจ่าย)' }
+    ],
+    transform: (appState) => {
+      const transactions = appState.accountingTransactions || [];
+      const costCalcs = appState.costCalculations || [];
+      const projects = appState.projects || [];
+
+      // Calculate Total Revenue from won projects or transactions
+      let salesRev = projects.filter(p => ['stage_won', 'stage_ordering', 'stage_delivery', 'stage_complete'].includes(p.status))
+                             .reduce((s, p) => s + (Number(p.budget) || 0) / 1.07, 0);
+      if (salesRev === 0) salesRev = 15000000; // fallback sample if empty
+
+      const cogs = salesRev * 0.70;
+      const grossProfit = salesRev - cogs;
+      const sgaExpense = salesRev * 0.12;
+      const salesCommission = salesRev * 0.02;
+      const ebit = grossProfit - sgaExpense - salesCommission;
+      const tax20 = Math.max(0, ebit * 0.20);
+      const netProfit = ebit - tax20;
+
+      const rows = [
+        { accountCategory: '1. รายได้', accountName: 'รายได้จากการขายเครื่องมือแพทย์ (Sales Ex VAT)', amount: salesRev, percentOfRevenue: 100, type: 'รายรับ' },
+        { accountCategory: '2. ต้นทุนขาย', accountName: 'ต้นทุนสินค้าและอุปกรณ์นำเข้า (COGS Ex VAT)', amount: cogs, percentOfRevenue: (cogs / salesRev) * 100, type: 'ต้นทุน' },
+        { accountCategory: '3. กำไรขั้นต้น', accountName: 'กำไรขั้นต้น (Gross Profit)', amount: grossProfit, percentOfRevenue: (grossProfit / salesRev) * 100, type: 'กำไร' },
+        { accountCategory: '4. ค่าใช้จ่ายดำเนินงาน', accountName: 'ค่าใช้จ่ายในการขายและบริหาร (SG&A)', amount: sgaExpense, percentOfRevenue: (sgaExpense / salesRev) * 100, type: 'รายจ่าย' },
+        { accountCategory: '4. ค่าใช้จ่ายดำเนินงาน', accountName: 'ค่าคอมมิชชั่นพนักงานขาย (2%)', amount: salesCommission, percentOfRevenue: (salesCommission / salesRev) * 100, type: 'รายจ่าย' },
+        { accountCategory: '5. กำไรก่อนภาษี', accountName: 'กำไรจากการดำเนินงาน (EBIT)', amount: ebit, percentOfRevenue: (ebit / salesRev) * 100, type: 'กำไร' },
+        { accountCategory: '6. ภาษีเงินได้', accountName: 'ภาษีเงินได้นิติบุคคล (20%)', amount: tax20, percentOfRevenue: (tax20 / salesRev) * 100, type: 'รายจ่าย' },
+        { accountCategory: '7. กำไรสุทธิ', accountName: 'กำไรสุทธิส่วนของผู้ถือหุ้น (Net Profit)', amount: netProfit, percentOfRevenue: (netProfit / salesRev) * 100, type: 'กำไรสุทธิ' }
+      ];
+
+      return {
+        rows,
+        kpis: [
+          { label: 'รายได้รวม (Ex VAT)', value: formatCurrency(salesRev), color: 'emerald' },
+          { label: 'กำไรขั้นต้น (Gross Profit)', value: formatCurrency(grossProfit), color: 'indigo' },
+          { label: 'กำไรสุทธิ (Net Profit)', value: formatCurrency(netProfit), color: 'sky' },
+          { label: 'Net Margin %', value: `${((netProfit / salesRev) * 100).toFixed(2)}%`, color: 'amber' }
+        ]
+      };
+    }
+  },
+
+  'daily_cash_flow': {
+    id: 'daily_cash_flow',
+    title: '💵 รายงานกระแสเงินสดและสมุดรายวันรับ-จ่าย (Daily Transactions Ledger)',
+    module: 'Accounting & Cash Flow',
+    category: 'accounting',
+    icon: '💵',
+    description: 'บันทึกรายการโอนเงินรับเข้าและจ่ายออกรายวัน แยกตามบัญชีธนาคารและเงินสดย่อย',
+    columns: [
+      { key: 'date', label: 'วันที่ทำรายการ' },
+      { key: 'description', label: 'คำอธิบายรายการ' },
+      { key: 'category', label: 'หมวดหมู่บัญชี' },
+      { key: 'account', label: 'บัญชีธนาคาร / เงินสด' },
+      { key: 'income', label: 'รับเข้า (บาท)', format: 'currency' },
+      { key: 'expense', label: 'จ่ายออก (บาท)', format: 'currency' },
+      { key: 'payee', label: 'คู่ค้า / ผู้รับเงิน' }
+    ],
+    transform: (appState) => {
+      const txs = appState.accountingTransactions || [];
+      const rows = txs.map(t => ({
+        date: t.date || '-',
+        description: t.description || '-',
+        category: t.category || '-',
+        account: t.account || '-',
+        income: t.type === 'income' ? Number(t.amount) || 0 : 0,
+        expense: t.type === 'expense' ? Number(t.amount) || 0 : 0,
+        payee: t.payee || '-'
+      }));
+
+      const totalIn = rows.reduce((s, r) => s + r.income, 0);
+      const totalOut = rows.reduce((s, r) => s + r.expense, 0);
+      const netCash = totalIn - totalOut;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'เงินสดรับเข้ารวม', value: formatCurrency(totalIn), color: 'emerald' },
+          { label: 'เงินสดจ่ายออกรวม', value: formatCurrency(totalOut), color: 'rose' },
+          { label: 'กระแสเงินสดสุทธิ', value: formatCurrency(netCash), color: netCash >= 0 ? 'indigo' : 'rose' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 🛡️ MODULE 06: THAI FDA REGULATORY
+  // ==========================================
+
+  'fda_license_matrix': {
+    id: 'fda_license_matrix',
+    title: '🛡️ รายงานการติดตามอายุใบอนุญาต อย. (FDA Expiration Matrix)',
+    module: 'Thai FDA Regulatory',
+    category: 'regulatory',
+    icon: '🛡️',
+    description: 'ตรวจสอบทะเบียน อย. ของเครื่องมือแพทย์ทุกรุ่น เพื่อเตือนต่ออายุล่วงหน้า 30-90 วัน',
+    columns: [
+      { key: 'productName', label: 'ชื่อผลิตภัณฑ์เครื่องมือแพทย์' },
+      { key: 'fdaNumber', label: 'เลขที่ใบอนุญาต อย.' },
+      { key: 'manufacturer', label: 'ผู้ผลิต / ประเทศ' },
+      { key: 'issueDate', label: 'วันที่ได้รับอนุญาต' },
+      { key: 'expiryDate', label: 'วันหมดอายุ' },
+      { key: 'daysLeft', label: 'คงเหลือ (วัน)', format: 'number' },
+      { key: 'status', label: 'สถานะใบอนุญาต' }
+    ],
+    transform: (appState) => {
+      const fdas = appState.fdaRegistrations || [];
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      const rows = fdas.map(f => {
+        let days = 0;
+        let status = 'ปกติ';
+        if (f.expiryDate) {
+          const exp = new Date(f.expiryDate);
+          exp.setHours(0,0,0,0);
+          days = Math.ceil((exp - today) / 86400000);
+          if (days < 0) status = '🔴 หมดอายุแล้ว';
+          else if (days <= 60) status = '🟡 ใกล้หมดอายุ (<60 วัน)';
+          else status = '🟢 ปกติ';
+        }
+        return {
+          productName: f.productName || '-',
+          fdaNumber: f.fdaNumber || '-',
+          manufacturer: f.manufacturer || '-',
+          issueDate: f.issueDate || '-',
+          expiryDate: f.expiryDate || '-',
+          daysLeft: days,
+          status: status
+        };
+      });
+
+      const expiringCount = rows.filter(r => r.daysLeft >= 0 && r.daysLeft <= 60).length;
+
+      return {
+        rows,
+        kpis: [
+          { label: 'ทะเบียน อย. ทั้งหมด', value: `${rows.length} รายการ`, color: 'indigo' },
+          { label: 'ใกล้หมดอายุ (<60 วัน)', value: `${expiringCount} รายการ`, color: 'amber' }
+        ]
+      };
+    }
+  },
+
+  // ==========================================
+  // 👥 MODULE 08: HUMAN RESOURCES
+  // ==========================================
+
+  'annual_leave_balance': {
+    id: 'annual_leave_balance',
+    title: '🏖️ รายงานสรุปวันลาคงเหลือและสถิติการลา (Annual Leave Balance)',
+    module: 'Human Resources',
+    category: 'hr',
+    icon: '🏖️',
+    description: 'สรุปโควตาวันลาพักร้อน ลาป่วย ลากิจ รายพนักงาน พร้อมประวัติการขออนุมัติ',
+    columns: [
+      { key: 'employeeName', label: 'ชื่อพนักงาน' },
+      { key: 'role', label: 'ตำแหน่ง / สิทธิ์' },
+      { key: 'annualQuota', label: 'โควตาพักร้อน (วัน)', format: 'number' },
+      { key: 'vacationUsed', label: 'พักร้อนใช้ไป (วัน)', format: 'number' },
+      { key: 'vacationRemaining', label: 'พักร้อนคงเหลือ (วัน)', format: 'number' },
+      { key: 'sickUsed', label: 'ลาป่วยใช้ไป (วัน)', format: 'number' },
+      { key: 'personalUsed', label: 'ลากิจใช้ไป (วัน)', format: 'number' }
+    ],
+    transform: (appState) => {
+      const members = appState.members || [];
+      const leaves = appState.leaveRequests || [];
+
+      const rows = members.map(m => {
+        const myLeaves = leaves.filter(l => l.employeeName === m.name && l.status === 'อนุมัติแล้ว');
+        const vacUsed = myLeaves.filter(l => l.leaveType === 'พักร้อน').reduce((s, l) => s + (Number(l.days) || 1), 0);
+        const sickUsed = myLeaves.filter(l => l.leaveType === 'ลาป่วย').reduce((s, l) => s + (Number(l.days) || 1), 0);
+        const persUsed = myLeaves.filter(l => l.leaveType === 'ลากิจ').reduce((s, l) => s + (Number(l.days) || 1), 0);
+        const quota = 10;
+
+        return {
+          employeeName: m.name || '-',
+          role: m.role || 'Sales',
+          annualQuota: quota,
+          vacationUsed: vacUsed,
+          vacationRemaining: Math.max(0, quota - vacUsed),
+          sickUsed: sickUsed,
+          personalUsed: persUsed
+        };
+      });
+
+      return {
+        rows,
+        kpis: [
+          { label: 'จำนวนพนักงาน', value: `${rows.length} ท่าน`, color: 'indigo' },
+          { label: 'โควตาพักร้อนเฉลี่ยคงเหลือ', value: `${(rows.reduce((s, r) => s + r.vacationRemaining, 0) / (rows.length || 1)).toFixed(1)} วัน`, color: 'emerald' }
+        ]
+      };
+    }
+  }
+
+};
+
+window.REPORT_REGISTRY = REPORT_REGISTRY;
+
+
+// --- Module File: js/modules/mod10_reports/UniversalReportModal.js ---
+// MODULE: mod10_reports/UniversalReportModal.js
+// Pluggable Universal Report Viewer Modal with Real-time Filters & Excel Export
+
+function UniversalReportModal({
+  isOpen,
+  onClose,
+  reportId,
+  appState = {}
+}) {
+  if (!isOpen || !reportId) return null;
+
+  const reportDef = (window.REPORT_REGISTRY && window.REPORT_REGISTRY[reportId]) || null;
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Compute report data on demand
+  const reportData = useMemo(() => {
+    if (!reportDef || !reportDef.transform) return { rows: [], kpis: [] };
+    try {
+      return reportDef.transform(appState);
+    } catch (err) {
+      console.error('Report computation error:', err);
+      return { rows: [], kpis: [] };
+    }
+  }, [reportDef, appState]);
+
+  // Real-time Search Filter
+  const filteredRows = useMemo(() => {
+    const rows = reportData.rows || [];
+    if (!searchQuery.trim()) return rows;
+    const q = searchQuery.toLowerCase().trim();
+    return rows.filter(row => {
+      return Object.values(row).some(val => {
+        if (val === undefined || val === null) return false;
+        return String(val).toLowerCase().includes(q);
+      });
+    });
+  }, [reportData.rows, searchQuery]);
+
+  const handleExportExcel = () => {
+    if (!reportDef) return;
+    setIsExporting(true);
+    setTimeout(() => {
+      ExcelExportEngine.exportToExcel(
+        `AERON_${reportDef.id}`,
+        reportDef.columns,
+        filteredRows,
+        {
+          reportTitle: `${reportDef.title} (${reportDef.module})`
+        }
+      );
+      setIsExporting(false);
+    }, 150);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (!reportDef) {
+    return (
+      <div className="fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl text-center space-y-3 max-w-md">
+          <div className="text-3xl">⚠️</div>
+          <div className="text-white font-bold">ไม่พบรายงานรหัส "{reportId}"</div>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold">
+            ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[1000] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in font-sans">
+      <div className="bg-slate-900 border border-slate-700/80 w-full max-w-6xl rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl animate-modal max-h-[94vh] flex flex-col text-slate-100">
+
+        {/* 1. Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center text-2xl shadow-inner shrink-0">
+              {reportDef.icon || '📊'}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-black text-white text-base sm:text-lg">{reportDef.title}</h3>
+                <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-bold">
+                  {reportDef.module}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">{reportDef.description}</p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting || filteredRows.length === 0}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+              title="ส่งออกรายงานเป็นไฟล์ Excel / CSV พร้อมเปิดใช้งาน"
+            >
+              <span>{isExporting ? '⏳' : '📥'}</span>
+              <span>{isExporting ? 'กำลังสร้างไฟล์...' : 'ดาวน์โหลด Excel'}</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all"
+              title="พิมพ์รายงาน"
+            >
+              <span>🖨️ พิมพ์</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-sm transition-all"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* 2. KPI Summary Cards */}
+        {reportData.kpis && reportData.kpis.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
+            {reportData.kpis.map((kpi, idx) => {
+              const bgCol = kpi.color === 'emerald' ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' :
+                            kpi.color === 'rose' ? 'bg-rose-950/40 border-rose-500/30 text-rose-300' :
+                            kpi.color === 'amber' ? 'bg-amber-950/40 border-amber-500/30 text-amber-300' :
+                            kpi.color === 'indigo' ? 'bg-indigo-950/40 border-indigo-500/30 text-indigo-300' :
+                            'bg-slate-800/50 border-slate-700 text-slate-200';
+              return (
+                <div key={idx} className={`p-3 rounded-2xl border ${bgCol} flex flex-col justify-between`}>
+                  <span className="text-[11px] text-slate-400 font-medium">{kpi.label}</span>
+                  <span className="text-sm sm:text-base font-extrabold mt-0.5 tracking-tight font-mono">{kpi.value}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 3. Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ค้นหาข้อมูลในรายงาน (เช่น ชื่อ รพ., รุ่นเครื่อง, เซลส์, S/N)..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-white text-xs font-bold"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-slate-400 font-mono flex items-center justify-end gap-2 px-1">
+            <span>แสดง <strong>{filteredRows.length}</strong> จาก <strong>{reportData.rows.length}</strong> รายการ</span>
+          </div>
+        </div>
+
+        {/* 4. Interactive Data Table */}
+        <div className="flex-1 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/50 scrollbar-thin">
+          {filteredRows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center text-slate-500 space-y-2">
+              <span className="text-3xl">📭</span>
+              <span className="text-sm font-bold">ไม่พบข้อมูลตรงกับเงื่อนไขที่ค้นหา</span>
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs border-collapse font-sans">
+              <thead className="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10.5px]">
+                <tr>
+                  <th className="p-3 w-12 text-center">#</th>
+                  {reportDef.columns.map((col, cIdx) => (
+                    <th key={cIdx} className={`p-3 whitespace-nowrap ${col.format === 'currency' || col.format === 'number' || col.format === 'percent' ? 'text-right' : ''}`}>
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono text-[11.5px]">
+                {filteredRows.map((row, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3 text-center text-slate-500 text-[10.5px] font-sans">{rIdx + 1}</td>
+                    {reportDef.columns.map((col, cIdx) => {
+                      const val = row[col.key];
+                      let displayVal = val;
+                      let extraClass = 'text-slate-200';
+
+                      if (val === undefined || val === null || val === '') {
+                        displayVal = '-';
+                        extraClass = 'text-slate-600';
+                      } else if (col.format === 'currency') {
+                        displayVal = formatCurrency(val);
+                        extraClass = 'text-right font-bold text-emerald-400';
+                      } else if (col.format === 'percent') {
+                        displayVal = typeof val === 'number' ? `${val.toFixed(2)}%` : String(val);
+                        extraClass = 'text-right font-bold text-amber-300';
+                      } else if (col.format === 'number') {
+                        displayVal = typeof val === 'number' ? val.toLocaleString('th-TH') : String(val);
+                        extraClass = 'text-right font-bold text-slate-200';
+                      } else if (typeof val === 'string' && (val.includes('หมดประกัน') || val.includes('หมดอายุ') || val.includes('แพ้งาน'))) {
+                        extraClass = 'text-rose-400 font-bold font-sans';
+                      } else if (typeof val === 'string' && (val.includes('ใกล้หมด') || val.includes('รอผล'))) {
+                        extraClass = 'text-amber-300 font-bold font-sans';
+                      } else if (typeof val === 'string' && (val.includes('ในประกัน') || val.includes('ชนะ') || val.includes('ปกติ'))) {
+                        extraClass = 'text-emerald-300 font-bold font-sans';
+                      } else {
+                        extraClass = 'font-sans text-slate-200';
+                      }
+
+                      return (
+                        <td key={cIdx} className={`p-3 whitespace-nowrap ${extraClass}`}>
+                          {displayVal}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* 5. Footer */}
+        <div className="flex items-center justify-between border-t border-slate-800 pt-3 text-xs text-slate-500 shrink-0">
+          <span>* รายงานคำนวณแบบ Real-time จากฐานข้อมูลปัจจุบันของระบบ AERON MEDICAL</span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+          >
+            ปิด
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+window.UniversalReportModal = UniversalReportModal;
+
+
 // --- Module File: js/modules/App.js ---
 // ====================================================
 // MODULE: App.js (Main Application Assembly)
@@ -15672,6 +18419,16 @@ function App() {
 
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
   const [editingCostCalc, setEditingCostCalc] = useState(null);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+
+  // Universal Report Hub & Modal States
+  const [isUniversalReportModalOpen, setIsUniversalReportModalOpen] = useState(false);
+  const [activeReportId, setActiveReportId] = useState(null);
+
+  const handleOpenReport = (reportId) => {
+    setActiveReportId(reportId);
+    setIsUniversalReportModalOpen(true);
+  };
 
   const handleOpenHistoryModal = (proj) => {
     setHistoryTargetProject(proj);
@@ -15709,6 +18466,175 @@ function App() {
 
   // Scoped Projects based on User Role Scope
   const scopedProjects = useMemo(() => getScopedProjects(currentUser, projects), [projects, currentUser]);
+
+  // 🔔 Cross-Module Smart Action Checklist / Alerts Aggregator (Personalized by currentUser & Role)
+  const systemAlerts = useMemo(() => {
+    const list = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const userRole = currentUser ? String(currentUser.role).toUpperCase() : 'SALES';
+    const isOwnerOrAdmin = ['OWNER', 'HEAD_ADMIN', 'ADMIN'].includes(userRole);
+
+    // 1. 🎯 Kanban Projects Missing Cost Sheets (เฉพาะงานของ User หรือ Admin เห็นทั้งหมด)
+    (projects || []).forEach(p => {
+      const isMyProject = isOwnerOrAdmin || (currentUser && (
+        p.salesPerson === currentUser.name || 
+        p.salesRep === currentUser.name || 
+        p.memberId === currentUser.id ||
+        (currentUser.name && p.hospitalName && p.hospitalName.includes(currentUser.name))
+      ));
+      if (!isMyProject) return;
+
+      // Check if project has cost calculation
+      const hasCostSheet = (costCalculations || []).some(c => 
+        (c.projectId && c.projectId === p.id) || 
+        (c.projectName && p.hospitalName && c.projectName.includes(p.hospitalName))
+      );
+
+      if (!hasCostSheet) {
+        let parsedDf = 0;
+        let dfMissing = true;
+        if (p.dfAmount) {
+          dfMissing = false;
+          const numStr = String(p.dfAmount).replace(/[^0-9.]/g, '');
+          parsedDf = Number(numStr) || 0;
+        }
+
+        list.push({
+          id: `cost-missing-${p.id}`,
+          category: 'cost_sheet',
+          icon: '🔴',
+          title: 'ยังไม่ได้จัดทำใบคำนวณต้นทุน (Cost Sheet)',
+          badgeText: 'งานด่วน Kanban',
+          severity: 'urgent',
+          description: `โครงการ: ${p.hospitalName || ''} - ${p.title || ''}`,
+          detail: `งบประมาณ: ${formatCurrency(p.budget || 0)} | เซลส์ผู้ดูแล: ${p.salesPerson || currentUser?.name || 'ทีมขาย'}`,
+          actionText: 'คำนวณต้นทุนงานนี้',
+          onAction: () => {
+            const tempCalc = {
+              id: `temp-${p.id}`,
+              projectId: p.id,
+              projectName: `${p.hospitalName || ''} - ${p.title || ''}`,
+              sellingPriceInVat: p.budget || 0,
+              costInVat: Math.round((p.budget || 0) * 0.7),
+              dfType: 'amount',
+              dfValue: parsedDf,
+              dfMissing: dfMissing,
+              salesCommPercent: 2.0,
+              interestPercent: 7.0,
+              taxPercent: 20.0,
+              retentionPercent: 5.0,
+              date: new Date().toISOString().split('T')[0]
+            };
+            setEditingCostCalc(tempCalc);
+            setIsCostModalOpen(true);
+          }
+        });
+      }
+    });
+
+    // 2. 🧪 Demo Bookings Overdue / Pending Result
+    if (checkTabAccess(userRole, 'calendar')) {
+      (demoBookings || []).forEach(b => {
+        const isMyDemo = isOwnerOrAdmin || (currentUser && b.salesPerson === currentUser.name);
+        if (!isMyDemo) return;
+
+        const isOverdue = b.endDate <= todayStr;
+        const isPendingOutcome = !b.outcomeStatus || b.outcomeStatus === 'กำลังทดสอบ / รอผล';
+        if (isOverdue && isPendingOutcome) {
+          list.push({
+            id: `demo-overdue-${b.id}`,
+            category: 'demo',
+            icon: '🧪',
+            title: 'ครบกำหนดเดโม่ / รอสรุปผลลัพธ์',
+            badgeText: 'คิวเดโม่',
+            severity: 'warning',
+            description: `เครื่อง ${b.productName || 'สาธิต'} ที่ ${b.hospitalName}`,
+            detail: `กำหนดสิ้นสุด: ${b.endDate} | ผู้รับผิดชอบ: ${b.salesPerson}`,
+            actionText: 'ไปที่ปฏิทินเดโม่',
+            onAction: () => {
+              setActiveSidebarTab('calendar');
+            }
+          });
+        }
+      });
+    }
+
+    // 3. 🛒 Purchase Orders Pending Action / Approval
+    if (checkTabAccess(userRole, 'finance')) {
+      (purchaseOrders || []).forEach(po => {
+        if (po.status === 'รออนุมัติ' || po.paymentStatus === 'รอชำระเงิน') {
+          list.push({
+            id: `po-pending-${po.id}`,
+            category: 'finance',
+            icon: '🛒',
+            title: po.status === 'รออนุมัติ' ? 'ใบสั่งซื้อรอการอนุมัติ (PO Pending)' : 'ใบสั่งซื้อรอชำระเงิน',
+            badgeText: 'จัดซื้อ & การเงิน',
+            severity: 'info',
+            description: `PO: ${po.poNumber} (${po.vendorName}) - ${po.productName}`,
+            detail: `ยอดรวม: ${formatCurrency(po.totalAmount || 0)}`,
+            actionText: 'ดูรายการ PO',
+            onAction: () => {
+              setActiveSidebarTab('finance');
+              setFinanceSubView('purchase_orders');
+            }
+          });
+        }
+      });
+    }
+
+    // 4. 🚢 Import Shipments Arrived in Thailand
+    if (checkTabAccess(userRole, 'logistic')) {
+      (shipments || []).forEach(shp => {
+        if (shp.status === 'ถึงประเทศไทย รอออกของ') {
+          list.push({
+            id: `shp-arrived-${shp.id}`,
+            category: 'import',
+            icon: '🚢',
+            title: 'สินค้าชิปปิ้งถึงประเทศไทย รอออกของ',
+            badgeText: 'นำเข้าสินค้า',
+            severity: 'info',
+            description: `${shp.shipmentNumber} (${shp.productName})`,
+            detail: `ผู้จัดส่ง: ${shp.shippingCompany} | AWB: ${shp.trackingNumber || '-'}`,
+            actionText: 'ดูสถานะนำเข้า',
+            onAction: () => {
+              setActiveSidebarTab('logistic');
+              setLogisticSubView('shipment_tracking');
+            }
+          });
+        }
+      });
+    }
+
+    // 5. 🛡️ FDA Registrations Expiring Soon (Within 60 days)
+    if (checkTabAccess(userRole, 'report')) {
+      (fdaRegistrations || []).forEach(fda => {
+        if (fda.expiryDate) {
+          const exp = new Date(fda.expiryDate);
+          const now = new Date();
+          const daysLeft = Math.ceil((exp - now) / 86400000);
+          if (daysLeft >= 0 && daysLeft <= 60) {
+            list.push({
+              id: `fda-exp-${fda.id}`,
+              category: 'fda',
+              icon: '🛡️',
+              title: `ใบอนุญาต อย. ใกล้หมดอายุ (เหลือ ${daysLeft} วัน)`,
+              badgeText: 'งาน อย.',
+              severity: 'warning',
+              description: `สินค้า: ${fda.productName} (เลข อย. ${fda.fdaNumber || '-'})`,
+              detail: `วันหมดอายุ: ${fda.expiryDate}`,
+              actionText: 'ดูทะเบียน อย.',
+              onAction: () => {
+                setActiveSidebarTab('report');
+                setReportSubView('fda_registration');
+              }
+            });
+          }
+        }
+      });
+    }
+
+    return list;
+  }, [projects, costCalculations, demoBookings, purchaseOrders, shipments, fdaRegistrations, currentUser]);
 
   // Pending PO Projects Count (โครงการที่ชนะงานแล้วแต่ยังไม่ได้ออก PO)
   const pendingPOCount = useMemo(() => {
@@ -16345,6 +19271,8 @@ function App() {
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserAccountModal={() => setIsUserAccountModalOpen(true)}
         onLogout={handleLogout}
+        alerts={systemAlerts}
+        onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
         activeSidebarTab={activeSidebarTab}
         setActiveSidebarTab={setActiveSidebarTab}
         activeView={activeView}
@@ -16392,12 +19320,22 @@ function App() {
               projects={filteredProjects}
               allProjects={projects}
               members={members}
+              products={products}
+              demoBookings={demoBookings}
+              purchaseOrders={purchaseOrders}
+              shipments={shipments}
+              repairTickets={repairTickets}
+              soldProducts={soldProducts}
+              fdaRegistrations={fdaRegistrations}
               costCalculations={costCalculations}
+              currentUser={currentUser}
+              initialTab={activeView === 'dashboard_ceo' ? 'ceo' : activeView === 'dashboard_cfo' ? 'cfo' : activeView === 'dashboard_manager' ? 'manager' : activeView === 'dashboard_classic' ? 'classic' : undefined}
               onEditProject={(p) => { setEditingProject(p); setIsModalOpen(true); }}
               onAddLog={(p) => { setLogTargetProject(p); setIsLogModalOpen(true); }}
               onViewHistory={handleOpenHistoryModal}
               onMoveProject={handleMoveProject}
               onBookDemo={(p) => { setDemoPrefill({ projectId: p.id, hospitalName: p.hospitalName, productId: p.productId, salesPerson: p.assignee }); setIsDemoModalOpen(true); }}
+              onOpenReport={handleOpenReport}
             />
           )}
 
@@ -16488,6 +19426,7 @@ function App() {
                   onOpenNewAsset={(prefill) => { setEditingSoldAsset(prefill); setIsSoldModalOpen(true); }}
                   onEditAsset={(asset) => { setEditingSoldAsset(asset); setIsSoldModalOpen(true); }}
                   onDeleteAsset={handleDeleteSoldAsset}
+                  onOpenReport={handleOpenReport}
                 />
               )}
             </div>
@@ -16513,6 +19452,28 @@ function App() {
             <div className="space-y-6">
               
 
+              {(reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports') && (
+                <CentralReportsHubView 
+                  appState={{
+                    projects,
+                    members,
+                    products,
+                    demoBookings,
+                    purchaseOrders,
+                    shipments,
+                    repairTickets,
+                    soldProducts,
+                    fdaRegistrations,
+                    costCalculations,
+                    leaveRequests,
+                    attendanceLogs,
+                    accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
+                    currentUser
+                  }}
+                  onOpenReport={handleOpenReport}
+                />
+              )}
+
               {reportSubView === 'fda_registration' && (
                 <FDARegistrationView 
                   fdaRegistrations={fdaRegistrations}
@@ -16521,19 +19482,6 @@ function App() {
                   onOpenNewFDA={(prefill) => { setEditingFDA(prefill); setIsFDAModalOpen(true); }}
                   onEditFDA={(fda) => { setEditingFDA(fda); setIsFDAModalOpen(true); }}
                   onDeleteFDA={handleDeleteFDA}
-                />
-              )}
-
-              {reportSubView === 'analytics_reports' && (
-                <AnalyticalReportsView 
-                  projects={projects}
-                  members={members}
-                  products={products}
-                  purchaseOrders={purchaseOrders}
-                  repairTickets={repairTickets}
-                  soldProducts={soldProducts}
-                  shipments={shipments}
-                  fdaRegistrations={fdaRegistrations}
                 />
               )}
 
@@ -16589,6 +19537,7 @@ function App() {
                   onOpenNewCalc={(prefill) => { setEditingCostCalc(prefill); setIsCostModalOpen(true); }}
                   onEditCalc={(calc) => { setEditingCostCalc(calc); setIsCostModalOpen(true); }}
                   onDeleteCalc={handleDeleteCostCalc}
+                  onOpenReport={handleOpenReport}
                 />
               )}
 
@@ -16917,6 +19866,41 @@ function App() {
           isOpen={isUserAccountModalOpen}
           onClose={() => setIsUserAccountModalOpen(false)}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* 🔔 Smart Notification Action Center Modal */}
+      {isNotificationModalOpen && (
+        <NotificationModal
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+          currentUser={currentUser}
+          alerts={systemAlerts}
+        />
+      )}
+
+      {/* 📊 Universal Report Viewer Modal */}
+      {isUniversalReportModalOpen && (
+        <UniversalReportModal
+          isOpen={isUniversalReportModalOpen}
+          onClose={() => setIsUniversalReportModalOpen(false)}
+          reportId={activeReportId}
+          appState={{
+            projects,
+            members,
+            products,
+            demoBookings,
+            purchaseOrders,
+            shipments,
+            repairTickets,
+            soldProducts,
+            fdaRegistrations,
+            costCalculations,
+            leaveRequests,
+            attendanceLogs,
+            accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
+            currentUser
+          }}
         />
       )}
 

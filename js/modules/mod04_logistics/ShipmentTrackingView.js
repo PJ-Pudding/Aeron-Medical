@@ -182,6 +182,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
                 <th className="p-3">ผู้จัดขนส่ง & เลข AWB/BL</th>
                 <th className="p-3">ปริมาตร CBM / น้ำหนัก</th>
                 <th className="p-3 text-right">ค่าขนส่ง & ภาษีศุลกากร</th>
+                <th className="p-3 text-center min-w-[130px]">💳 วันจ่ายเงิน / นับวัน</th>
                 <th className="p-3 text-center">วันที่ ETD / ETA</th>
                 <th className="p-3 text-center">สถานะนำเข้า</th>
                 <th className="p-3 text-center">จัดการ</th>
@@ -190,7 +191,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
             <tbody className="divide-y divide-slate-800/60">
               {filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-8 text-center text-slate-500 text-xs">
+                  <td colSpan="9" className="p-8 text-center text-slate-500 text-xs">
                     ไม่พบรายการนำเข้าสินค้าตรงตามเงื่อนไขที่ค้นหา
                   </td>
                 </tr>
@@ -239,6 +240,43 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
                         <div className="font-bold text-emerald-400">{formatCurrency(shp.shippingCost)}</div>
                         {shp.dutyTaxes > 0 && (
                           <div className="text-[10px] text-purple-300">+ ภาษี {formatCurrency(shp.dutyTaxes)}</div>
+                        )}
+                      </td>
+
+                      {/* Payment Date & Elapsed Days Counter */}
+                      <td className="p-3 text-center">
+                        {shp.paymentDate ? (
+                          <div className="space-y-1">
+                            <div className="font-mono text-emerald-300 font-bold text-xs flex items-center justify-center gap-1">
+                              <span>💳</span> <span>{shp.paymentDate}</span>
+                            </div>
+                            <div>
+                              {(() => {
+                                const p = new Date(shp.paymentDate);
+                                const t = new Date();
+                                p.setHours(0,0,0,0);
+                                t.setHours(0,0,0,0);
+                                const diff = Math.floor((t - p) / 86400000);
+                                if (diff >= 0) {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10.5px] font-mono font-bold inline-flex items-center gap-1">
+                                      <span>⏱️</span> <span>ผ่านมา {diff} วัน</span>
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-mono">
+                                      อีก {Math.abs(diff)} วัน
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 text-[10.5px] border border-slate-700">
+                            ⏳ ยังไม่ระบุวันจ่าย
+                          </span>
                         )}
                       </td>
 
@@ -317,18 +355,34 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
+              <div>
+                <span className="text-slate-500 font-bold">💳 วันที่จ่ายเงิน:</span>
+                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate || 'ยังไม่ระบุ'}</div>
+                {previewShipment.paymentDate && (
+                  <div className="text-amber-300 text-[10.5px] font-bold mt-0.5">
+                    {(() => {
+                      const p = new Date(previewShipment.paymentDate);
+                      const t = new Date();
+                      p.setHours(0,0,0,0);
+                      t.setHours(0,0,0,0);
+                      const diff = Math.floor((t - p) / 86400000);
+                      return diff >= 0 ? `⏱️ ผ่านมา ${diff} วันแล้ว` : `อีก ${Math.abs(diff)} วัน`;
+                    })()}
+                  </div>
+                )}
+              </div>
               <div>
                 <span className="text-slate-500 font-bold">ปริมาตร (CBM):</span>
-                <div className="text-amber-400 font-bold text-base">{previewShipment.cbm} CBM</div>
+                <div className="text-amber-400 font-bold text-sm">{previewShipment.cbm} CBM</div>
               </div>
               <div>
                 <span className="text-slate-500 font-bold">น้ำหนักรวม (Weight):</span>
-                <div className="text-slate-200 font-bold text-base">{previewShipment.grossWeight || 0} kg</div>
+                <div className="text-slate-200 font-bold text-sm">{previewShipment.grossWeight || 0} kg</div>
               </div>
               <div>
                 <span className="text-slate-500 font-bold">ค่าขนส่งรวม:</span>
-                <div className="text-emerald-400 font-bold text-base">{formatCurrency(previewShipment.shippingCost)}</div>
+                <div className="text-emerald-400 font-bold text-sm">{formatCurrency(previewShipment.shippingCost)}</div>
               </div>
             </div>
 

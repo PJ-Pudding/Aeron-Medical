@@ -4,6 +4,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
   const [filterProduct, setFilterProduct] = useState('all');
   const [calendarMode, setCalendarMode] = useState('month'); // 'month' or 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7, 1)); // Default August 2026 for mock data
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return demoBookings.filter(b => {
@@ -43,8 +44,17 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           
+          {/* 📊 Demo Analytics Report Button */}
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 font-bold text-xs py-2.5 px-3.5 rounded-xl border border-amber-500/40 shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+            title="ดูรายงานประวัติการเดินทางของเครื่อง ค่าใช้จ่าย และอัตรา Win Rate"
+          >
+            <span>📊 รายงานประวัติ & สถิติ Demo</span>
+          </button>
+
           {/* Mode Switcher */}
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
             <button
@@ -53,7 +63,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
                 calendarMode === 'month' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              🗓️ มุมมอง Month Grid
+              🗓️ Month Grid
             </button>
             <button
               onClick={() => setCalendarMode('list')}
@@ -61,7 +71,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
                 calendarMode === 'list' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              📋 มุมมอง รายการ
+              📋 รายการ
             </button>
           </div>
 
@@ -70,7 +80,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
             onChange={(e) => setFilterProduct(e.target.value)}
             className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl p-2.5 outline-none"
           >
-            <option value="all">กรองตามเครื่องสาธิตทุกรุ่น</option>
+            <option value="all">กรองทุกรุ่น</option>
             {(products || []).map(p => (
               <option key={p.id} value={p.id}>📦 {p.name}</option>
             ))}
@@ -78,7 +88,7 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
 
           <button
             onClick={onOpenBookDemo}
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center gap-1.5"
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center gap-1.5 active:scale-95"
           >
             <span>+ เพิ่มการจองคิว Demo</span>
           </button>
@@ -152,6 +162,16 @@ function DemoCalendarView({ demoBookings, products, projects, members, onOpenBoo
           )}
         </div>
       )}
+
+      {/* 📊 Demo Analytics & History Report Modal */}
+      <DemoReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        demoBookings={demoBookings}
+        products={products}
+        projects={projects}
+        members={members}
+      />
 
     </div>
   );

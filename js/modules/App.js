@@ -212,6 +212,16 @@ function App() {
 
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
   const [editingCostCalc, setEditingCostCalc] = useState(null);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+
+  // Universal Report Hub & Modal States
+  const [isUniversalReportModalOpen, setIsUniversalReportModalOpen] = useState(false);
+  const [activeReportId, setActiveReportId] = useState(null);
+
+  const handleOpenReport = (reportId) => {
+    setActiveReportId(reportId);
+    setIsUniversalReportModalOpen(true);
+  };
 
   const handleOpenHistoryModal = (proj) => {
     setHistoryTargetProject(proj);
@@ -249,6 +259,175 @@ function App() {
 
   // Scoped Projects based on User Role Scope
   const scopedProjects = useMemo(() => getScopedProjects(currentUser, projects), [projects, currentUser]);
+
+  // 🔔 Cross-Module Smart Action Checklist / Alerts Aggregator (Personalized by currentUser & Role)
+  const systemAlerts = useMemo(() => {
+    const list = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const userRole = currentUser ? String(currentUser.role).toUpperCase() : 'SALES';
+    const isOwnerOrAdmin = ['OWNER', 'HEAD_ADMIN', 'ADMIN'].includes(userRole);
+
+    // 1. 🎯 Kanban Projects Missing Cost Sheets (เฉพาะงานของ User หรือ Admin เห็นทั้งหมด)
+    (projects || []).forEach(p => {
+      const isMyProject = isOwnerOrAdmin || (currentUser && (
+        p.salesPerson === currentUser.name || 
+        p.salesRep === currentUser.name || 
+        p.memberId === currentUser.id ||
+        (currentUser.name && p.hospitalName && p.hospitalName.includes(currentUser.name))
+      ));
+      if (!isMyProject) return;
+
+      // Check if project has cost calculation
+      const hasCostSheet = (costCalculations || []).some(c => 
+        (c.projectId && c.projectId === p.id) || 
+        (c.projectName && p.hospitalName && c.projectName.includes(p.hospitalName))
+      );
+
+      if (!hasCostSheet) {
+        let parsedDf = 0;
+        let dfMissing = true;
+        if (p.dfAmount) {
+          dfMissing = false;
+          const numStr = String(p.dfAmount).replace(/[^0-9.]/g, '');
+          parsedDf = Number(numStr) || 0;
+        }
+
+        list.push({
+          id: `cost-missing-${p.id}`,
+          category: 'cost_sheet',
+          icon: '🔴',
+          title: 'ยังไม่ได้จัดทำใบคำนวณต้นทุน (Cost Sheet)',
+          badgeText: 'งานด่วน Kanban',
+          severity: 'urgent',
+          description: `โครงการ: ${p.hospitalName || ''} - ${p.title || ''}`,
+          detail: `งบประมาณ: ${formatCurrency(p.budget || 0)} | เซลส์ผู้ดูแล: ${p.salesPerson || currentUser?.name || 'ทีมขาย'}`,
+          actionText: 'คำนวณต้นทุนงานนี้',
+          onAction: () => {
+            const tempCalc = {
+              id: `temp-${p.id}`,
+              projectId: p.id,
+              projectName: `${p.hospitalName || ''} - ${p.title || ''}`,
+              sellingPriceInVat: p.budget || 0,
+              costInVat: Math.round((p.budget || 0) * 0.7),
+              dfType: 'amount',
+              dfValue: parsedDf,
+              dfMissing: dfMissing,
+              salesCommPercent: 2.0,
+              interestPercent: 7.0,
+              taxPercent: 20.0,
+              retentionPercent: 5.0,
+              date: new Date().toISOString().split('T')[0]
+            };
+            setEditingCostCalc(tempCalc);
+            setIsCostModalOpen(true);
+          }
+        });
+      }
+    });
+
+    // 2. 🧪 Demo Bookings Overdue / Pending Result
+    if (checkTabAccess(userRole, 'calendar')) {
+      (demoBookings || []).forEach(b => {
+        const isMyDemo = isOwnerOrAdmin || (currentUser && b.salesPerson === currentUser.name);
+        if (!isMyDemo) return;
+
+        const isOverdue = b.endDate <= todayStr;
+        const isPendingOutcome = !b.outcomeStatus || b.outcomeStatus === 'กำลังทดสอบ / รอผล';
+        if (isOverdue && isPendingOutcome) {
+          list.push({
+            id: `demo-overdue-${b.id}`,
+            category: 'demo',
+            icon: '🧪',
+            title: 'ครบกำหนดเดโม่ / รอสรุปผลลัพธ์',
+            badgeText: 'คิวเดโม่',
+            severity: 'warning',
+            description: `เครื่อง ${b.productName || 'สาธิต'} ที่ ${b.hospitalName}`,
+            detail: `กำหนดสิ้นสุด: ${b.endDate} | ผู้รับผิดชอบ: ${b.salesPerson}`,
+            actionText: 'ไปที่ปฏิทินเดโม่',
+            onAction: () => {
+              setActiveSidebarTab('calendar');
+            }
+          });
+        }
+      });
+    }
+
+    // 3. 🛒 Purchase Orders Pending Action / Approval
+    if (checkTabAccess(userRole, 'finance')) {
+      (purchaseOrders || []).forEach(po => {
+        if (po.status === 'รออนุมัติ' || po.paymentStatus === 'รอชำระเงิน') {
+          list.push({
+            id: `po-pending-${po.id}`,
+            category: 'finance',
+            icon: '🛒',
+            title: po.status === 'รออนุมัติ' ? 'ใบสั่งซื้อรอการอนุมัติ (PO Pending)' : 'ใบสั่งซื้อรอชำระเงิน',
+            badgeText: 'จัดซื้อ & การเงิน',
+            severity: 'info',
+            description: `PO: ${po.poNumber} (${po.vendorName}) - ${po.productName}`,
+            detail: `ยอดรวม: ${formatCurrency(po.totalAmount || 0)}`,
+            actionText: 'ดูรายการ PO',
+            onAction: () => {
+              setActiveSidebarTab('finance');
+              setFinanceSubView('purchase_orders');
+            }
+          });
+        }
+      });
+    }
+
+    // 4. 🚢 Import Shipments Arrived in Thailand
+    if (checkTabAccess(userRole, 'logistic')) {
+      (shipments || []).forEach(shp => {
+        if (shp.status === 'ถึงประเทศไทย รอออกของ') {
+          list.push({
+            id: `shp-arrived-${shp.id}`,
+            category: 'import',
+            icon: '🚢',
+            title: 'สินค้าชิปปิ้งถึงประเทศไทย รอออกของ',
+            badgeText: 'นำเข้าสินค้า',
+            severity: 'info',
+            description: `${shp.shipmentNumber} (${shp.productName})`,
+            detail: `ผู้จัดส่ง: ${shp.shippingCompany} | AWB: ${shp.trackingNumber || '-'}`,
+            actionText: 'ดูสถานะนำเข้า',
+            onAction: () => {
+              setActiveSidebarTab('logistic');
+              setLogisticSubView('shipment_tracking');
+            }
+          });
+        }
+      });
+    }
+
+    // 5. 🛡️ FDA Registrations Expiring Soon (Within 60 days)
+    if (checkTabAccess(userRole, 'report')) {
+      (fdaRegistrations || []).forEach(fda => {
+        if (fda.expiryDate) {
+          const exp = new Date(fda.expiryDate);
+          const now = new Date();
+          const daysLeft = Math.ceil((exp - now) / 86400000);
+          if (daysLeft >= 0 && daysLeft <= 60) {
+            list.push({
+              id: `fda-exp-${fda.id}`,
+              category: 'fda',
+              icon: '🛡️',
+              title: `ใบอนุญาต อย. ใกล้หมดอายุ (เหลือ ${daysLeft} วัน)`,
+              badgeText: 'งาน อย.',
+              severity: 'warning',
+              description: `สินค้า: ${fda.productName} (เลข อย. ${fda.fdaNumber || '-'})`,
+              detail: `วันหมดอายุ: ${fda.expiryDate}`,
+              actionText: 'ดูทะเบียน อย.',
+              onAction: () => {
+                setActiveSidebarTab('report');
+                setReportSubView('fda_registration');
+              }
+            });
+          }
+        }
+      });
+    }
+
+    return list;
+  }, [projects, costCalculations, demoBookings, purchaseOrders, shipments, fdaRegistrations, currentUser]);
 
   // Pending PO Projects Count (โครงการที่ชนะงานแล้วแต่ยังไม่ได้ออก PO)
   const pendingPOCount = useMemo(() => {
@@ -885,6 +1064,8 @@ function App() {
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserAccountModal={() => setIsUserAccountModalOpen(true)}
         onLogout={handleLogout}
+        alerts={systemAlerts}
+        onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
         activeSidebarTab={activeSidebarTab}
         setActiveSidebarTab={setActiveSidebarTab}
         activeView={activeView}
@@ -932,12 +1113,22 @@ function App() {
               projects={filteredProjects}
               allProjects={projects}
               members={members}
+              products={products}
+              demoBookings={demoBookings}
+              purchaseOrders={purchaseOrders}
+              shipments={shipments}
+              repairTickets={repairTickets}
+              soldProducts={soldProducts}
+              fdaRegistrations={fdaRegistrations}
               costCalculations={costCalculations}
+              currentUser={currentUser}
+              initialTab={activeView === 'dashboard_ceo' ? 'ceo' : activeView === 'dashboard_cfo' ? 'cfo' : activeView === 'dashboard_manager' ? 'manager' : activeView === 'dashboard_classic' ? 'classic' : undefined}
               onEditProject={(p) => { setEditingProject(p); setIsModalOpen(true); }}
               onAddLog={(p) => { setLogTargetProject(p); setIsLogModalOpen(true); }}
               onViewHistory={handleOpenHistoryModal}
               onMoveProject={handleMoveProject}
               onBookDemo={(p) => { setDemoPrefill({ projectId: p.id, hospitalName: p.hospitalName, productId: p.productId, salesPerson: p.assignee }); setIsDemoModalOpen(true); }}
+              onOpenReport={handleOpenReport}
             />
           )}
 
@@ -1028,6 +1219,7 @@ function App() {
                   onOpenNewAsset={(prefill) => { setEditingSoldAsset(prefill); setIsSoldModalOpen(true); }}
                   onEditAsset={(asset) => { setEditingSoldAsset(asset); setIsSoldModalOpen(true); }}
                   onDeleteAsset={handleDeleteSoldAsset}
+                  onOpenReport={handleOpenReport}
                 />
               )}
             </div>
@@ -1053,6 +1245,28 @@ function App() {
             <div className="space-y-6">
               
 
+              {(reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports') && (
+                <CentralReportsHubView 
+                  appState={{
+                    projects,
+                    members,
+                    products,
+                    demoBookings,
+                    purchaseOrders,
+                    shipments,
+                    repairTickets,
+                    soldProducts,
+                    fdaRegistrations,
+                    costCalculations,
+                    leaveRequests,
+                    attendanceLogs,
+                    accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
+                    currentUser
+                  }}
+                  onOpenReport={handleOpenReport}
+                />
+              )}
+
               {reportSubView === 'fda_registration' && (
                 <FDARegistrationView 
                   fdaRegistrations={fdaRegistrations}
@@ -1061,19 +1275,6 @@ function App() {
                   onOpenNewFDA={(prefill) => { setEditingFDA(prefill); setIsFDAModalOpen(true); }}
                   onEditFDA={(fda) => { setEditingFDA(fda); setIsFDAModalOpen(true); }}
                   onDeleteFDA={handleDeleteFDA}
-                />
-              )}
-
-              {reportSubView === 'analytics_reports' && (
-                <AnalyticalReportsView 
-                  projects={projects}
-                  members={members}
-                  products={products}
-                  purchaseOrders={purchaseOrders}
-                  repairTickets={repairTickets}
-                  soldProducts={soldProducts}
-                  shipments={shipments}
-                  fdaRegistrations={fdaRegistrations}
                 />
               )}
 
@@ -1129,6 +1330,7 @@ function App() {
                   onOpenNewCalc={(prefill) => { setEditingCostCalc(prefill); setIsCostModalOpen(true); }}
                   onEditCalc={(calc) => { setEditingCostCalc(calc); setIsCostModalOpen(true); }}
                   onDeleteCalc={handleDeleteCostCalc}
+                  onOpenReport={handleOpenReport}
                 />
               )}
 
@@ -1457,6 +1659,41 @@ function App() {
           isOpen={isUserAccountModalOpen}
           onClose={() => setIsUserAccountModalOpen(false)}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* 🔔 Smart Notification Action Center Modal */}
+      {isNotificationModalOpen && (
+        <NotificationModal
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+          currentUser={currentUser}
+          alerts={systemAlerts}
+        />
+      )}
+
+      {/* 📊 Universal Report Viewer Modal */}
+      {isUniversalReportModalOpen && (
+        <UniversalReportModal
+          isOpen={isUniversalReportModalOpen}
+          onClose={() => setIsUniversalReportModalOpen(false)}
+          reportId={activeReportId}
+          appState={{
+            projects,
+            members,
+            products,
+            demoBookings,
+            purchaseOrders,
+            shipments,
+            repairTickets,
+            soldProducts,
+            fdaRegistrations,
+            costCalculations,
+            leaveRequests,
+            attendanceLogs,
+            accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
+            currentUser
+          }}
         />
       )}
 

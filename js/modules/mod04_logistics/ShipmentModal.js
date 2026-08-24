@@ -24,6 +24,7 @@ function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) 
       shippingCost: 35000,
       dutyTaxes: 12000,
       customsBroker: 'V-Cargo Logistics (Thailand)',
+      paymentDate: shipment?.paymentDate || '',
       etd: new Date().toISOString().split('T')[0],
       eta: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
       status: window.SHIPMENT_STATUSES[0],
@@ -208,33 +209,63 @@ function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">วันที่ส่งออกจากต้นทาง (ETD)</label>
+          {/* 📅 Dates & Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            
+            {/* วันที่จ่ายเงิน */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-emerald-300 flex items-center justify-between">
+                <span>💳 วันที่จ่ายเงิน</span>
+                {formData.paymentDate && (
+                  <span className="text-[10px] text-amber-300 font-mono font-bold">
+                    {(() => {
+                      const p = new Date(formData.paymentDate);
+                      const t = new Date();
+                      p.setHours(0,0,0,0);
+                      t.setHours(0,0,0,0);
+                      const diff = Math.floor((t - p) / 86400000);
+                      return diff >= 0 ? `(ผ่านมา ${diff} วัน)` : `(อีก ${Math.abs(diff)} วัน)`;
+                    })()}
+                  </span>
+                )}
+              </label>
+              <input
+                type="date"
+                value={formData.paymentDate || ''}
+                onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-300 font-mono font-bold outline-none focus:border-emerald-500 text-xs"
+              />
+            </div>
+
+            {/* วันที่ส่งออก (ETD) */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🛫 ส่งออกจากต้นทาง (ETD)</label>
               <input
                 type="date"
                 value={formData.etd}
                 onChange={(e) => setFormData({ ...formData, etd: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none focus:border-cyan-500 text-xs"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">วันที่คาดว่าถึงไทย (ETA)</label>
+            {/* วันที่คาดว่าถึงไทย (ETA) */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🛬 คาดว่าถึงไทย (ETA)</label>
               <input
                 type="date"
                 value={formData.eta}
                 onChange={(e) => setFormData({ ...formData, eta: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-mono font-bold outline-none focus:border-cyan-500 text-xs"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-300">สถานะการนำเข้า <span className="text-rose-400">*</span></label>
+            {/* สถานะการนำเข้า */}
+            <div className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+              <label className="font-semibold text-slate-300">🏷️ สถานะนำเข้า <span className="text-rose-400">*</span></label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full bg-slate-950 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 font-bold outline-none"
+                className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg p-2 text-cyan-300 font-bold outline-none focus:border-cyan-400 text-xs"
               >
                 {window.SHIPMENT_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>

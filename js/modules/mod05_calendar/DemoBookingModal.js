@@ -2,15 +2,18 @@
 
 function DemoBookingModal({ prefill, projects, products, members, existingBookings, onSave, onClose }) {
   const [formData, setFormData] = useState({
+    id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',
     hospitalName: prefill?.hospitalName || '',
     productId: prefill?.productId || (products[0] ? products[0].id : ''),
-    demoSerial: '',
+    demoSerial: prefill?.demoSerial || '',
     salesPerson: prefill?.salesPerson || (members[0] ? members[0].name : ''),
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-    status: 'อนุมัติคิว',
-    note: ''
+    startDate: prefill?.startDate || new Date().toISOString().split('T')[0],
+    endDate: prefill?.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    status: prefill?.status || 'อนุมัติคิว',
+    expenseAmount: prefill?.expenseAmount || prefill?.demoCost || '',
+    outcomeStatus: prefill?.outcomeStatus || 'กำลังทดสอบ / รอผล',
+    note: prefill?.note || ''
   });
 
   const [conflictWarning, setConflictWarning] = useState('');
@@ -166,6 +169,33 @@ function DemoBookingModal({ prefill, projects, products, members, existingBookin
                 ) : (
                   <option value="SN-AERON-DEMO-01">🔹 SN-AERON-DEMO-01</option>
                 )}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-300">💸 ค่าใช้จ่ายเดโม่ (บาท THB)</label>
+              <input
+                type="number"
+                placeholder="เช่น 1500 (ค่าน้ำมัน/ขนส่ง)"
+                value={formData.expenseAmount}
+                onChange={(e) => setFormData({ ...formData, expenseAmount: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-300">🎯 สถานะผลลัพธ์การเดโม่</label>
+              <select
+                value={formData.outcomeStatus}
+                onChange={(e) => setFormData({ ...formData, outcomeStatus: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-semibold"
+              >
+                <option value="กำลังทดสอบ / รอผล">⏳ กำลังทดสอบ / รอผล</option>
+                <option value="ชนะประมูล / ปิดการขายสำเร็จ">🏆 ชนะประมูล / ปิดการขายสำเร็จ</option>
+                <option value="แพ้ประมูล / ปิดไม่สำเร็จ">❌ แพ้ประมูล / ปิดไม่สำเร็จ</option>
+                <option value="ขยายเวลาทดสอบ">🔄 ขยายเวลาทดสอบ</option>
               </select>
             </div>
           </div>
