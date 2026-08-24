@@ -2,7 +2,7 @@
 
 > **โปรเจกต์**: AERON MEDICAL Project Tracker & Enterprise Management System  
 > **สถาปัตยกรรม**: Micro-Modular Architecture (React 18 + Babel + TailwindCSS + Supabase Sync)  
-> **อัปเดตล่าสุด**: 24 สิงหาคม 2026 (v2.7.1)  
+> **อัปเดตล่าสุด**: 24 สิงหาคม 2026 (v2.8.0 - Day 1 Clean Production Reset)  
 > **ที่อยู่โปรเจกต์**: `D:\Team Projects Aeron`  
 > **GitHub Repository**: `https://github.com/RJ-Pudding/Aeron-Medical`
 
@@ -169,6 +169,13 @@ D:\Team Projects Aeron\
     - 💰 **CFO Financial View**: เงินสดสภาพคล่อง 5 บัญชี, ทุนสำรองสั่งของ Stage 4+, ภาระหนี้ PO รอชำระ, ปฏิทินวันครบกำหนดจ่ายเงิน (Upcoming Payables), ตรวจสอบกำไรรายโครงการ (Margin Audit)
     - 🎯 **Manager Operations View**: โครงการ Active, คิวเครื่องเดโม่และวันครบกำหนดส่งคืน, ติดตามชิปปิ้งนำเข้าพร้อมเวลานับวัน, แจ้งเตือนเครื่องใกล้หมดประกัน (โอกาสขาย MA)
   - **Header View Switcher Shortcuts**: มีทางลัดในดรอปดาวน์มุมมองบน Header ครบทั้ง 4 แบบ กดเลือกเข้าถึงได้ทันที
+
+### 6. การรีเซ็ตระบบเข้าสู่สภาวะเริ่มต้นวันแรก (Day 1 Production Clean Reset)
+- **ไฟล์**: `db/*.json`, `initialData.js`, `App.js`, `index.html` (v2.8.0)
+- **ความสามารถ**:
+  - ล้างข้อมูลธุรกรรมและการดำเนินงานทั้งหมดเป็น 0 รายการ (Projects, Cost Sheets, PO, Shipments, Demos, Repairs, Sold Products, FDA Registrations, Product Catalog, Bank Reconciliations, Daily Transactions, Leaves, Attendances)
+  - คงไว้เฉพาะ **บัญชีพนักงาน & สิทธิ์ผู้ใช้งาน (Team Members & Roles)** เพื่อให้พร้อมล็อกอินเริ่มใช้งานจริงได้ทันที
+  - ระบบตรวจสอบ LocalStorage อัตโนมัติ (`v2.8.0_day1_clean`) บังคับให้เบราว์เซอร์ของผู้ใช้ทุกคนเริ่มต้นจากข้อมูลว่างเปล่าวันแรกทันที
 
 ---
 

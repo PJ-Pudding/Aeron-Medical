@@ -1,6 +1,19 @@
-// ====================================================
-// MODULE: App.js (Main Application Assembly)
-// ====================================================
+// One-time System Data Reset Check for Day 1 Clean Go-Live
+const DAY1_RESET_VERSION = 'v2.8.0_day1_clean';
+try {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('aeron_sys_data_version') !== DAY1_RESET_VERSION) {
+    const keptAuth = localStorage.getItem('aeron_auth_user');
+    const keptJwt = localStorage.getItem('aeron_jwt_token');
+    const keptMembers = localStorage.getItem('gov_hospital_members');
+    localStorage.clear();
+    if (keptAuth) localStorage.setItem('aeron_auth_user', keptAuth);
+    if (keptJwt) localStorage.setItem('aeron_jwt_token', keptJwt);
+    if (keptMembers) localStorage.setItem('gov_hospital_members', keptMembers);
+    localStorage.setItem('aeron_sys_data_version', DAY1_RESET_VERSION);
+  }
+} catch (e) {
+  console.warn('Storage reset sync notice:', e);
+}
 
 function App() {
   // Projects State
