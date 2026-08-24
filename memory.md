@@ -2,7 +2,7 @@
 
 > **โปรเจกต์**: AERON MEDICAL Project Tracker & Enterprise Management System  
 > **สถาปัตยกรรม**: Micro-Modular Architecture (React 18 + Babel + TailwindCSS + Supabase Sync)  
-> **อัปเดตล่าสุด**: 24 สิงหาคม 2026 (v2.8.0 - Day 1 Clean Production Reset)  
+> **อัปเดตล่าสุด**: 24 สิงหาคม 2026 (v2.8.1 - Google Sheet 4-Year Expenses Import)  
 > **ที่อยู่โปรเจกต์**: `D:\Team Projects Aeron`  
 > **GitHub Repository**: `https://github.com/RJ-Pudding/Aeron-Medical`
 
@@ -175,7 +175,15 @@ D:\Team Projects Aeron\
 - **ความสามารถ**:
   - ล้างข้อมูลธุรกรรมและการดำเนินงานทั้งหมดเป็น 0 รายการ (Projects, Cost Sheets, PO, Shipments, Demos, Repairs, Sold Products, FDA Registrations, Product Catalog, Bank Reconciliations, Daily Transactions, Leaves, Attendances)
   - คงไว้เฉพาะ **บัญชีพนักงาน & สิทธิ์ผู้ใช้งาน (Team Members & Roles)** เพื่อให้พร้อมล็อกอินเริ่มใช้งานจริงได้ทันที
-  - ระบบตรวจสอบ LocalStorage อัตโนมัติ (`v2.8.0_day1_clean`) บังคับให้เบราว์เซอร์ของผู้ใช้ทุกคนเริ่มต้นจากข้อมูลว่างเปล่าวันแรกทันที
+
+### 7. การนำเข้าข้อมูลรายรับ-รายจ่ายย้อนหลัง 4 ปีจาก Google Sheet (2023 - 2026 Import)
+- **ไฟล์**: `db/daily_transactions.json`, `db/accounting.json`, `initialData.js`, `App.js`, `index.html` (v2.8.1)
+- **ความสามารถ**:
+  - นำเข้าข้อมูลรายรับ-รายจ่ายจริงจาก Google Sheet แท็บ **"ภาพรวม ยอดค่าใช้จ่าย"** รวมทั้งสิ้น **4,736 รายการ**
+    - 💸 รายจ่าย (Expenses): **4,176 รายการ** (มูลค่ารวม **฿88,607,832.35**)
+    - 💰 รายรับ (Incomes): **560 รายการ** (มูลค่ารวม **฿84,258,505.29**)
+  - ทำการจัดกลุ่มบัญชีธนาคารมาตรฐาน (KBANK Corp, KBANK Personal, SCB Corp, TTB Personal)
+  - ตัดคอลัมน์ด้านขวา (ข้อมูลผิดพลาด) ออกอย่างถูกต้อง และเก็บบันทึกเฉพาะคอลัมน์ค่าใช้จ่ายแยกย่อย, แพทย์, รพ., และภาษี W/H ครบถ้วน 100%
 
 ---
 

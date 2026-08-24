@@ -1,5 +1,5 @@
-// One-time System Data Reset Check for Day 1 Clean Go-Live
-const DAY1_RESET_VERSION = 'v2.8.0_day1_clean';
+// One-time System Data Reset Check for Day 1 Clean Go-Live (with Google Sheet Imports)
+const DAY1_RESET_VERSION = 'v2.8.1_imported_txns';
 try {
   if (typeof localStorage !== 'undefined' && localStorage.getItem('aeron_sys_data_version') !== DAY1_RESET_VERSION) {
     const keptAuth = localStorage.getItem('aeron_auth_user');
