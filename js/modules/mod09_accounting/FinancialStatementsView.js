@@ -379,7 +379,7 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
         <div className="flex flex-wrap items-center gap-2 bg-slate-950 p-2.5 rounded-2xl border border-amber-500/40 text-xs shadow-md">
           <div className="flex items-center gap-1.5 mr-1 border-r border-slate-800 pr-2">
             <span className="font-extrabold text-amber-400">ปีที่เลือก:</span>
-            {['2026', '2025', '2024', 'all'].map(yr => (
+            {['2026', '2025', '2024', '2023', 'all'].map(yr => (
               <button
                 key={yr}
                 onClick={() => { setSelectedYear(yr); if (yr !== 'all') handleApplyYearlyPreset(Number(yr)); else handleClearDateRange(); }}
@@ -442,10 +442,18 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
         >
           <span>📑 สรุปงบกำไรขาดทุน P&L</span>
         </button>
+
+        <button
+          onClick={() => window.print()}
+          className="ml-auto px-4 py-2 rounded-xl font-extrabold text-xs bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 shadow-sm flex items-center gap-2 transition-all print:hidden"
+        >
+          <span>🖨️</span>
+          <span>พิมพ์ / บันทึก PDF รายงานงบ</span>
+        </button>
       </div>
 
       {/* ---------------------------------------------------- */}
-      // TAB 1: MONTHLY 12-MONTH SPREADSHEET MATRIX (JAN-DEC + FULL YEAR)
+      {/* TAB 1: MONTHLY 12-MONTH SPREADSHEET MATRIX (JAN-DEC + FULL YEAR) */}
       {/* ---------------------------------------------------- */}
       {statementTab === 'monthly_matrix' && (
         <div className="glass-panel rounded-3xl border border-slate-800 overflow-hidden shadow-2xl space-y-0">
