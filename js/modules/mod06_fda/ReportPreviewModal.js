@@ -1,6 +1,6 @@
 // MODULE: mod06_fda/ReportPreviewModal.js
 
-function ReportPreviewModal({ report, projects, messengerTrips, purchaseOrders, repairTickets, fdaRegistrations, leaveRequests, onClose }) {
+function ReportPreviewModal({ report = null, projects = [], messengerTrips = [], purchaseOrders = [], repairTickets = [], fdaRegistrations = [], leaveRequests = [], onClose }) {
 
   const handlePrintReport = () => {
     window.print();

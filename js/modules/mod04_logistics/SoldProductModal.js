@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/SoldProductModal.js
 
-function SoldProductModal({ asset, projects, members, onSave, onClose }) {
+function SoldProductModal({ asset, projects = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (asset) return { ...asset };
     const wonProj = projects.find(p => p.status === 'stage_delivery' || p.status === 'stage_completed') || projects[0] || {};

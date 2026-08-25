@@ -155,11 +155,29 @@ function App() {
     setCurrentUser(null);
     setIsLoginModalOpen(true);
   };
+
+  // 🔄 Live Sync Centralized User Accounts from Cloud/Server DB on Startup
+  useEffect(() => {
+    async function syncRemoteUsers() {
+      try {
+        if (typeof loadFromDB === 'function') {
+          const remoteUsers = await loadFromDB('users', null);
+          if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
+          }
+        }
+      } catch (e) {
+        console.warn('[User Sync Notice]:', e.message);
+      }
+    }
+    syncRemoteUsers();
+  }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [logisticSubView, setLogisticSubView] = useState('product_catalog');
-  const [reportSubView, setReportSubView] = useState('fda_registration');
+  const [reportSubView, setReportSubView] = useState('hub');
   const [financeSubView, setFinanceSubView] = useState('cost_calculation');
   const [hrSubView, setHRSubView] = useState('leave_attendance');
+  const [accountingSubTab, setAccountingSubTab] = useState('daily_entries');
   const [activeView, setActiveView] = useState('manager');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClientType, setFilterClientType] = useState('all'); // all, รัฐบาล, เอกชน
@@ -1091,6 +1109,8 @@ function App() {
         setFinanceSubView={setFinanceSubView}
         hrSubView={hrSubView}
         setHRSubView={setHRSubView}
+        accountingSubTab={accountingSubTab}
+        setAccountingSubTab={setAccountingSubTab}
         members={members}
         projects={projects}
         pendingPOCount={pendingPOCount}
@@ -1367,6 +1387,8 @@ function App() {
               initialFrozenMonths={window.INITIAL_ACCOUNTING_FROZEN_MONTHS}
               initialRecurringTemplates={window.INITIAL_ACCOUNTING_RECURRING}
               currentUser={currentUser}
+              accountingSubTab={accountingSubTab}
+              onSubTabChange={setAccountingSubTab}
               onSaveTxn={handleSaveTransaction}
               onDeleteTxn={handleDeleteTransaction}
             />

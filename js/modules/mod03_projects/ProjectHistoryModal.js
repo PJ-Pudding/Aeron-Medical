@@ -1,6 +1,6 @@
 // MODULE: mod03_projects/ProjectHistoryModal.js
 
-function ProjectHistoryModal({ project, members, stages, products, onAddLog, onClose }) {
+function ProjectHistoryModal({ project, members = [], stages = window.STAGES || [], products = [], onAddLog, onClose }) {
   const [newLogNote, setNewLogNote] = useState('');
   const [logAuthor, setLogAuthor] = useState(project.assignee);
   const [logSearchQuery, setLogSearchQuery] = useState('');

@@ -1,6 +1,6 @@
 // MODULE: mod08_hr/LeaveAttendanceView.js
 
-function LeaveAttendanceView({ leaveRequests, attendanceLogs, members, currentUser, onOpenLeaveModal, onOpenAttendanceModal, onApproveLeave, onDeleteLeave, onDeleteAttendance }) {
+function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members = [], currentUser, onOpenLeaveModal, onOpenAttendanceModal, onApproveLeave, onDeleteLeave, onDeleteAttendance }) {
   const [activeTab, setActiveTab] = useState('schedule'); // 'schedule' | 'requests' | 'attendance'
 
   // Date Range Picker State (Default Year To Date YTD)

@@ -1,7 +1,13 @@
 // MODULE: mod09_accounting/AccountingModule.js
 
-function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn }) {
-  const [subTab, setSubTab] = useState('daily_entries'); // 'daily_entries' | 'pending_transfers' | 'financial_statements' | 'hospital_payee_analytics' | 'bank_reconciliation'
+function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn, accountingSubTab = 'daily_entries', onSubTabChange }) {
+  const [localSubTab, setLocalSubTab] = useState(accountingSubTab || 'daily_entries');
+  const subTab = accountingSubTab || localSubTab;
+  const setSubTab = (newTab) => {
+    setLocalSubTab(newTab);
+    if (onSubTabChange) onSubTabChange(newTab);
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPendingTransferModalOpen, setIsPendingTransferModalOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
@@ -35,20 +41,6 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
   useEffect(() => {
     localStorage.setItem('aeron_accounting_recurring', JSON.stringify(recurringTemplates));
   }, [recurringTemplates]);
-
-  // Check if current user is restricted ADMIN
-  const isRestrictedAdmin = useMemo(() => {
-    if (!currentUser || !currentUser.role) return false;
-    const roleUpper = String(currentUser.role).toUpperCase();
-    return roleUpper === 'ADMIN';
-  }, [currentUser]);
-
-  // Ensure restricted ADMIN is forced to stay on daily_entries or pending_transfers
-  useEffect(() => {
-    if (isRestrictedAdmin && subTab !== 'daily_entries' && subTab !== 'pending_transfers') {
-      setSubTab('daily_entries');
-    }
-  }, [isRestrictedAdmin, subTab]);
 
   // Freeze month toggle handler
   const handleToggleFreeze = (monthStr) => {
@@ -212,23 +204,19 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
             <span>📌 ตั้งค้างโอนประจำเดือน</span>
           </button>
 
-          {!isRestrictedAdmin && (
-            <>
-              <button
-                onClick={() => setIsRecurringModalOpen(true)}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
-              >
-                <span>🔄 จ่ายประจำ (Recurring)</span>
-              </button>
+          <button
+            onClick={() => setIsRecurringModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <span>🔄 จ่ายประจำ (Recurring)</span>
+          </button>
 
-              <button
-                onClick={() => setIsFreezeModalOpen(true)}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
-              >
-                <span>🔒 ปิดงบ (Freeze Month)</span>
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => setIsFreezeModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <span>🔒 ปิดงบ (Freeze Month)</span>
+          </button>
 
           {/* Sub Tabs Navigation */}
           <div className="flex flex-wrap bg-slate-950 p-1.5 rounded-2xl border border-slate-800 text-xs">
@@ -255,40 +243,32 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
               )}
             </button>
 
-            {!isRestrictedAdmin ? (
-              <>
-                <button
-                  onClick={() => setSubTab('financial_statements')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'financial_statements' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  📈 งบการเงิน P&L
-                </button>
+            <button
+              onClick={() => setSubTab('financial_statements')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'financial_statements' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📈 งบการเงิน P&L
+            </button>
 
-                <button
-                  onClick={() => setSubTab('hospital_payee_analytics')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'hospital_payee_analytics' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🏥 Drill-Down ราย รพ.
-                </button>
+            <button
+              onClick={() => setSubTab('hospital_payee_analytics')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'hospital_payee_analytics' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏥 Drill-Down ราย รพ.
+            </button>
 
-                <button
-                  onClick={() => setSubTab('bank_reconciliation')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'bank_reconciliation' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🏦 Bank Reconciliation
-                </button>
-              </>
-            ) : (
-              <span className="px-3 py-2 text-slate-600 text-[11px] italic flex items-center gap-1 cursor-not-allowed">
-                🔒 งบการเงิน (สงวนสิทธิ์ OWNER/HEAD_ADMIN)
-              </span>
-            )}
+            <button
+              onClick={() => setSubTab('bank_reconciliation')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'bank_reconciliation' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏦 Bank Reconciliation
+            </button>
           </div>
         </div>
       </div>
@@ -320,23 +300,23 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
         />
       )}
 
-      {/* SUB TAB 3: Financial Statements (Restricted) */}
-      {subTab === 'financial_statements' && !isRestrictedAdmin && (
+      {/* SUB TAB 3: Financial Statements */}
+      {subTab === 'financial_statements' && (
         <FinancialStatementsView
           transactions={transactions}
           currentUser={currentUser}
         />
       )}
 
-      {/* SUB TAB 4: Hospital & Payee Drill-Down Analytics (Restricted) */}
-      {subTab === 'hospital_payee_analytics' && !isRestrictedAdmin && (
+      {/* SUB TAB 4: Hospital & Payee Drill-Down Analytics */}
+      {subTab === 'hospital_payee_analytics' && (
         <HospitalPayeeAnalyticsView
           transactions={transactions}
         />
       )}
 
-      {/* SUB TAB 5: Bank Reconciliation (Restricted) */}
-      {subTab === 'bank_reconciliation' && !isRestrictedAdmin && (
+      {/* SUB TAB 5: Bank Reconciliation */}
+      {subTab === 'bank_reconciliation' && (
         <BankReconciliationView
           transactions={transactions}
         />

@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/ShipmentModal.js
 
-function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) {
+function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (shipment) return { ...shipment };
     const firstPO = purchaseOrders[0] || {};

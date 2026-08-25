@@ -92,6 +92,74 @@ function getCompanyAccounts() {
 window.FIXED_COMPANY_BANK_ACCOUNTS = FIXED_COMPANY_BANK_ACCOUNTS;
 window.getCompanyAccounts = getCompanyAccounts;
 
+// --- Global Master Domain Constants ---
+window.SHIPMENT_STATUSES = [
+  'รอจ่ายเงิน',
+  'จ่ายเงินแล้ว รอผลิต',
+  'ผลิตเสร็จแล้ว รอส่ง',
+  'ระหว่างขนส่ง',
+  'ถึงประเทศไทย รอออกของ',
+  'ของถึง ออฟฟิศ',
+  'ส่งลูกค้าแล้ว'
+];
+
+window.TRANSPORT_TYPES = [
+  'ทางเรือ (Sea Freight)',
+  'ทางเครื่องบิน (Air Freight)',
+  'ทางรถ (Truck / Land)',
+  'ขนส่งด่วน (Courier / Express)'
+];
+
+window.REPAIR_CATEGORIES = [
+  'สินค้า Demo',
+  'สินค้าส่งซ่อมจาก รพ',
+  'สินค้าอยู่ในประกันของ บริษัท',
+  'สินค้า นอกประกันของบริษัท'
+];
+
+window.REPAIR_STATUSES = [
+  'รอส่งซ่อม',
+  'ส่งซ่อมอยู่',
+  'ระหว่างขนส่ง',
+  'ซ่อมเสร็จแล้ว',
+  'ส่งคืนลูกค้า'
+];
+
+window.FDA_CLASSES = [
+  { code: 'Class 1', label: 'Class 1 (ความเสี่ยงต่ำ)' },
+  { code: 'Class 2', label: 'Class 2 (ความเสี่ยงปานกลาง)' },
+  { code: 'Class 3', label: 'Class 3 (ความเสี่ยงสูง)' },
+  { code: 'Class 4', label: 'Class 4 (ความเสี่ยงสูงสุด)' }
+];
+
+window.FDA_STATUSES = [
+  'กำลังเตรียมเอกสาร',
+  'ยื่นคำขอแล้ว รอ อย. ตรวจ',
+  'ขอเอกสารเพิ่มเติม',
+  'อนุมัติแล้ว ได้รับใบอนุญาต',
+  'ต่ออายุใบอนุญาต'
+];
+
+window.PO_STATUSES = [
+  'ฉบับร่าง (Draft)',
+  'รออนุมัติ (Pending Approval)',
+  'อนุมัติแล้ว (Approved)',
+  'ส่งสั่งซื้อแล้ว (Ordered)',
+  'ของถึงคลังแล้ว (Received)',
+  'ยกเลิก (Cancelled)'
+];
+
+window.VENDOR_LIST = [
+  'Aeron International Ltd.',
+  'Mindray Medical',
+  'GE Healthcare Partner',
+  'Olympus Medical Thailand',
+  'Philips Healthcare Supplier',
+  'Stryker Global Vendor',
+  'Karl Storz Supplier',
+  'Local Medical Distributor'
+];
+
 // --- Shared Business Calculation Helpers ---
 
 function calculateWorkingDays(startDateStr, endDateStr) {
@@ -237,7 +305,7 @@ const ROLES_PERMISSIONS = {
     roleId: 'SALES_HEAD',
     roleName: '👨‍💼 SALES_HEAD (หัวหน้าทีมขาย)',
     badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    allowedTabs: ['dashboard', 'clients', 'project', 'logistic', 'calendar', 'hr'],
+    allowedTabs: ['dashboard', 'clients', 'project', 'logistic', 'calendar', 'report', 'hr'],
     canApproveHR: true,
     canViewAuditLogs: false,
     canViewAllFinancials: false,
@@ -247,7 +315,7 @@ const ROLES_PERMISSIONS = {
     roleId: 'SALES',
     roleName: '👨‍⚕️ SALES (เจ้าหน้าที่ฝ่ายขาย)',
     badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
-    allowedTabs: ['clients', 'project', 'logistic', 'calendar', 'hr'],
+    allowedTabs: ['clients', 'project', 'logistic', 'calendar', 'report', 'hr'],
     canApproveHR: false,
     canViewAuditLogs: false,
     canViewAllFinancials: false,
@@ -368,6 +436,9 @@ function getUserAccounts() {
 function saveUserAccounts(accounts = []) {
   try {
     localStorage.setItem('aeron_user_accounts', JSON.stringify(accounts));
+    if (typeof syncToDB === 'function') {
+      syncToDB('users', accounts);
+    }
   } catch (e) {
     console.error('Error saving user accounts:', e);
   }
@@ -451,12 +522,14 @@ function Header({
   setActiveView, 
   logisticSubView = 'product_catalog', 
   setLogisticSubView = () => {}, 
-  reportSubView = 'fda_registration', 
+  reportSubView = 'hub', 
   setReportSubView = () => {}, 
   financeSubView = 'cost_calculation', 
   setFinanceSubView = () => {}, 
   hrSubView = 'leave_attendance', 
   setHRSubView = () => {}, 
+  accountingSubTab = 'daily_entries',
+  setAccountingSubTab = () => {}, 
   members = [], 
   projects = [], 
   pendingPOCount = 0, 
@@ -544,7 +617,7 @@ function Header({
     else if (newView === 'cost_calculation' || newView === 'purchase_orders') targetTab = 'finance';
     else if (newView === 'demo_calendar') targetTab = 'calendar';
     else if (['product_catalog', 'shipment_tracking', 'repair_service', 'sold_products'].includes(newView)) targetTab = 'logistic';
-    else if (newView === 'fda_registration') targetTab = 'report';
+    else if (newView === 'reports_hub' || newView === 'fda_registration') targetTab = 'report';
     else if (newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') targetTab = 'accounting';
     else if (members.some(m => m.id === newView)) targetTab = 'project';
 
@@ -580,10 +653,19 @@ function Header({
     } else if (newView === 'sold_products') {
       setActiveSidebarTab('logistic');
       setLogisticSubView('sold_products');
+    } else if (newView === 'reports_hub') {
+      setActiveSidebarTab('report');
+      setReportSubView('hub');
     } else if (newView === 'fda_registration') {
       setActiveSidebarTab('report');
       setReportSubView('fda_registration');
-    } else if (newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') {
+    } else if (newView === 'daily_transactions') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('daily_entries');
+    } else if (newView === 'financial_statements') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('financial_statements');
+    } else if (newView === 'accounting') {
       setActiveSidebarTab('accounting');
     } else if (members.some(m => m.id === newView)) {
       setActiveSidebarTab('project');
@@ -671,14 +753,24 @@ function Header({
                   </option>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'report')) && (
-                  <option value="fda_registration">
-                    🛡️ การจดทะเบียน อย. (Thai FDA Registration) {activeFDACount > 0 ? `(📋 ${activeFDACount} คำขอ)` : ''}
-                  </option>
+                  <>
+                    <option value="reports_hub">
+                      📊 ศูนย์รวมรายงานทุกระบบ (Unified Reports Hub)
+                    </option>
+                    <option value="fda_registration">
+                      🛡️ การจดทะเบียน อย. (Thai FDA Registration) {activeFDACount > 0 ? `(📋 ${activeFDACount} คำขอ)` : ''}
+                    </option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'accounting')) && (
-                  <option value="daily_transactions">
-                    🧾 ลงบันทึกรายรับ-รายจ่ายรายวัน (Daily Transactions Entry)
-                  </option>
+                  <>
+                    <option value="daily_transactions">
+                      🧾 ลงบันทึกรายรับ-รายจ่ายรายวัน (Daily Transactions Entry)
+                    </option>
+                    <option value="financial_statements">
+                      📈 งบการเงิน P&L, Cash Flow & งบดุล (Financial Statements)
+                    </option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'project')) && (
                   <optgroup label="-- Kanban รายบุคคล --">
@@ -1081,6 +1173,70 @@ function Header({
           </div>
         )}
 
+        {/* ACCOUNTING MODULE SUB-VIEWS */}
+        {activeSidebarTab === 'accounting' && (
+          <div className="flex items-center gap-2 flex-shrink-0 w-full">
+            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+              <span>🧾 บัญชี & การเงิน:</span>
+            </span>
+
+            <button
+              onClick={() => setAccountingSubTab('daily_entries')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'daily_entries'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📋 บันทึกรายรับ-รายจ่ายรายวัน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('financial_statements')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'financial_statements'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📈 งบการเงิน P&L & Cash Flow
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('pending_transfers')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'pending_transfers'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              ⏳ ค้างโอนประจำเดือน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('hospital_payee_analytics')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'hospital_payee_analytics'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              🏥 รายจ่ายราย รพ./ผู้รับ
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('bank_reconciliation')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'bank_reconciliation'
+                  ? 'bg-teal-600 text-white border-teal-400 font-black shadow-md shadow-teal-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              🏦 Bank Reconciliation
+            </button>
+          </div>
+        )}
+
         {/* DASHBOARD / PROJECT / CLIENTS / CALENDAR GENERAL SHORTCUTS */}
         {(activeSidebarTab === 'dashboard' || activeSidebarTab === 'project' || activeSidebarTab === 'clients' || activeSidebarTab === 'calendar') && (
           <>
@@ -1292,6 +1448,21 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   const [accountsList, setAccountsList] = useState(() => {
     return window.getUserAccounts ? window.getUserAccounts() : DEMO_USERS;
   });
+
+  useEffect(() => {
+    async function refreshUsers() {
+      try {
+        if (typeof loadFromDB === 'function') {
+          const remoteUsers = await loadFromDB('users', null);
+          if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
+            setAccountsList(remoteUsers);
+          }
+        }
+      } catch (e) {}
+    }
+    refreshUsers();
+  }, []);
 
   const handleQuickLogin = (demoUser) => {
     setLoading(true);
@@ -1711,7 +1882,7 @@ function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOC
     { id: 'project', label: 'Project', icon: '📋', badge: null, desc: 'กระดาน Sales Kanban' },
     { id: 'logistic', label: 'Logistic', icon: '🚚', badge: (activeShipmentCount + activeRepairCount) > 0 ? (activeShipmentCount + activeRepairCount) : null, desc: 'คลังสินค้า & ขนส่ง' },
     { id: 'calendar', label: 'Calendar', icon: '📅', badge: null, desc: 'ปฏิทินจอง Demo' },
-    { id: 'report', label: 'Report', icon: '📑', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'ทะเบียน อย. & เอกสาร' },
+    { id: 'report', label: 'Report', icon: '📑', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'ศูนย์รวมรายงานทุกระบบ & เอกสาร' },
     { id: 'finance', label: 'Finance', icon: '💰', badge: pendingPOCount > 0 ? pendingPOCount : null, desc: 'ต้นทุน & ใบสั่งซื้อ PO' },
     { id: 'hr', label: 'HR', icon: '👥', badge: null, desc: 'ตารางวันลา & บุคลากร' },
     { id: 'accounting', label: 'Accounting', icon: '🧾', badge: null, desc: 'ลงบันทึกรายรับ-รายจ่าย & งบการเงิน' }
@@ -1837,9 +2008,10 @@ function SidebarNavDrawer({ isOpen, onClose, activeTab, setActiveTab, currentUse
     { id: 'project', label: 'กระดานติดตามงานขาย Sales Kanban', icon: '📋', tabName: 'Projects', desc: 'All Sales Pipelines' },
     { id: 'logistic', label: 'คลังสินค้า เครื่อง Demo & ขนส่ง', icon: '🚚', tabName: 'Logistic', badge: (activeShipmentCount + activeRepairCount) > 0 ? (activeShipmentCount + activeRepairCount) : null, desc: 'Demo Assets & Shipment' },
     { id: 'calendar', label: 'ปฏิทินจองคิวเครื่อง Demo', icon: '📅', tabName: 'Calendar', desc: 'Demo Booking Schedules' },
-    { id: 'report', label: 'ทะเบียน อย. & ศูนย์รายงานสรุป', icon: '📑', tabName: 'Report', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'Thai FDA & Executive Reports' },
+    { id: 'report', label: 'ศูนย์รวมรายงานทุกระบบ & ทะเบียน อย.', icon: '📑', tabName: 'Report', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'Enterprise Reports & Thai FDA' },
     { id: 'finance', label: 'ตารางคำนวณต้นทุน & ใบสั่งซื้อ PO', icon: '💰', tabName: 'Finance', badge: pendingPOCount > 0 ? pendingPOCount : null, desc: 'Cost Sheet & Vendor POs' },
-    { id: 'hr', label: 'ตารางวันลา & บุคลากรทีม Sales', icon: '👥', tabName: 'HR', desc: 'Leave Requests & Team Roster' }
+    { id: 'hr', label: 'ตารางวันลา & บุคลากรทีม Sales', icon: '👥', tabName: 'HR', desc: 'Leave Requests & Team Roster' },
+    { id: 'accounting', label: 'ลงบันทึกรายรับ-รายจ่าย & งบการเงิน', icon: '🧾', tabName: 'Accounting', desc: 'Daily Transactions & P&L' }
   ];
 
   return (
@@ -3923,7 +4095,7 @@ function KanbanModal({
 // --- Module File: js/modules/mod03_projects/MemberKanban.js ---
 // MODULE: mod03_projects/MemberKanban.js
 
-function MemberKanban({ projects, currentUser, stages = window.STAGES || [], members = [], products = [], activeMemberId, onMoveProject, onEditProject, onDeleteProject, onAddLog, onViewHistory, onOpenNewModal, onBookDemo }) {
+function MemberKanban({ projects = [], currentUser, stages = window.STAGES || [], members = [], products = [], activeMemberId, onMoveProject, onEditProject, onDeleteProject, onAddLog, onViewHistory, onOpenNewModal, onBookDemo }) {
   const activeMember = members.find(m => m.id === activeMemberId);
   const [selectedMobileStage, setSelectedMobileStage] = useState(stages[0] ? stages[0].id : 'stage_draft');
   const [draggedProjectId, setDraggedProjectId] = useState(null);
@@ -4350,7 +4522,7 @@ function ProjectDetailModal({ project, currentUser, stages = window.STAGES || []
 // --- Module File: js/modules/mod03_projects/ProjectHistoryModal.js ---
 // MODULE: mod03_projects/ProjectHistoryModal.js
 
-function ProjectHistoryModal({ project, members, stages, products, onAddLog, onClose }) {
+function ProjectHistoryModal({ project, members = [], stages = window.STAGES || [], products = [], onAddLog, onClose }) {
   const [newLogNote, setNewLogNote] = useState('');
   const [logAuthor, setLogAuthor] = useState(project.assignee);
   const [logSearchQuery, setLogSearchQuery] = useState('');
@@ -4557,7 +4729,7 @@ function ProjectHistoryModal({ project, members, stages, products, onAddLog, onC
 // --- Module File: js/modules/mod03_projects/ProjectModal.js ---
 // MODULE: mod03_projects/ProjectModal.js
 
-function ProjectModal({ project, members, stages, products, onSave, onClose }) {
+function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
     clientType: 'รัฐบาล',
@@ -4883,7 +5055,7 @@ function ProjectModal({ project, members, stages, products, onSave, onClose }) {
 // --- Module File: js/modules/mod03_projects/WeeklyLogModal.js ---
 // MODULE: mod03_projects/WeeklyLogModal.js
 
-function WeeklyLogModal({ project, members, onSave, onClose }) {
+function WeeklyLogModal({ project, members = [], onSave, onClose }) {
   const [note, setNote] = useState('');
   const [author, setAuthor] = useState(project.assignee);
   
@@ -5378,7 +5550,7 @@ function MessengerDispatchView({ currentUser, onLogout }) {
 // --- Module File: js/modules/mod04_logistics/ProductCatalogView.js ---
 // MODULE: mod04_logistics/ProductCatalogView.js
 
-function ProductCatalogView({ products, demoBookings, onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal }) {
+function ProductCatalogView({ products = [], demoBookings = [], onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal }) {
   const [expandedProduct, setExpandedProduct] = useState(null);
 
   const statusConfig = {
@@ -6072,14 +6244,14 @@ function ProductModal({ product, onSave, onClose }) {
 // --- Module File: js/modules/mod04_logistics/RepairServiceView.js ---
 // MODULE: mod04_logistics/RepairServiceView.js
 
-function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, onEditTicket, onDeleteTicket, onViewInCatalog }) {
+function RepairServiceView({ repairTickets = [], products = [], members = [], onOpenNewTicket, onEditTicket, onDeleteTicket, onViewInCatalog }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filtered tickets
   const filteredTickets = useMemo(() => {
-    return repairTickets.filter(t => {
+    return (repairTickets || []).filter(t => {
       if (filterCategory !== 'all' && t.category !== filterCategory) return false;
       if (filterStatus !== 'all' && t.status !== filterStatus) return false;
       if (searchQuery.trim()) {
@@ -6231,7 +6403,7 @@ function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, 
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตาม Category ทุกประเภท</option>
-              {window.REPAIR_CATEGORIES.map(c => (
+              {(window.REPAIR_CATEGORIES || []).map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -6242,7 +6414,7 @@ function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, 
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะ</option>
-              {window.REPAIR_STATUSES.map(s => (
+              {(window.REPAIR_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -6388,7 +6560,7 @@ function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, 
 // --- Module File: js/modules/mod04_logistics/RepairTicketModal.js ---
 // MODULE: mod04_logistics/RepairTicketModal.js
 
-function RepairTicketModal({ ticket, products, members, onSave, onClose }) {
+function RepairTicketModal({ ticket, products = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (ticket) return { ...ticket };
     const firstProd = products[0] || {};
@@ -6670,7 +6842,7 @@ function RepairTicketModal({ ticket, products, members, onSave, onClose }) {
 // --- Module File: js/modules/mod04_logistics/ShipmentModal.js ---
 // MODULE: mod04_logistics/ShipmentModal.js
 
-function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) {
+function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (shipment) return { ...shipment };
     const firstPO = purchaseOrders[0] || {};
@@ -6972,7 +7144,7 @@ function ShipmentModal({ shipment, purchaseOrders, products, onSave, onClose }) 
 // --- Module File: js/modules/mod04_logistics/ShipmentTrackingView.js ---
 // MODULE: mod04_logistics/ShipmentTrackingView.js
 
-function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewShipment, onEditShipment, onDeleteShipment }) {
+function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = [], onOpenNewShipment, onEditShipment, onDeleteShipment }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -6980,7 +7152,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
 
   // Filtered Shipments
   const filteredShipments = useMemo(() => {
-    return shipments.filter(s => {
+    return (shipments || []).filter(s => {
       if (filterStatus !== 'all' && s.status !== filterStatus) return false;
       if (filterTransport !== 'all' && s.transportType !== filterTransport) return false;
       if (searchQuery.trim()) {
@@ -7126,7 +7298,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะนำเข้า</option>
-              {window.SHIPMENT_STATUSES.map(s => (
+              {(window.SHIPMENT_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -7137,7 +7309,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามประเภทการขนส่ง</option>
-              {window.TRANSPORT_TYPES.map(t => (
+              {(window.TRANSPORT_TYPES || []).map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
@@ -7393,7 +7565,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
 // --- Module File: js/modules/mod04_logistics/SoldProductModal.js ---
 // MODULE: mod04_logistics/SoldProductModal.js
 
-function SoldProductModal({ asset, projects, members, onSave, onClose }) {
+function SoldProductModal({ asset, projects = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (asset) return { ...asset };
     const wonProj = projects.find(p => p.status === 'stage_delivery' || p.status === 'stage_completed') || projects[0] || {};
@@ -7682,7 +7854,7 @@ function SoldProductModal({ asset, projects, members, onSave, onClose }) {
 // --- Module File: js/modules/mod04_logistics/SoldProductsView.js ---
 // MODULE: mod04_logistics/SoldProductsView.js
 
-function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
+function SoldProductsView({ soldProducts = [], projects = [], members = [], onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
   const [filterYear, setFilterYear] = useState('all');
   const [filterSales, setFilterSales] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -8076,7 +8248,7 @@ function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset
 // --- Module File: js/modules/mod05_calendar/DemoBookingModal.js ---
 // MODULE: mod05_calendar/DemoBookingModal.js
 
-function DemoBookingModal({ prefill, projects, products, members, existingBookings, onSave, onClose }) {
+function DemoBookingModal({ prefill, projects = [], products = [], members = [], existingBookings = [], onSave, onClose }) {
   const [formData, setFormData] = useState({
     id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',
@@ -8314,7 +8486,7 @@ function DemoBookingModal({ prefill, projects, products, members, existingBookin
 // --- Module File: js/modules/mod05_calendar/DemoCalendarView.js ---
 // MODULE: mod05_calendar/DemoCalendarView.js
 
-function DemoCalendarView({ demoBookings, products, projects, members, onOpenBookDemo, onDeleteBooking }) {
+function DemoCalendarView({ demoBookings = [], products = [], projects = [], members = [], onOpenBookDemo, onDeleteBooking }) {
   const [filterProduct, setFilterProduct] = useState('all');
   const [calendarMode, setCalendarMode] = useState('month'); // 'month' or 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7, 1)); // Default August 2026 for mock data
@@ -8929,7 +9101,7 @@ function DemoReportModal({ isOpen, onClose, demoBookings = [], products = [], pr
 // --- Module File: js/modules/mod05_calendar/MonthCalendarGrid.js ---
 // MODULE: mod05_calendar/MonthCalendarGrid.js
 
-function MonthCalendarGrid({ currentMonth, bookings, products, onPrevMonth, onNextMonth, onTodayMonth, onDeleteBooking }) {
+function MonthCalendarGrid({ currentMonth, bookings = [], products = [], onPrevMonth, onNextMonth, onTodayMonth, onDeleteBooking }) {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 
@@ -9344,7 +9516,7 @@ function AnalyticalReportsView({ projects = [], members = [], products = [], cos
 // --- Module File: js/modules/mod06_fda/FDAModal.js ---
 // MODULE: mod06_fda/FDAModal.js
 
-function FDAModal({ fda, products, members, onSave, onClose }) {
+function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (fda) return { ...fda };
     const firstProd = products[0] || {};
@@ -9626,7 +9798,7 @@ function FDAModal({ fda, products, members, onSave, onClose }) {
 // --- Module File: js/modules/mod06_fda/FDARegistrationView.js ---
 // MODULE: mod06_fda/FDARegistrationView.js
 
-function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA, onEditFDA, onDeleteFDA }) {
+function FDARegistrationView({ fdaRegistrations = [], products = [], members = [], onOpenNewFDA, onEditFDA, onDeleteFDA }) {
   const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -9821,8 +9993,10 @@ function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุก Class อย.</option>
-              {window.FDA_CLASSES.map(c => (
-                <option key={c.code} value={c.code}>{c.label}</option>
+              {(window.FDA_CLASSES || []).map(c => typeof c === 'object' ? (
+                <option key={c.code || c.label} value={c.code || c.label}>{c.label || c.code}</option>
+              ) : (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
 
@@ -9832,7 +10006,7 @@ function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะ</option>
-              {window.FDA_STATUSES.map(s => (
+              {(window.FDA_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -10071,7 +10245,7 @@ function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA
 // --- Module File: js/modules/mod06_fda/ReportPreviewModal.js ---
 // MODULE: mod06_fda/ReportPreviewModal.js
 
-function ReportPreviewModal({ report, projects, messengerTrips, purchaseOrders, repairTickets, fdaRegistrations, leaveRequests, onClose }) {
+function ReportPreviewModal({ report = null, projects = [], messengerTrips = [], purchaseOrders = [], repairTickets = [], fdaRegistrations = [], leaveRequests = [], onClose }) {
 
   const handlePrintReport = () => {
     window.print();
@@ -10796,7 +10970,7 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
 // --- Module File: js/modules/mod07_finance/CostSheetModal.js ---
 // MODULE: mod07_finance/CostSheetModal.js
 
-function CostSheetModal({ calc, projects, onSave, onClose }) {
+function CostSheetModal({ calc, projects = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (calc) return { ...calc };
     const firstProj = projects[0] || {};
@@ -11169,7 +11343,7 @@ function CostSheetModal({ calc, projects, onSave, onClose }) {
 // --- Module File: js/modules/mod07_finance/PurchaseOrderModal.js ---
 // MODULE: mod07_finance/PurchaseOrderModal.js
 
-function PurchaseOrderModal({ po, projects, products, onSave, onClose }) {
+function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (po) return { ...po };
     const wonProjects = projects.filter(p => p.status === 'stage_won' || p.status === 'stage_ordering' || p.status === 'stage_delivery');
@@ -12290,7 +12464,7 @@ function AttendanceModal({ members = [], onSave, onClose }) {
 // --- Module File: js/modules/mod08_hr/LeaveAttendanceView.js ---
 // MODULE: mod08_hr/LeaveAttendanceView.js
 
-function LeaveAttendanceView({ leaveRequests, attendanceLogs, members, currentUser, onOpenLeaveModal, onOpenAttendanceModal, onApproveLeave, onDeleteLeave, onDeleteAttendance }) {
+function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members = [], currentUser, onOpenLeaveModal, onOpenAttendanceModal, onApproveLeave, onDeleteLeave, onDeleteAttendance }) {
   const [activeTab, setActiveTab] = useState('schedule'); // 'schedule' | 'requests' | 'attendance'
 
   // Date Range Picker State (Default Year To Date YTD)
@@ -12795,7 +12969,7 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
 // --- Module File: js/modules/mod08_hr/MemberManagementModal.js ---
 // MODULE: mod08_hr/MemberManagementModal.js
 
-function MemberManagementModal({ members, setMembers, onClose }) {
+function MemberManagementModal({ members = [], setMembers, onClose }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('Sales Specialist');
   const [avatar, setAvatar] = useState('👨‍⚕️');
@@ -12888,8 +13062,14 @@ function MemberManagementModal({ members, setMembers, onClose }) {
 // --- Module File: js/modules/mod09_accounting/AccountingModule.js ---
 // MODULE: mod09_accounting/AccountingModule.js
 
-function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn }) {
-  const [subTab, setSubTab] = useState('daily_entries'); // 'daily_entries' | 'pending_transfers' | 'financial_statements' | 'hospital_payee_analytics' | 'bank_reconciliation'
+function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn, accountingSubTab = 'daily_entries', onSubTabChange }) {
+  const [localSubTab, setLocalSubTab] = useState(accountingSubTab || 'daily_entries');
+  const subTab = accountingSubTab || localSubTab;
+  const setSubTab = (newTab) => {
+    setLocalSubTab(newTab);
+    if (onSubTabChange) onSubTabChange(newTab);
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPendingTransferModalOpen, setIsPendingTransferModalOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
@@ -12923,20 +13103,6 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
   useEffect(() => {
     localStorage.setItem('aeron_accounting_recurring', JSON.stringify(recurringTemplates));
   }, [recurringTemplates]);
-
-  // Check if current user is restricted ADMIN
-  const isRestrictedAdmin = useMemo(() => {
-    if (!currentUser || !currentUser.role) return false;
-    const roleUpper = String(currentUser.role).toUpperCase();
-    return roleUpper === 'ADMIN';
-  }, [currentUser]);
-
-  // Ensure restricted ADMIN is forced to stay on daily_entries or pending_transfers
-  useEffect(() => {
-    if (isRestrictedAdmin && subTab !== 'daily_entries' && subTab !== 'pending_transfers') {
-      setSubTab('daily_entries');
-    }
-  }, [isRestrictedAdmin, subTab]);
 
   // Freeze month toggle handler
   const handleToggleFreeze = (monthStr) => {
@@ -13100,23 +13266,19 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
             <span>📌 ตั้งค้างโอนประจำเดือน</span>
           </button>
 
-          {!isRestrictedAdmin && (
-            <>
-              <button
-                onClick={() => setIsRecurringModalOpen(true)}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
-              >
-                <span>🔄 จ่ายประจำ (Recurring)</span>
-              </button>
+          <button
+            onClick={() => setIsRecurringModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <span>🔄 จ่ายประจำ (Recurring)</span>
+          </button>
 
-              <button
-                onClick={() => setIsFreezeModalOpen(true)}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
-              >
-                <span>🔒 ปิดงบ (Freeze Month)</span>
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => setIsFreezeModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <span>🔒 ปิดงบ (Freeze Month)</span>
+          </button>
 
           {/* Sub Tabs Navigation */}
           <div className="flex flex-wrap bg-slate-950 p-1.5 rounded-2xl border border-slate-800 text-xs">
@@ -13143,40 +13305,32 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
               )}
             </button>
 
-            {!isRestrictedAdmin ? (
-              <>
-                <button
-                  onClick={() => setSubTab('financial_statements')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'financial_statements' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  📈 งบการเงิน P&L
-                </button>
+            <button
+              onClick={() => setSubTab('financial_statements')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'financial_statements' ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📈 งบการเงิน P&L
+            </button>
 
-                <button
-                  onClick={() => setSubTab('hospital_payee_analytics')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'hospital_payee_analytics' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🏥 Drill-Down ราย รพ.
-                </button>
+            <button
+              onClick={() => setSubTab('hospital_payee_analytics')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'hospital_payee_analytics' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏥 Drill-Down ราย รพ.
+            </button>
 
-                <button
-                  onClick={() => setSubTab('bank_reconciliation')}
-                  className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
-                    subTab === 'bank_reconciliation' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🏦 Bank Reconciliation
-                </button>
-              </>
-            ) : (
-              <span className="px-3 py-2 text-slate-600 text-[11px] italic flex items-center gap-1 cursor-not-allowed">
-                🔒 งบการเงิน (สงวนสิทธิ์ OWNER/HEAD_ADMIN)
-              </span>
-            )}
+            <button
+              onClick={() => setSubTab('bank_reconciliation')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'bank_reconciliation' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏦 Bank Reconciliation
+            </button>
           </div>
         </div>
       </div>
@@ -13208,23 +13362,23 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
         />
       )}
 
-      {/* SUB TAB 3: Financial Statements (Restricted) */}
-      {subTab === 'financial_statements' && !isRestrictedAdmin && (
+      {/* SUB TAB 3: Financial Statements */}
+      {subTab === 'financial_statements' && (
         <FinancialStatementsView
           transactions={transactions}
           currentUser={currentUser}
         />
       )}
 
-      {/* SUB TAB 4: Hospital & Payee Drill-Down Analytics (Restricted) */}
-      {subTab === 'hospital_payee_analytics' && !isRestrictedAdmin && (
+      {/* SUB TAB 4: Hospital & Payee Drill-Down Analytics */}
+      {subTab === 'hospital_payee_analytics' && (
         <HospitalPayeeAnalyticsView
           transactions={transactions}
         />
       )}
 
-      {/* SUB TAB 5: Bank Reconciliation (Restricted) */}
-      {subTab === 'bank_reconciliation' && !isRestrictedAdmin && (
+      {/* SUB TAB 5: Bank Reconciliation */}
+      {subTab === 'bank_reconciliation' && (
         <BankReconciliationView
           transactions={transactions}
         />
@@ -14488,55 +14642,53 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
 
       const m = monthsData[mIdx];
       const amt = Number(t.amount) || 0;
-      const cat = t.category || '';
+      const cat = t.category || t.expense_type || '';
       const notes = t.notes || '';
+      const isIncome = t.type === 'income' || t.transaction_type === 'รายรับ';
+      const isExpense = t.type === 'expense' || t.transaction_type === 'รายจ่าย';
 
-      if (t.type === 'income') {
+      if (isIncome) {
         if (cat.includes('ส่วนลด') || cat.includes('คืนสินค้า')) {
           m.returnsDiscounts += amt;
         } else {
           m.totalNetRevenue += amt;
         }
-      } else if (t.type === 'expense') {
+      } else if (isExpense) {
         // COGS
         if (cat.includes('ซื้อสินค้า') || cat.includes('ต้นทุน') || notes.includes('Material')) m.materialExp += amt;
         else if (cat.includes('ขนส่ง') || notes.includes('Transport')) m.transportExp += amt;
         else if (cat.includes('เอกสาร') || notes.includes('Doc')) m.docRegExp += amt;
         else if (cat.includes('ภาษีนำเข้า') || notes.includes('Import Tax')) m.importTaxExp += amt;
-        else if (cat.includes('ประกัน') || cat.includes('โต๊ะโค้ด')) m.etcInsuranceExp += amt;
+        else if (cat.includes('ประกัน') || cat.includes('โต๊ะ') || cat.includes('โต้ะ')) m.etcInsuranceExp += amt;
         
         // H/O Expenses
         else if (cat.includes('ค่าเช่า') || notes.includes('Rent')) m.rentExp += amt;
         else if (cat.includes('ออฟฟิศ') || cat.includes('วัสดุสำนักงาน')) m.officeSuppliesExp += amt;
         else if (cat.includes('ส่งของ') || cat.includes('ไปรษณีย์')) m.postalExp += amt;
-        else if (cat.includes('เงินเดือน H/O') || notes.includes('H/O Salary')) m.hoSalariesExp += amt;
+        else if (cat.includes('เงินเดือน H/O') || cat.includes('เงินเดือน พนักงาน') || notes.includes('H/O Salary')) m.hoSalariesExp += amt;
         else if (cat.includes('ทำบัญชี') || notes.includes('Accounting')) m.accountingFeeExp += amt;
         else if (cat.includes('เทรนนิ่ง') || cat.includes('อบรม')) m.trainingExp += amt;
 
         // Sales Expenses
-        else if (cat.includes('เงินเดือนเซลล์') || notes.includes('Sales Salary')) m.salesSalariesExp += amt;
-        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม')) m.incentiveCommExp += amt;
-        else if (cat.includes('เลี้ยงทีมเซลล์') || notes.includes('Staff Ent')) m.staffEntExp += amt;
+        else if (cat.includes('เงินเดือนเซลล์') || cat.includes('เงินเดือนเซลส์') || notes.includes('Sales Salary')) m.salesSalariesExp += amt;
+        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม') || cat.includes('Commission')) m.incentiveCommExp += amt;
+        else if (cat.includes('เลี้ยงทีม') || notes.includes('Staff Ent')) m.staffEntExp += amt;
         else if (cat.includes('รับรองลูกค้า') || notes.includes('Cust Ent')) m.custEntExp += amt;
         else if (cat.includes('สครับ') || notes.includes('Scrub')) m.scrubExp += amt;
+        else if (cat.includes('ค่าใช้จ่ายเซลล์')) m.salesOtherExp += amt;
         else if (cat.includes('ดอกเบี้ย')) m.interestExp += amt;
         else if (cat.includes('ภาษี')) m.incomeTax += amt;
         else m.officeOtherExp += amt;
       }
     });
 
-    // Subtotal and Balance Sheet calculations per month
+    // Subtotal and Balance Sheet calculations per month (Strictly based on actual transactions)
     monthsData.forEach((m, idx) => {
       m.cogsTotal = m.materialExp + m.transportExp + m.docRegExp + m.etcInsuranceExp + m.importTaxExp;
-      if (m.cogsTotal === 0 && m.totalNetRevenue > 0) m.cogsTotal = Math.round(m.totalNetRevenue * 0.33);
-
       m.grossProfit = m.totalNetRevenue - m.cogsTotal - m.returnsDiscounts;
 
       m.hoTotal = m.rentExp + m.officeSuppliesExp + m.postalExp + m.officeOtherExp + m.hoSalariesExp + m.docEtcExp + m.trainingExp + m.accountingFeeExp;
-      if (m.hoTotal === 0 && m.totalNetRevenue > 0) m.hoTotal = Math.round(m.totalNetRevenue * 0.11);
-
       m.salesTotal = m.salesSalariesExp + m.staffCommExp + m.incentiveCommExp + m.staffEntExp + m.custEntExp + m.salesOtherExp + m.scrubExp;
-      if (m.salesTotal === 0 && m.totalNetRevenue > 0) m.salesTotal = Math.round(m.totalNetRevenue * 0.16);
 
       m.totalExpenses = m.hoTotal + m.salesTotal;
       m.ebit = m.grossProfit - m.totalExpenses;
@@ -14544,19 +14696,19 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
       m.netEarnings = m.ebt - m.vat7 - m.incomeTax;
       m.cashFlow = m.netEarnings; // Cash Flow Net
 
-      // Balance Sheet Estimates
-      m.accountsReceivable = Math.round(m.totalNetRevenue * 7.5);
-      m.cashBalance = Math.round(1000000 + m.netEarnings * 0.5);
-      m.stockVal = Math.round(5000000 + m.cogsTotal * 1.2);
-      m.totalAssets = m.accountsReceivable + m.cashBalance + m.stockVal;
+      // Balance Sheet (Defaults to 0 unless officially recorded)
+      m.accountsReceivable = 0;
+      m.cashBalance = 0;
+      m.stockVal = 0;
+      m.totalAssets = 0;
 
-      m.accountsPayable = Math.round(m.cogsTotal * 0.5);
+      m.accountsPayable = 0;
       m.smeBank1 = 0;
-      m.smeBank2 = 500000;
-      m.relativeLoan = 2000000;
-      m.equityCapital = 4000000;
-      m.totalLiabilities = m.accountsPayable + m.smeBank1 + m.smeBank2 + m.relativeLoan;
-      m.totalEquityLiabilities = m.totalLiabilities + m.equityCapital;
+      m.smeBank2 = 0;
+      m.relativeLoan = 0;
+      m.equityCapital = 0;
+      m.totalLiabilities = 0;
+      m.totalEquityLiabilities = 0;
     });
 
     // Calculate Full Year Summary
@@ -14596,17 +14748,17 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
       incomeTax: monthsData.reduce((s, m) => s + m.incomeTax, 0),
       netEarnings: monthsData.reduce((s, m) => s + m.netEarnings, 0),
       cashFlow: monthsData.reduce((s, m) => s + m.cashFlow, 0),
-      accountsReceivable: monthsData[monthsData.length - 1]?.accountsReceivable || 0,
-      cashBalance: monthsData[monthsData.length - 1]?.cashBalance || 0,
-      stockVal: monthsData[monthsData.length - 1]?.stockVal || 0,
-      totalAssets: monthsData[monthsData.length - 1]?.totalAssets || 0,
-      accountsPayable: monthsData[monthsData.length - 1]?.accountsPayable || 0,
+      accountsReceivable: 0,
+      cashBalance: 0,
+      stockVal: 0,
+      totalAssets: 0,
+      accountsPayable: 0,
       smeBank1: 0,
-      smeBank2: 500000,
-      relativeLoan: 2000000,
-      equityCapital: 4000000,
-      totalLiabilities: monthsData[monthsData.length - 1]?.totalLiabilities || 0,
-      totalEquityLiabilities: monthsData[monthsData.length - 1]?.totalEquityLiabilities || 0
+      smeBank2: 0,
+      relativeLoan: 0,
+      equityCapital: 0,
+      totalLiabilities: 0,
+      totalEquityLiabilities: 0
     };
 
     return { months: monthsData, fullYear };
@@ -14633,23 +14785,26 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
 
     filteredTransactions.forEach(t => {
       const amt = Number(t.amount) || 0;
-      const cat = t.category || '';
+      const cat = t.category || t.expense_type || '';
       const notes = t.notes || '';
+      const isIncome = t.type === 'income' || t.transaction_type === 'รายรับ';
+      const isExpense = t.type === 'expense' || t.transaction_type === 'รายจ่าย';
 
-      if (t.type === 'income') {
+      if (isIncome) {
         totalRevenue += amt;
-      } else if (t.type === 'expense') {
+      } else if (isExpense) {
         if (cat.includes('ซื้อสินค้า') || cat.includes('ต้นทุน') || notes.includes('Material')) materialExp += amt;
         else if (cat.includes('ขนส่ง') || notes.includes('Transport')) transportExp += amt;
         else if (cat.includes('เอกสาร') || notes.includes('Doc')) docRegExp += amt;
         else if (cat.includes('ภาษีนำเข้า') || notes.includes('Import Tax')) importTaxExp += amt;
+        else if (cat.includes('ประกัน') || cat.includes('โต๊ะ') || cat.includes('โต้ะ')) etcInsuranceExp += amt;
         else if (cat.includes('เช่า') || notes.includes('Rent')) rentExp += amt;
         else if (cat.includes('ออฟฟิศ') || cat.includes('วัสดุสำนักงาน')) officeSuppliesExp += amt;
-        else if (cat.includes('เงินเดือน H/O') || notes.includes('H/O Salary')) hoSalariesExp += amt;
+        else if (cat.includes('เงินเดือน H/O') || cat.includes('เงินเดือน พนักงาน') || notes.includes('H/O Salary')) hoSalariesExp += amt;
         else if (cat.includes('ทำบัญชี') || notes.includes('Accounting')) accountingFeeExp += amt;
-        else if (cat.includes('เงินเดือนเซลล์') || notes.includes('Sales Salary')) salesSalariesExp += amt;
-        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม')) salesCommExp += amt;
-        else if (cat.includes('เลี้ยงทีมเซลล์') || notes.includes('Staff Ent')) staffEntExp += amt;
+        else if (cat.includes('เงินเดือนเซลล์') || cat.includes('เงินเดือนเซลส์') || notes.includes('Sales Salary')) salesSalariesExp += amt;
+        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม') || cat.includes('Commission')) salesCommExp += amt;
+        else if (cat.includes('เลี้ยงทีม') || notes.includes('Staff Ent')) staffEntExp += amt;
         else if (cat.includes('รับรองลูกค้า') || notes.includes('Cust Ent')) custEntExp += amt;
         else if (cat.includes('สครับ') || notes.includes('Scrub')) scrubExp += amt;
         else hoOtherExp += amt;
@@ -18370,11 +18525,29 @@ function App() {
     setCurrentUser(null);
     setIsLoginModalOpen(true);
   };
+
+  // 🔄 Live Sync Centralized User Accounts from Cloud/Server DB on Startup
+  useEffect(() => {
+    async function syncRemoteUsers() {
+      try {
+        if (typeof loadFromDB === 'function') {
+          const remoteUsers = await loadFromDB('users', null);
+          if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
+          }
+        }
+      } catch (e) {
+        console.warn('[User Sync Notice]:', e.message);
+      }
+    }
+    syncRemoteUsers();
+  }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [logisticSubView, setLogisticSubView] = useState('product_catalog');
-  const [reportSubView, setReportSubView] = useState('fda_registration');
+  const [reportSubView, setReportSubView] = useState('hub');
   const [financeSubView, setFinanceSubView] = useState('cost_calculation');
   const [hrSubView, setHRSubView] = useState('leave_attendance');
+  const [accountingSubTab, setAccountingSubTab] = useState('daily_entries');
   const [activeView, setActiveView] = useState('manager');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClientType, setFilterClientType] = useState('all'); // all, รัฐบาล, เอกชน
@@ -19306,6 +19479,8 @@ function App() {
         setFinanceSubView={setFinanceSubView}
         hrSubView={hrSubView}
         setHRSubView={setHRSubView}
+        accountingSubTab={accountingSubTab}
+        setAccountingSubTab={setAccountingSubTab}
         members={members}
         projects={projects}
         pendingPOCount={pendingPOCount}
@@ -19582,6 +19757,8 @@ function App() {
               initialFrozenMonths={window.INITIAL_ACCOUNTING_FROZEN_MONTHS}
               initialRecurringTemplates={window.INITIAL_ACCOUNTING_RECURRING}
               currentUser={currentUser}
+              accountingSubTab={accountingSubTab}
+              onSubTabChange={setAccountingSubTab}
               onSaveTxn={handleSaveTransaction}
               onDeleteTxn={handleDeleteTransaction}
             />

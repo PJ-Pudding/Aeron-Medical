@@ -1,6 +1,6 @@
 // MODULE: mod07_finance/CostSheetModal.js
 
-function CostSheetModal({ calc, projects, onSave, onClose }) {
+function CostSheetModal({ calc, projects = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (calc) return { ...calc };
     const firstProj = projects[0] || {};

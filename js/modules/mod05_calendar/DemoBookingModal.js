@@ -1,6 +1,6 @@
 // MODULE: mod05_calendar/DemoBookingModal.js
 
-function DemoBookingModal({ prefill, projects, products, members, existingBookings, onSave, onClose }) {
+function DemoBookingModal({ prefill, projects = [], products = [], members = [], existingBookings = [], onSave, onClose }) {
   const [formData, setFormData] = useState({
     id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',

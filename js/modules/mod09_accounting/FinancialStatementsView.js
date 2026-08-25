@@ -131,55 +131,53 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
 
       const m = monthsData[mIdx];
       const amt = Number(t.amount) || 0;
-      const cat = t.category || '';
+      const cat = t.category || t.expense_type || '';
       const notes = t.notes || '';
+      const isIncome = t.type === 'income' || t.transaction_type === 'รายรับ';
+      const isExpense = t.type === 'expense' || t.transaction_type === 'รายจ่าย';
 
-      if (t.type === 'income') {
+      if (isIncome) {
         if (cat.includes('ส่วนลด') || cat.includes('คืนสินค้า')) {
           m.returnsDiscounts += amt;
         } else {
           m.totalNetRevenue += amt;
         }
-      } else if (t.type === 'expense') {
+      } else if (isExpense) {
         // COGS
         if (cat.includes('ซื้อสินค้า') || cat.includes('ต้นทุน') || notes.includes('Material')) m.materialExp += amt;
         else if (cat.includes('ขนส่ง') || notes.includes('Transport')) m.transportExp += amt;
         else if (cat.includes('เอกสาร') || notes.includes('Doc')) m.docRegExp += amt;
         else if (cat.includes('ภาษีนำเข้า') || notes.includes('Import Tax')) m.importTaxExp += amt;
-        else if (cat.includes('ประกัน') || cat.includes('โต๊ะโค้ด')) m.etcInsuranceExp += amt;
+        else if (cat.includes('ประกัน') || cat.includes('โต๊ะ') || cat.includes('โต้ะ')) m.etcInsuranceExp += amt;
         
         // H/O Expenses
         else if (cat.includes('ค่าเช่า') || notes.includes('Rent')) m.rentExp += amt;
         else if (cat.includes('ออฟฟิศ') || cat.includes('วัสดุสำนักงาน')) m.officeSuppliesExp += amt;
         else if (cat.includes('ส่งของ') || cat.includes('ไปรษณีย์')) m.postalExp += amt;
-        else if (cat.includes('เงินเดือน H/O') || notes.includes('H/O Salary')) m.hoSalariesExp += amt;
+        else if (cat.includes('เงินเดือน H/O') || cat.includes('เงินเดือน พนักงาน') || notes.includes('H/O Salary')) m.hoSalariesExp += amt;
         else if (cat.includes('ทำบัญชี') || notes.includes('Accounting')) m.accountingFeeExp += amt;
         else if (cat.includes('เทรนนิ่ง') || cat.includes('อบรม')) m.trainingExp += amt;
 
         // Sales Expenses
-        else if (cat.includes('เงินเดือนเซลล์') || notes.includes('Sales Salary')) m.salesSalariesExp += amt;
-        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม')) m.incentiveCommExp += amt;
-        else if (cat.includes('เลี้ยงทีมเซลล์') || notes.includes('Staff Ent')) m.staffEntExp += amt;
+        else if (cat.includes('เงินเดือนเซลล์') || cat.includes('เงินเดือนเซลส์') || notes.includes('Sales Salary')) m.salesSalariesExp += amt;
+        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม') || cat.includes('Commission')) m.incentiveCommExp += amt;
+        else if (cat.includes('เลี้ยงทีม') || notes.includes('Staff Ent')) m.staffEntExp += amt;
         else if (cat.includes('รับรองลูกค้า') || notes.includes('Cust Ent')) m.custEntExp += amt;
         else if (cat.includes('สครับ') || notes.includes('Scrub')) m.scrubExp += amt;
+        else if (cat.includes('ค่าใช้จ่ายเซลล์')) m.salesOtherExp += amt;
         else if (cat.includes('ดอกเบี้ย')) m.interestExp += amt;
         else if (cat.includes('ภาษี')) m.incomeTax += amt;
         else m.officeOtherExp += amt;
       }
     });
 
-    // Subtotal and Balance Sheet calculations per month
+    // Subtotal and Balance Sheet calculations per month (Strictly based on actual transactions)
     monthsData.forEach((m, idx) => {
       m.cogsTotal = m.materialExp + m.transportExp + m.docRegExp + m.etcInsuranceExp + m.importTaxExp;
-      if (m.cogsTotal === 0 && m.totalNetRevenue > 0) m.cogsTotal = Math.round(m.totalNetRevenue * 0.33);
-
       m.grossProfit = m.totalNetRevenue - m.cogsTotal - m.returnsDiscounts;
 
       m.hoTotal = m.rentExp + m.officeSuppliesExp + m.postalExp + m.officeOtherExp + m.hoSalariesExp + m.docEtcExp + m.trainingExp + m.accountingFeeExp;
-      if (m.hoTotal === 0 && m.totalNetRevenue > 0) m.hoTotal = Math.round(m.totalNetRevenue * 0.11);
-
       m.salesTotal = m.salesSalariesExp + m.staffCommExp + m.incentiveCommExp + m.staffEntExp + m.custEntExp + m.salesOtherExp + m.scrubExp;
-      if (m.salesTotal === 0 && m.totalNetRevenue > 0) m.salesTotal = Math.round(m.totalNetRevenue * 0.16);
 
       m.totalExpenses = m.hoTotal + m.salesTotal;
       m.ebit = m.grossProfit - m.totalExpenses;
@@ -187,19 +185,19 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
       m.netEarnings = m.ebt - m.vat7 - m.incomeTax;
       m.cashFlow = m.netEarnings; // Cash Flow Net
 
-      // Balance Sheet Estimates
-      m.accountsReceivable = Math.round(m.totalNetRevenue * 7.5);
-      m.cashBalance = Math.round(1000000 + m.netEarnings * 0.5);
-      m.stockVal = Math.round(5000000 + m.cogsTotal * 1.2);
-      m.totalAssets = m.accountsReceivable + m.cashBalance + m.stockVal;
+      // Balance Sheet (Defaults to 0 unless officially recorded)
+      m.accountsReceivable = 0;
+      m.cashBalance = 0;
+      m.stockVal = 0;
+      m.totalAssets = 0;
 
-      m.accountsPayable = Math.round(m.cogsTotal * 0.5);
+      m.accountsPayable = 0;
       m.smeBank1 = 0;
-      m.smeBank2 = 500000;
-      m.relativeLoan = 2000000;
-      m.equityCapital = 4000000;
-      m.totalLiabilities = m.accountsPayable + m.smeBank1 + m.smeBank2 + m.relativeLoan;
-      m.totalEquityLiabilities = m.totalLiabilities + m.equityCapital;
+      m.smeBank2 = 0;
+      m.relativeLoan = 0;
+      m.equityCapital = 0;
+      m.totalLiabilities = 0;
+      m.totalEquityLiabilities = 0;
     });
 
     // Calculate Full Year Summary
@@ -239,17 +237,17 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
       incomeTax: monthsData.reduce((s, m) => s + m.incomeTax, 0),
       netEarnings: monthsData.reduce((s, m) => s + m.netEarnings, 0),
       cashFlow: monthsData.reduce((s, m) => s + m.cashFlow, 0),
-      accountsReceivable: monthsData[monthsData.length - 1]?.accountsReceivable || 0,
-      cashBalance: monthsData[monthsData.length - 1]?.cashBalance || 0,
-      stockVal: monthsData[monthsData.length - 1]?.stockVal || 0,
-      totalAssets: monthsData[monthsData.length - 1]?.totalAssets || 0,
-      accountsPayable: monthsData[monthsData.length - 1]?.accountsPayable || 0,
+      accountsReceivable: 0,
+      cashBalance: 0,
+      stockVal: 0,
+      totalAssets: 0,
+      accountsPayable: 0,
       smeBank1: 0,
-      smeBank2: 500000,
-      relativeLoan: 2000000,
-      equityCapital: 4000000,
-      totalLiabilities: monthsData[monthsData.length - 1]?.totalLiabilities || 0,
-      totalEquityLiabilities: monthsData[monthsData.length - 1]?.totalEquityLiabilities || 0
+      smeBank2: 0,
+      relativeLoan: 0,
+      equityCapital: 0,
+      totalLiabilities: 0,
+      totalEquityLiabilities: 0
     };
 
     return { months: monthsData, fullYear };
@@ -276,23 +274,26 @@ function FinancialStatementsView({ transactions = [], currentUser }) {
 
     filteredTransactions.forEach(t => {
       const amt = Number(t.amount) || 0;
-      const cat = t.category || '';
+      const cat = t.category || t.expense_type || '';
       const notes = t.notes || '';
+      const isIncome = t.type === 'income' || t.transaction_type === 'รายรับ';
+      const isExpense = t.type === 'expense' || t.transaction_type === 'รายจ่าย';
 
-      if (t.type === 'income') {
+      if (isIncome) {
         totalRevenue += amt;
-      } else if (t.type === 'expense') {
+      } else if (isExpense) {
         if (cat.includes('ซื้อสินค้า') || cat.includes('ต้นทุน') || notes.includes('Material')) materialExp += amt;
         else if (cat.includes('ขนส่ง') || notes.includes('Transport')) transportExp += amt;
         else if (cat.includes('เอกสาร') || notes.includes('Doc')) docRegExp += amt;
         else if (cat.includes('ภาษีนำเข้า') || notes.includes('Import Tax')) importTaxExp += amt;
+        else if (cat.includes('ประกัน') || cat.includes('โต๊ะ') || cat.includes('โต้ะ')) etcInsuranceExp += amt;
         else if (cat.includes('เช่า') || notes.includes('Rent')) rentExp += amt;
         else if (cat.includes('ออฟฟิศ') || cat.includes('วัสดุสำนักงาน')) officeSuppliesExp += amt;
-        else if (cat.includes('เงินเดือน H/O') || notes.includes('H/O Salary')) hoSalariesExp += amt;
+        else if (cat.includes('เงินเดือน H/O') || cat.includes('เงินเดือน พนักงาน') || notes.includes('H/O Salary')) hoSalariesExp += amt;
         else if (cat.includes('ทำบัญชี') || notes.includes('Accounting')) accountingFeeExp += amt;
-        else if (cat.includes('เงินเดือนเซลล์') || notes.includes('Sales Salary')) salesSalariesExp += amt;
-        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม')) salesCommExp += amt;
-        else if (cat.includes('เลี้ยงทีมเซลล์') || notes.includes('Staff Ent')) staffEntExp += amt;
+        else if (cat.includes('เงินเดือนเซลล์') || cat.includes('เงินเดือนเซลส์') || notes.includes('Sales Salary')) salesSalariesExp += amt;
+        else if (cat.includes('คอมมิชชั่น') || cat.includes('ค่าคอม') || cat.includes('Commission')) salesCommExp += amt;
+        else if (cat.includes('เลี้ยงทีม') || notes.includes('Staff Ent')) staffEntExp += amt;
         else if (cat.includes('รับรองลูกค้า') || notes.includes('Cust Ent')) custEntExp += amt;
         else if (cat.includes('สครับ') || notes.includes('Scrub')) scrubExp += amt;
         else hoOtherExp += amt;

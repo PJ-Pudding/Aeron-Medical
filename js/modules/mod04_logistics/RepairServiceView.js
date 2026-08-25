@@ -1,13 +1,13 @@
 // MODULE: mod04_logistics/RepairServiceView.js
 
-function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, onEditTicket, onDeleteTicket, onViewInCatalog }) {
+function RepairServiceView({ repairTickets = [], products = [], members = [], onOpenNewTicket, onEditTicket, onDeleteTicket, onViewInCatalog }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filtered tickets
   const filteredTickets = useMemo(() => {
-    return repairTickets.filter(t => {
+    return (repairTickets || []).filter(t => {
       if (filterCategory !== 'all' && t.category !== filterCategory) return false;
       if (filterStatus !== 'all' && t.status !== filterStatus) return false;
       if (searchQuery.trim()) {
@@ -159,7 +159,7 @@ function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, 
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตาม Category ทุกประเภท</option>
-              {window.REPAIR_CATEGORIES.map(c => (
+              {(window.REPAIR_CATEGORIES || []).map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -170,7 +170,7 @@ function RepairServiceView({ repairTickets, products, members, onOpenNewTicket, 
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะ</option>
-              {window.REPAIR_STATUSES.map(s => (
+              {(window.REPAIR_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>

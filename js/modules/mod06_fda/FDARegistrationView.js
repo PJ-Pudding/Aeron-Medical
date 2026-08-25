@@ -1,6 +1,6 @@
 // MODULE: mod06_fda/FDARegistrationView.js
 
-function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA, onEditFDA, onDeleteFDA }) {
+function FDARegistrationView({ fdaRegistrations = [], products = [], members = [], onOpenNewFDA, onEditFDA, onDeleteFDA }) {
   const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -195,8 +195,10 @@ function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุก Class อย.</option>
-              {window.FDA_CLASSES.map(c => (
-                <option key={c.code} value={c.code}>{c.label}</option>
+              {(window.FDA_CLASSES || []).map(c => typeof c === 'object' ? (
+                <option key={c.code || c.label} value={c.code || c.label}>{c.label || c.code}</option>
+              ) : (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
 
@@ -206,7 +208,7 @@ function FDARegistrationView({ fdaRegistrations, products, members, onOpenNewFDA
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะ</option>
-              {window.FDA_STATUSES.map(s => (
+              {(window.FDA_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>

@@ -1,6 +1,6 @@
 // MODULE: mod03_projects/MemberKanban.js
 
-function MemberKanban({ projects, currentUser, stages = window.STAGES || [], members = [], products = [], activeMemberId, onMoveProject, onEditProject, onDeleteProject, onAddLog, onViewHistory, onOpenNewModal, onBookDemo }) {
+function MemberKanban({ projects = [], currentUser, stages = window.STAGES || [], members = [], products = [], activeMemberId, onMoveProject, onEditProject, onDeleteProject, onAddLog, onViewHistory, onOpenNewModal, onBookDemo }) {
   const activeMember = members.find(m => m.id === activeMemberId);
   const [selectedMobileStage, setSelectedMobileStage] = useState(stages[0] ? stages[0].id : 'stage_draft');
   const [draggedProjectId, setDraggedProjectId] = useState(null);

@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/SoldProductsView.js
 
-function SoldProductsView({ soldProducts, projects = [], members, onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
+function SoldProductsView({ soldProducts = [], projects = [], members = [], onOpenNewAsset, onEditAsset, onDeleteAsset, onOpenProjectDetail, onOpenReport }) {
   const [filterYear, setFilterYear] = useState('all');
   const [filterSales, setFilterSales] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');

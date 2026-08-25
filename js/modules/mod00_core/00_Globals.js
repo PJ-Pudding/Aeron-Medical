@@ -86,6 +86,74 @@ function getCompanyAccounts() {
 window.FIXED_COMPANY_BANK_ACCOUNTS = FIXED_COMPANY_BANK_ACCOUNTS;
 window.getCompanyAccounts = getCompanyAccounts;
 
+// --- Global Master Domain Constants ---
+window.SHIPMENT_STATUSES = [
+  'รอจ่ายเงิน',
+  'จ่ายเงินแล้ว รอผลิต',
+  'ผลิตเสร็จแล้ว รอส่ง',
+  'ระหว่างขนส่ง',
+  'ถึงประเทศไทย รอออกของ',
+  'ของถึง ออฟฟิศ',
+  'ส่งลูกค้าแล้ว'
+];
+
+window.TRANSPORT_TYPES = [
+  'ทางเรือ (Sea Freight)',
+  'ทางเครื่องบิน (Air Freight)',
+  'ทางรถ (Truck / Land)',
+  'ขนส่งด่วน (Courier / Express)'
+];
+
+window.REPAIR_CATEGORIES = [
+  'สินค้า Demo',
+  'สินค้าส่งซ่อมจาก รพ',
+  'สินค้าอยู่ในประกันของ บริษัท',
+  'สินค้า นอกประกันของบริษัท'
+];
+
+window.REPAIR_STATUSES = [
+  'รอส่งซ่อม',
+  'ส่งซ่อมอยู่',
+  'ระหว่างขนส่ง',
+  'ซ่อมเสร็จแล้ว',
+  'ส่งคืนลูกค้า'
+];
+
+window.FDA_CLASSES = [
+  { code: 'Class 1', label: 'Class 1 (ความเสี่ยงต่ำ)' },
+  { code: 'Class 2', label: 'Class 2 (ความเสี่ยงปานกลาง)' },
+  { code: 'Class 3', label: 'Class 3 (ความเสี่ยงสูง)' },
+  { code: 'Class 4', label: 'Class 4 (ความเสี่ยงสูงสุด)' }
+];
+
+window.FDA_STATUSES = [
+  'กำลังเตรียมเอกสาร',
+  'ยื่นคำขอแล้ว รอ อย. ตรวจ',
+  'ขอเอกสารเพิ่มเติม',
+  'อนุมัติแล้ว ได้รับใบอนุญาต',
+  'ต่ออายุใบอนุญาต'
+];
+
+window.PO_STATUSES = [
+  'ฉบับร่าง (Draft)',
+  'รออนุมัติ (Pending Approval)',
+  'อนุมัติแล้ว (Approved)',
+  'ส่งสั่งซื้อแล้ว (Ordered)',
+  'ของถึงคลังแล้ว (Received)',
+  'ยกเลิก (Cancelled)'
+];
+
+window.VENDOR_LIST = [
+  'Aeron International Ltd.',
+  'Mindray Medical',
+  'GE Healthcare Partner',
+  'Olympus Medical Thailand',
+  'Philips Healthcare Supplier',
+  'Stryker Global Vendor',
+  'Karl Storz Supplier',
+  'Local Medical Distributor'
+];
+
 // --- Shared Business Calculation Helpers ---
 
 function calculateWorkingDays(startDateStr, endDateStr) {
@@ -231,7 +299,7 @@ const ROLES_PERMISSIONS = {
     roleId: 'SALES_HEAD',
     roleName: '👨‍💼 SALES_HEAD (หัวหน้าทีมขาย)',
     badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    allowedTabs: ['dashboard', 'clients', 'project', 'logistic', 'calendar', 'hr'],
+    allowedTabs: ['dashboard', 'clients', 'project', 'logistic', 'calendar', 'report', 'hr'],
     canApproveHR: true,
     canViewAuditLogs: false,
     canViewAllFinancials: false,
@@ -241,7 +309,7 @@ const ROLES_PERMISSIONS = {
     roleId: 'SALES',
     roleName: '👨‍⚕️ SALES (เจ้าหน้าที่ฝ่ายขาย)',
     badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
-    allowedTabs: ['clients', 'project', 'logistic', 'calendar', 'hr'],
+    allowedTabs: ['clients', 'project', 'logistic', 'calendar', 'report', 'hr'],
     canApproveHR: false,
     canViewAuditLogs: false,
     canViewAllFinancials: false,
@@ -362,6 +430,9 @@ function getUserAccounts() {
 function saveUserAccounts(accounts = []) {
   try {
     localStorage.setItem('aeron_user_accounts', JSON.stringify(accounts));
+    if (typeof syncToDB === 'function') {
+      syncToDB('users', accounts);
+    }
   } catch (e) {
     console.error('Error saving user accounts:', e);
   }

@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/ShipmentTrackingView.js
 
-function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewShipment, onEditShipment, onDeleteShipment }) {
+function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = [], onOpenNewShipment, onEditShipment, onDeleteShipment }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -8,7 +8,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
 
   // Filtered Shipments
   const filteredShipments = useMemo(() => {
-    return shipments.filter(s => {
+    return (shipments || []).filter(s => {
       if (filterStatus !== 'all' && s.status !== filterStatus) return false;
       if (filterTransport !== 'all' && s.transportType !== filterTransport) return false;
       if (searchQuery.trim()) {
@@ -154,7 +154,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามทุกสถานะนำเข้า</option>
-              {window.SHIPMENT_STATUSES.map(s => (
+              {(window.SHIPMENT_STATUSES || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -165,7 +165,7 @@ function ShipmentTrackingView({ shipments, purchaseOrders, products, onOpenNewSh
               className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
             >
               <option value="all">กรองตามประเภทการขนส่ง</option>
-              {window.TRANSPORT_TYPES.map(t => (
+              {(window.TRANSPORT_TYPES || []).map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>

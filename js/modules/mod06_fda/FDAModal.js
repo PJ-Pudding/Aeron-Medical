@@ -1,6 +1,6 @@
 // MODULE: mod06_fda/FDAModal.js
 
-function FDAModal({ fda, products, members, onSave, onClose }) {
+function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (fda) return { ...fda };
     const firstProd = products[0] || {};

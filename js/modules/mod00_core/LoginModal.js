@@ -10,6 +10,21 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
     return window.getUserAccounts ? window.getUserAccounts() : DEMO_USERS;
   });
 
+  useEffect(() => {
+    async function refreshUsers() {
+      try {
+        if (typeof loadFromDB === 'function') {
+          const remoteUsers = await loadFromDB('users', null);
+          if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
+            setAccountsList(remoteUsers);
+          }
+        }
+      } catch (e) {}
+    }
+    refreshUsers();
+  }, []);
+
   const handleQuickLogin = (demoUser) => {
     setLoading(true);
     setErrorMsg('');

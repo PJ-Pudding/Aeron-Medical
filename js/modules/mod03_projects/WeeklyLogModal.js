@@ -1,6 +1,6 @@
 // MODULE: mod03_projects/WeeklyLogModal.js
 
-function WeeklyLogModal({ project, members, onSave, onClose }) {
+function WeeklyLogModal({ project, members = [], onSave, onClose }) {
   const [note, setNote] = useState('');
   const [author, setAuthor] = useState(project.assignee);
   

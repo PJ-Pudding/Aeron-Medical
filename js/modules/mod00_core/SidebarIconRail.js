@@ -7,7 +7,7 @@ function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOC
     { id: 'project', label: 'Project', icon: '📋', badge: null, desc: 'กระดาน Sales Kanban' },
     { id: 'logistic', label: 'Logistic', icon: '🚚', badge: (activeShipmentCount + activeRepairCount) > 0 ? (activeShipmentCount + activeRepairCount) : null, desc: 'คลังสินค้า & ขนส่ง' },
     { id: 'calendar', label: 'Calendar', icon: '📅', badge: null, desc: 'ปฏิทินจอง Demo' },
-    { id: 'report', label: 'Report', icon: '📑', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'ทะเบียน อย. & เอกสาร' },
+    { id: 'report', label: 'Report', icon: '📑', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'ศูนย์รวมรายงานทุกระบบ & เอกสาร' },
     { id: 'finance', label: 'Finance', icon: '💰', badge: pendingPOCount > 0 ? pendingPOCount : null, desc: 'ต้นทุน & ใบสั่งซื้อ PO' },
     { id: 'hr', label: 'HR', icon: '👥', badge: null, desc: 'ตารางวันลา & บุคลากร' },
     { id: 'accounting', label: 'Accounting', icon: '🧾', badge: null, desc: 'ลงบันทึกรายรับ-รายจ่าย & งบการเงิน' }

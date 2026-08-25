@@ -1,6 +1,6 @@
 // MODULE: mod05_calendar/MonthCalendarGrid.js
 
-function MonthCalendarGrid({ currentMonth, bookings, products, onPrevMonth, onNextMonth, onTodayMonth, onDeleteBooking }) {
+function MonthCalendarGrid({ currentMonth, bookings = [], products = [], onPrevMonth, onNextMonth, onTodayMonth, onDeleteBooking }) {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 

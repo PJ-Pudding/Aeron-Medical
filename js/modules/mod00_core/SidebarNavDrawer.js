@@ -9,9 +9,10 @@ function SidebarNavDrawer({ isOpen, onClose, activeTab, setActiveTab, currentUse
     { id: 'project', label: 'กระดานติดตามงานขาย Sales Kanban', icon: '📋', tabName: 'Projects', desc: 'All Sales Pipelines' },
     { id: 'logistic', label: 'คลังสินค้า เครื่อง Demo & ขนส่ง', icon: '🚚', tabName: 'Logistic', badge: (activeShipmentCount + activeRepairCount) > 0 ? (activeShipmentCount + activeRepairCount) : null, desc: 'Demo Assets & Shipment' },
     { id: 'calendar', label: 'ปฏิทินจองคิวเครื่อง Demo', icon: '📅', tabName: 'Calendar', desc: 'Demo Booking Schedules' },
-    { id: 'report', label: 'ทะเบียน อย. & ศูนย์รายงานสรุป', icon: '📑', tabName: 'Report', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'Thai FDA & Executive Reports' },
+    { id: 'report', label: 'ศูนย์รวมรายงานทุกระบบ & ทะเบียน อย.', icon: '📑', tabName: 'Report', badge: activeFDACount > 0 ? activeFDACount : null, desc: 'Enterprise Reports & Thai FDA' },
     { id: 'finance', label: 'ตารางคำนวณต้นทุน & ใบสั่งซื้อ PO', icon: '💰', tabName: 'Finance', badge: pendingPOCount > 0 ? pendingPOCount : null, desc: 'Cost Sheet & Vendor POs' },
-    { id: 'hr', label: 'ตารางวันลา & บุคลากรทีม Sales', icon: '👥', tabName: 'HR', desc: 'Leave Requests & Team Roster' }
+    { id: 'hr', label: 'ตารางวันลา & บุคลากรทีม Sales', icon: '👥', tabName: 'HR', desc: 'Leave Requests & Team Roster' },
+    { id: 'accounting', label: 'ลงบันทึกรายรับ-รายจ่าย & งบการเงิน', icon: '🧾', tabName: 'Accounting', desc: 'Daily Transactions & P&L' }
   ];
 
   return (

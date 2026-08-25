@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/RepairTicketModal.js
 
-function RepairTicketModal({ ticket, products, members, onSave, onClose }) {
+function RepairTicketModal({ ticket, products = [], members = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (ticket) return { ...ticket };
     const firstProd = products[0] || {};

@@ -1,6 +1,6 @@
 // MODULE: mod03_projects/ProjectModal.js
 
-function ProjectModal({ project, members, stages, products, onSave, onClose }) {
+function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
     clientType: 'รัฐบาล',

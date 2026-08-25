@@ -8,12 +8,14 @@ function Header({
   setActiveView, 
   logisticSubView = 'product_catalog', 
   setLogisticSubView = () => {}, 
-  reportSubView = 'fda_registration', 
+  reportSubView = 'hub', 
   setReportSubView = () => {}, 
   financeSubView = 'cost_calculation', 
   setFinanceSubView = () => {}, 
   hrSubView = 'leave_attendance', 
   setHRSubView = () => {}, 
+  accountingSubTab = 'daily_entries',
+  setAccountingSubTab = () => {}, 
   members = [], 
   projects = [], 
   pendingPOCount = 0, 
@@ -101,7 +103,7 @@ function Header({
     else if (newView === 'cost_calculation' || newView === 'purchase_orders') targetTab = 'finance';
     else if (newView === 'demo_calendar') targetTab = 'calendar';
     else if (['product_catalog', 'shipment_tracking', 'repair_service', 'sold_products'].includes(newView)) targetTab = 'logistic';
-    else if (newView === 'fda_registration') targetTab = 'report';
+    else if (newView === 'reports_hub' || newView === 'fda_registration') targetTab = 'report';
     else if (newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') targetTab = 'accounting';
     else if (members.some(m => m.id === newView)) targetTab = 'project';
 
@@ -137,10 +139,19 @@ function Header({
     } else if (newView === 'sold_products') {
       setActiveSidebarTab('logistic');
       setLogisticSubView('sold_products');
+    } else if (newView === 'reports_hub') {
+      setActiveSidebarTab('report');
+      setReportSubView('hub');
     } else if (newView === 'fda_registration') {
       setActiveSidebarTab('report');
       setReportSubView('fda_registration');
-    } else if (newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') {
+    } else if (newView === 'daily_transactions') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('daily_entries');
+    } else if (newView === 'financial_statements') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('financial_statements');
+    } else if (newView === 'accounting') {
       setActiveSidebarTab('accounting');
     } else if (members.some(m => m.id === newView)) {
       setActiveSidebarTab('project');
@@ -228,14 +239,24 @@ function Header({
                   </option>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'report')) && (
-                  <option value="fda_registration">
-                    🛡️ การจดทะเบียน อย. (Thai FDA Registration) {activeFDACount > 0 ? `(📋 ${activeFDACount} คำขอ)` : ''}
-                  </option>
+                  <>
+                    <option value="reports_hub">
+                      📊 ศูนย์รวมรายงานทุกระบบ (Unified Reports Hub)
+                    </option>
+                    <option value="fda_registration">
+                      🛡️ การจดทะเบียน อย. (Thai FDA Registration) {activeFDACount > 0 ? `(📋 ${activeFDACount} คำขอ)` : ''}
+                    </option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'accounting')) && (
-                  <option value="daily_transactions">
-                    🧾 ลงบันทึกรายรับ-รายจ่ายรายวัน (Daily Transactions Entry)
-                  </option>
+                  <>
+                    <option value="daily_transactions">
+                      🧾 ลงบันทึกรายรับ-รายจ่ายรายวัน (Daily Transactions Entry)
+                    </option>
+                    <option value="financial_statements">
+                      📈 งบการเงิน P&L, Cash Flow & งบดุล (Financial Statements)
+                    </option>
+                  </>
                 )}
                 {(!currentUser || checkTabAccess(currentUser.role, 'project')) && (
                   <optgroup label="-- Kanban รายบุคคล --">
@@ -634,6 +655,70 @@ function Header({
               }`}
             >
               👥 รายชื่อทีม Sales ({members.length} คน)
+            </button>
+          </div>
+        )}
+
+        {/* ACCOUNTING MODULE SUB-VIEWS */}
+        {activeSidebarTab === 'accounting' && (
+          <div className="flex items-center gap-2 flex-shrink-0 w-full">
+            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+              <span>🧾 บัญชี & การเงิน:</span>
+            </span>
+
+            <button
+              onClick={() => setAccountingSubTab('daily_entries')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'daily_entries'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📋 บันทึกรายรับ-รายจ่ายรายวัน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('financial_statements')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'financial_statements'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📈 งบการเงิน P&L & Cash Flow
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('pending_transfers')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'pending_transfers'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              ⏳ ค้างโอนประจำเดือน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('hospital_payee_analytics')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'hospital_payee_analytics'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              🏥 รายจ่ายราย รพ./ผู้รับ
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('bank_reconciliation')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'bank_reconciliation'
+                  ? 'bg-teal-600 text-white border-teal-400 font-black shadow-md shadow-teal-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              🏦 Bank Reconciliation
             </button>
           </div>
         )}

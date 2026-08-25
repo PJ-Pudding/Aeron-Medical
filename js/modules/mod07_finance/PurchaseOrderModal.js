@@ -1,6 +1,6 @@
 // MODULE: mod07_finance/PurchaseOrderModal.js
 
-function PurchaseOrderModal({ po, projects, products, onSave, onClose }) {
+function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (po) return { ...po };
     const wonProjects = projects.filter(p => p.status === 'stage_won' || p.status === 'stage_ordering' || p.status === 'stage_delivery');

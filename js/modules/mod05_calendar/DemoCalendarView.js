@@ -1,6 +1,6 @@
 // MODULE: mod05_calendar/DemoCalendarView.js
 
-function DemoCalendarView({ demoBookings, products, projects, members, onOpenBookDemo, onDeleteBooking }) {
+function DemoCalendarView({ demoBookings = [], products = [], projects = [], members = [], onOpenBookDemo, onDeleteBooking }) {
   const [filterProduct, setFilterProduct] = useState('all');
   const [calendarMode, setCalendarMode] = useState('month'); // 'month' or 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7, 1)); // Default August 2026 for mock data

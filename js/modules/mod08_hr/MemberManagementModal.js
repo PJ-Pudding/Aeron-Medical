@@ -1,6 +1,6 @@
 // MODULE: mod08_hr/MemberManagementModal.js
 
-function MemberManagementModal({ members, setMembers, onClose }) {
+function MemberManagementModal({ members = [], setMembers, onClose }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('Sales Specialist');
   const [avatar, setAvatar] = useState('👨‍⚕️');
