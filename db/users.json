@@ -1,0 +1,241 @@
+﻿[
+  {
+    "id": "usr_owner",
+    "username": "owner",
+    "name": "à¸„à¸¸à¸“à¸•à¸¹à¹‰ (CEO / Owner)",
+    "role": "OWNER",
+    "avatar": "ðŸ‘‘",
+    "memberId": "m1"
+  },
+  {
+    "id": "usr_head_admin",
+    "username": "head_admin",
+    "name": "à¸„à¸¸à¸“à¸ˆà¸µà¹‰à¸” (Head Admin)",
+    "role": "HEAD_ADMIN",
+    "avatar": "ðŸ‘©â€ðŸ’¼",
+    "memberId": "m2",
+    "password": "123456",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "finance",
+      "hr",
+      "accounting"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": true,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": true
+  },
+  {
+    "id": "usr_admin",
+    "username": "admin",
+    "name": "à¸„à¸¸à¸“à¸¡à¸¸à¸ (Admin Officer)",
+    "role": "ADMIN",
+    "avatar": "ðŸ¢",
+    "memberId": "m3",
+    "password": "123456",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "finance",
+      "hr",
+      "accounting"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_sales_head",
+    "username": "sales_head",
+    "name": "à¸„à¸¸à¸“à¹‚à¸«à¸™à¹ˆà¸‡ (Sales Head Bkk1)",
+    "role": "SALES_HEAD",
+    "avatar": "ðŸ‘¨â€ðŸ’¼",
+    "memberId": "m3",
+    "subordinates": [
+      "m2"
+    ],
+    "password": "123456",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "canApproveHR": true,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_sales_somchai",
+    "username": "sales_somchai",
+    "name": "à¸„à¸¸à¸“ à¸›à¸­ (Sales Specialist)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "memberId": "m1",
+    "password": "123456",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_messenger",
+    "username": "messenger",
+    "name": "à¸„à¸¸à¸“à¸šà¸­à¸¢ (Messenger Dispatch)",
+    "role": "MESSENGER",
+    "avatar": "ðŸ›µ",
+    "memberId": "m4",
+    "password": "123456",
+    "allowedTabs": [
+      "messenger"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_1787649029621",
+    "username": "sales esarn1",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¹à¸ˆà¸‡ (Sales ESarn 1)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649029621"
+  },
+  {
+    "id": "usr_1787649065561",
+    "username": "sales bkk2",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“ à¹€à¸›à¸´à¹‰à¸¥ (Sales Bkk2)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649065561"
+  },
+  {
+    "id": "usr_1787649116794",
+    "username": "sales bkk3",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¸­à¸¸à¹‹à¸¡à¸­à¸´à¹ˆà¸¡ (Sales Bkk3)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649116794"
+  },
+  {
+    "id": "usr_1787651638976",
+    "username": "sales esarn2",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¸¡à¸´à¹‰à¸§ (Sales ESarn2)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787651638976"
+  }
+]
