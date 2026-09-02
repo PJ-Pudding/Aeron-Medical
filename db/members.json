@@ -1,26 +1,26 @@
-﻿[
+[
   {
     "id": "m1",
-    "name": "à¸ªà¸¡à¸Šà¸²à¸¢ à¸ªà¸²à¸¢à¸¥à¸¸à¸¢",
+    "name": "สมชาย สายลุย",
     "role": "Sales Specialist",
-    "avatar": "ðŸ‘¨â€âš•ï¸"
+    "avatar": "👨‍⚕️"
   },
   {
     "id": "m2",
-    "name": "à¸ªà¸¡à¸«à¸à¸´à¸‡ à¹ƒà¸ˆà¸”à¸µ",
+    "name": "สมหญิง ใจดี",
     "role": "Medical Representative",
-    "avatar": "ðŸ‘©â€âš•ï¸"
+    "avatar": "👩‍⚕️"
   },
   {
     "id": "m3",
-    "name": "à¸­à¸™à¸±à¸™à¸•à¹Œ à¸œà¸¹à¹‰à¹‚à¸Šà¸„à¸”à¸µ",
+    "name": "อนันต์ ผู้โชคดี",
     "role": "Key Account Manager",
-    "avatar": "ðŸ‘¨â€ðŸ’¼"
+    "avatar": "👨‍💼"
   },
   {
     "id": "m4",
-    "name": "à¸ªà¸¸à¸Šà¸²à¸•à¸´ à¸¡à¸¸à¹ˆà¸‡à¸¡à¸±à¹ˆà¸™",
-    "role": "Product Specialist",
-    "avatar": "ðŸ§‘â€ðŸ’»"
+    "name": "สุชาติ มุ่งมั่น",
+    "role": "Senior Sales Executive",
+    "avatar": "👨‍💼"
   }
 ]
