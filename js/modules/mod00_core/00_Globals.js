@@ -417,6 +417,11 @@ function getUserAccounts() {
   try {
     const saved = localStorage.getItem('aeron_user_accounts');
     if (saved) {
+      if (saved.includes('à¸') || saved.includes('à¹') || saved.includes('ðŸ')) {
+        console.warn('Sanitizing corrupted user accounts cache in localStorage...');
+        localStorage.setItem('aeron_user_accounts', JSON.stringify(DEMO_USERS));
+        return DEMO_USERS;
+      }
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }

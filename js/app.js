@@ -423,6 +423,11 @@ function getUserAccounts() {
   try {
     const saved = localStorage.getItem('aeron_user_accounts');
     if (saved) {
+      if (saved.includes('à¸') || saved.includes('à¹') || saved.includes('ðŸ')) {
+        console.warn('Sanitizing corrupted user accounts cache in localStorage...');
+        localStorage.setItem('aeron_user_accounts', JSON.stringify(DEMO_USERS));
+        return DEMO_USERS;
+      }
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
@@ -1455,8 +1460,11 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
         if (typeof loadFromDB === 'function') {
           const remoteUsers = await loadFromDB('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
-            setAccountsList(remoteUsers);
+            const rawStr = JSON.stringify(remoteUsers);
+            if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
+              localStorage.setItem('aeron_user_accounts', rawStr);
+              setAccountsList(remoteUsers);
+            }
           }
         }
       } catch (e) {}
@@ -18533,7 +18541,10 @@ function App() {
         if (typeof loadFromDB === 'function') {
           const remoteUsers = await loadFromDB('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
+            const rawStr = JSON.stringify(remoteUsers);
+            if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
+              localStorage.setItem('aeron_user_accounts', rawStr);
+            }
           }
         }
       } catch (e) {

@@ -16,8 +16,11 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
         if (typeof loadFromDB === 'function') {
           const remoteUsers = await loadFromDB('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-            localStorage.setItem('aeron_user_accounts', JSON.stringify(remoteUsers));
-            setAccountsList(remoteUsers);
+            const rawStr = JSON.stringify(remoteUsers);
+            if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
+              localStorage.setItem('aeron_user_accounts', rawStr);
+              setAccountsList(remoteUsers);
+            }
           }
         }
       } catch (e) {}
