@@ -33,8 +33,8 @@ window.formatCurrency = formatCurrency;
 window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
-// 🌐 DIRECT SUPABASE CLOUD REST API ENGINE (TRUE TIMESTAMP LWW)
-// 100% Direct Real-Time Cloud Sync with Last-Write-Wins Conflict Resolution
+// 🌐 AERON UNIFIED CLOUD ENGINE (SUPABASE SINGLE SOURCE OF TRUTH)
+// Direct Cloud-First REST API with Immediate Sync & Multi-Device Poller
 // ====================================================
 
 const _SB_HOST = 'aelmtxmanctdjxiwsent.supabase.co';
@@ -64,76 +64,73 @@ const _TABLE_LS_MAP = {
   messenger_trips: 'aeron_messenger_trips'
 };
 
-// Helper: Direct Cloud Save with Timestamp Record
-async function syncToDB(tableName, data) {
-  if (!tableName) return;
-  const nowIso = new Date().toISOString();
-  const nowMs = Date.now();
+window.AeronCloudDB = {
+  async save(tableName, data) {
+    if (!tableName) return;
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
 
-  try {
-    localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
-  } catch(e) {}
-
-  try {
-    const payload = JSON.stringify({
-      table_name: tableName,
-      data: data,
-      updated_at: nowIso
-    });
-
-    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'apikey': _SB_KEY,
-        'Authorization': 'Bearer ' + _SB_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: payload
-    }).catch(() => {});
-
-    // Also mirror to local endpoint if available
+    // 1. Mirror to local cache
     try {
-      fetch('/api/save-db?table=' + tableName, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data, null, 2)
-      }).catch(() => {});
-    } catch(e) {}
-  } catch (err) {
-    console.warn('[Cloud Sync Notice]:', err.message);
-  }
-}
-
-// Helper: Direct Cloud Load with Timestamp Last-Write-Wins Resolution
-async function loadFromDB(tableName, defaultVal) {
-  if (!tableName) return defaultVal;
-
-  let localTs = 0;
-  try {
-    const localTsStr = localStorage.getItem('aeron_ts_' + tableName);
-    localTs = localTsStr ? parseInt(localTsStr, 10) : 0;
-  } catch(e) {}
-
-  try {
-    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'apikey': _SB_KEY,
-        'Authorization': 'Bearer ' + _SB_KEY
+      localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
+      const lsKey = _TABLE_LS_MAP[tableName];
+      if (lsKey) {
+        localStorage.setItem(lsKey, JSON.stringify(data));
       }
-    });
+    } catch(e) {}
 
-    if (res.ok) {
-      const records = await res.json();
-      if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
-        const cloudRecord = records[0];
-        const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : 0;
+    // 2. Direct POST to Supabase Cloud REST API
+    try {
+      const payload = JSON.stringify({
+        table_name: tableName,
+        data: data,
+        updated_at: nowIso
+      });
 
-        // Last-Write-Wins: If Cloud timestamp is newer or equal, Cloud is the authoritative source!
-        if (cloudTs >= localTs) {
+      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': _SB_KEY,
+          'Authorization': 'Bearer ' + _SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: payload
+      });
+
+      // Mirror to local node server if available
+      try {
+        fetch('/api/save-db?table=' + tableName, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data, null, 2)
+        }).catch(() => {});
+      } catch(e) {}
+    } catch (err) {
+      console.warn('[AeronCloudDB Save Error]:', err.message);
+    }
+  },
+
+  async load(tableName, fallbackVal) {
+    if (!tableName) return fallbackVal;
+
+    try {
+      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'apikey': _SB_KEY,
+          'Authorization': 'Bearer ' + _SB_KEY
+        }
+      });
+
+      if (res.ok) {
+        const records = await res.json();
+        if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
+          const cloudRecord = records[0];
+          const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : Date.now();
+
           try {
             localStorage.setItem('aeron_ts_' + tableName, cloudTs.toString());
             const lsKey = _TABLE_LS_MAP[tableName];
@@ -141,36 +138,28 @@ async function loadFromDB(tableName, defaultVal) {
               localStorage.setItem(lsKey, JSON.stringify(cloudRecord.data));
             }
           } catch(e) {}
+
           return cloudRecord.data;
-        } else {
-          // Local has newer un-synced edits: push local to Cloud!
-          const lsKey = _TABLE_LS_MAP[tableName];
-          if (lsKey) {
-            try {
-              const rawLocal = localStorage.getItem(lsKey);
-              if (rawLocal) {
-                const parsedLocal = JSON.parse(rawLocal);
-                syncToDB(tableName, parsedLocal);
-                return parsedLocal;
-              }
-            } catch(e) {}
-          }
         }
       }
+    } catch (err) {
+      console.warn('[AeronCloudDB Load Warning]:', err.message);
     }
 
-    // Fallback to local server endpoint
-    const fallbackRes = await fetch('/api/load-db?table=' + tableName);
-    if (fallbackRes.ok) {
-      const data = await fallbackRes.json();
-      if (data !== undefined && data !== null) return data;
-    }
-  } catch (err) {
-    console.warn('[Load DB Notice]:', err.message);
+    try {
+      const lsKey = _TABLE_LS_MAP[tableName];
+      if (lsKey) {
+        const cached = localStorage.getItem(lsKey);
+        if (cached !== null) return JSON.parse(cached);
+      }
+    } catch(e) {}
+
+    return fallbackVal;
   }
-  return defaultVal;
-}
+};
 
+var syncToDB = (table, data) => window.AeronCloudDB.save(table, data);
+var loadFromDB = (table, fallback) => window.AeronCloudDB.load(table, fallback);
 window.syncToDB = syncToDB;
 window.loadFromDB = loadFromDB;
 
@@ -2871,22 +2860,7 @@ function useAeronAccounting({ setShipments }) {
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('accounting', transactions);
-    }
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('purchase_orders', purchaseOrders);
-    }
-  }, [purchaseOrders]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
@@ -2920,7 +2894,7 @@ function useAeronAccounting({ setShipments }) {
     hydrateAccountingFromCloud();
 
     window.addEventListener('focus', hydrateAccountingFromCloud);
-    const poller = setInterval(hydrateAccountingFromCloud, 10000);
+    const poller = setInterval(hydrateAccountingFromCloud, 3000);
 
     return () => {
       isMounted = false;
@@ -3056,22 +3030,7 @@ function useAeronHR({ currentUser }) {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('leave_requests', leaveRequests);
-    }
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('attendance_logs', attendanceLogs);
-    }
-  }, [attendanceLogs]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
@@ -3105,7 +3064,7 @@ function useAeronHR({ currentUser }) {
     hydrateHRFromCloud();
 
     window.addEventListener('focus', hydrateHRFromCloud);
-    const poller = setInterval(hydrateHRFromCloud, 10000);
+    const poller = setInterval(hydrateHRFromCloud, 3000);
 
     return () => {
       isMounted = false;
@@ -3204,6 +3163,9 @@ function useAeronLogistics({ setActiveView }) {
 
   const handleUpdateCategories = useCallback((updatedList) => {
     setProductCategories(updatedList);
+    if (typeof window.syncToDB === 'function') {
+      window.syncToDB('product_categories', updatedList);
+    }
   }, []);
 
   // 1. Central Product Catalog State (No hardcoded resurrection)
@@ -3276,42 +3238,7 @@ function useAeronLogistics({ setActiveView }) {
   const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
   const [editingFDA, setEditingFDA] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
-
-  useEffect(() => {
-    localStorage.setItem('aeron_products', JSON.stringify(products));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('products', products);
-    }
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('sold_products', soldProducts);
-    }
-  }, [soldProducts]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('shipments', shipments);
-    }
-  }, [shipments]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('repair_tickets', repairTickets);
-    }
-  }, [repairTickets]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('fda_registrations', fdaRegistrations);
-    }
-  }, [fdaRegistrations]);
+  // ⚡ Action-Driven Direct Cloud Sync: State updates only trigger cloud sync on explicit user actions!
 
   // ⚡ Universal Hydration with Focus Listener & Heartbeat Poller
   useEffect(() => {
@@ -3373,7 +3300,7 @@ function useAeronLogistics({ setActiveView }) {
     hydrateLogisticsFromCloud();
 
     window.addEventListener('focus', hydrateLogisticsFromCloud);
-    const poller = setInterval(hydrateLogisticsFromCloud, 10000);
+    const poller = setInterval(hydrateLogisticsFromCloud, 3000);
 
     return () => {
       isMounted = false;
@@ -3384,15 +3311,22 @@ function useAeronLogistics({ setActiveView }) {
 
   // Handlers
   const handleSaveProduct = useCallback((productData) => {
-    if (productData.id) {
-      setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
-    } else {
-      const newProd = {
-        ...productData,
-        id: 'prod-' + Date.now()
-      };
-      setProducts(prev => [newProd, ...prev]);
-    }
+    setProducts(prev => {
+      let updated;
+      if (productData.id) {
+        updated = prev.map(p => p.id === productData.id ? productData : p);
+      } else {
+        const newProd = {
+          ...productData,
+          id: 'prod-' + Date.now()
+        };
+        updated = [newProd, ...prev];
+      }
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('products', updated);
+      }
+      return updated;
+    });
     setIsProductModalOpen(false);
     setEditingProduct(null);
   }, []);
@@ -3607,29 +3541,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [isDemoBookingModalOpen, setIsDemoBookingModalOpen] = useState(false);
   const [editingDemoBooking, setEditingDemoBooking] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('projects', projects);
-    }
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('cost_calculations', costCalculations);
-    }
-  }, [costCalculations]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('demo_bookings', demoBookings);
-    }
-  }, [demoBookings]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
   useEffect(() => {
@@ -3665,7 +3577,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
     hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
     window.addEventListener('focus', hydrateProjectsFromCloud);
-    const poller = setInterval(hydrateProjectsFromCloud, 10000);
+    const poller = setInterval(hydrateProjectsFromCloud, 3000);
     return () => {
       isMounted = false;
       window.removeEventListener('focus', hydrateProjectsFromCloud);
@@ -21368,7 +21280,15 @@ function App() {
                   demoBookings={demoBookings}
                   onOpenNewProduct={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
                   onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true); }}
-                  onDeleteProduct={(id) => setProducts(prev => prev.filter(p => p.id !== id))}
+                  onDeleteProduct={(id) => {
+                    setProducts(prev => {
+                      const updated = prev.filter(p => p.id !== id);
+                      if (typeof window.syncToDB === 'function') {
+                        window.syncToDB('products', updated);
+                      }
+                      return updated;
+                    });
+                  }}
                   onOpenRepairModal={handleOpenRepairFromCatalog}
                 />
               )}

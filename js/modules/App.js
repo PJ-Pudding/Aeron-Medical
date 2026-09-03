@@ -689,7 +689,15 @@ function App() {
                   demoBookings={demoBookings}
                   onOpenNewProduct={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
                   onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true); }}
-                  onDeleteProduct={(id) => setProducts(prev => prev.filter(p => p.id !== id))}
+                  onDeleteProduct={(id) => {
+                    setProducts(prev => {
+                      const updated = prev.filter(p => p.id !== id);
+                      if (typeof window.syncToDB === 'function') {
+                        window.syncToDB('products', updated);
+                      }
+                      return updated;
+                    });
+                  }}
                   onOpenRepairModal={handleOpenRepairFromCatalog}
                 />
               )}

@@ -30,22 +30,7 @@ function useAeronHR({ currentUser }) {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('leave_requests', leaveRequests);
-    }
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('attendance_logs', attendanceLogs);
-    }
-  }, [attendanceLogs]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
@@ -79,7 +64,7 @@ function useAeronHR({ currentUser }) {
     hydrateHRFromCloud();
 
     window.addEventListener('focus', hydrateHRFromCloud);
-    const poller = setInterval(hydrateHRFromCloud, 10000);
+    const poller = setInterval(hydrateHRFromCloud, 3000);
 
     return () => {
       isMounted = false;

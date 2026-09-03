@@ -51,29 +51,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [isDemoBookingModalOpen, setIsDemoBookingModalOpen] = useState(false);
   const [editingDemoBooking, setEditingDemoBooking] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('projects', projects);
-    }
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('cost_calculations', costCalculations);
-    }
-  }, [costCalculations]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('demo_bookings', demoBookings);
-    }
-  }, [demoBookings]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
   useEffect(() => {
@@ -109,7 +87,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
     hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
     window.addEventListener('focus', hydrateProjectsFromCloud);
-    const poller = setInterval(hydrateProjectsFromCloud, 10000);
+    const poller = setInterval(hydrateProjectsFromCloud, 3000);
     return () => {
       isMounted = false;
       window.removeEventListener('focus', hydrateProjectsFromCloud);

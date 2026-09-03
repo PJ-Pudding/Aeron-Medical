@@ -1,3 +1,7 @@
+var syncToDB = function(t, d) { if (window.AeronCloudDB) return window.AeronCloudDB.save(t, d); };
+var loadFromDB = function(t, f) { if (window.AeronCloudDB) return window.AeronCloudDB.load(t, f); return Promise.resolve(f); };
+window.syncToDB = syncToDB;
+window.loadFromDB = loadFromDB;
 // ====================================================
 // Global Currency & Number Formatters (Indestructible Failsafe)
 // ====================================================

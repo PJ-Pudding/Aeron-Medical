@@ -27,8 +27,8 @@ window.formatCurrency = formatCurrency;
 window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
-// 🌐 DIRECT SUPABASE CLOUD REST API ENGINE (TRUE TIMESTAMP LWW)
-// 100% Direct Real-Time Cloud Sync with Last-Write-Wins Conflict Resolution
+// 🌐 AERON UNIFIED CLOUD ENGINE (SUPABASE SINGLE SOURCE OF TRUTH)
+// Direct Cloud-First REST API with Immediate Sync & Multi-Device Poller
 // ====================================================
 
 const _SB_HOST = 'aelmtxmanctdjxiwsent.supabase.co';
@@ -58,76 +58,73 @@ const _TABLE_LS_MAP = {
   messenger_trips: 'aeron_messenger_trips'
 };
 
-// Helper: Direct Cloud Save with Timestamp Record
-async function syncToDB(tableName, data) {
-  if (!tableName) return;
-  const nowIso = new Date().toISOString();
-  const nowMs = Date.now();
+window.AeronCloudDB = {
+  async save(tableName, data) {
+    if (!tableName) return;
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
 
-  try {
-    localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
-  } catch(e) {}
-
-  try {
-    const payload = JSON.stringify({
-      table_name: tableName,
-      data: data,
-      updated_at: nowIso
-    });
-
-    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'apikey': _SB_KEY,
-        'Authorization': 'Bearer ' + _SB_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: payload
-    }).catch(() => {});
-
-    // Also mirror to local endpoint if available
+    // 1. Mirror to local cache
     try {
-      fetch('/api/save-db?table=' + tableName, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data, null, 2)
-      }).catch(() => {});
-    } catch(e) {}
-  } catch (err) {
-    console.warn('[Cloud Sync Notice]:', err.message);
-  }
-}
-
-// Helper: Direct Cloud Load with Timestamp Last-Write-Wins Resolution
-async function loadFromDB(tableName, defaultVal) {
-  if (!tableName) return defaultVal;
-
-  let localTs = 0;
-  try {
-    const localTsStr = localStorage.getItem('aeron_ts_' + tableName);
-    localTs = localTsStr ? parseInt(localTsStr, 10) : 0;
-  } catch(e) {}
-
-  try {
-    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'apikey': _SB_KEY,
-        'Authorization': 'Bearer ' + _SB_KEY
+      localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
+      const lsKey = _TABLE_LS_MAP[tableName];
+      if (lsKey) {
+        localStorage.setItem(lsKey, JSON.stringify(data));
       }
-    });
+    } catch(e) {}
 
-    if (res.ok) {
-      const records = await res.json();
-      if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
-        const cloudRecord = records[0];
-        const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : 0;
+    // 2. Direct POST to Supabase Cloud REST API
+    try {
+      const payload = JSON.stringify({
+        table_name: tableName,
+        data: data,
+        updated_at: nowIso
+      });
 
-        // Last-Write-Wins: If Cloud timestamp is newer or equal, Cloud is the authoritative source!
-        if (cloudTs >= localTs) {
+      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': _SB_KEY,
+          'Authorization': 'Bearer ' + _SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: payload
+      });
+
+      // Mirror to local node server if available
+      try {
+        fetch('/api/save-db?table=' + tableName, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data, null, 2)
+        }).catch(() => {});
+      } catch(e) {}
+    } catch (err) {
+      console.warn('[AeronCloudDB Save Error]:', err.message);
+    }
+  },
+
+  async load(tableName, fallbackVal) {
+    if (!tableName) return fallbackVal;
+
+    try {
+      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'apikey': _SB_KEY,
+          'Authorization': 'Bearer ' + _SB_KEY
+        }
+      });
+
+      if (res.ok) {
+        const records = await res.json();
+        if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
+          const cloudRecord = records[0];
+          const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : Date.now();
+
           try {
             localStorage.setItem('aeron_ts_' + tableName, cloudTs.toString());
             const lsKey = _TABLE_LS_MAP[tableName];
@@ -135,36 +132,28 @@ async function loadFromDB(tableName, defaultVal) {
               localStorage.setItem(lsKey, JSON.stringify(cloudRecord.data));
             }
           } catch(e) {}
+
           return cloudRecord.data;
-        } else {
-          // Local has newer un-synced edits: push local to Cloud!
-          const lsKey = _TABLE_LS_MAP[tableName];
-          if (lsKey) {
-            try {
-              const rawLocal = localStorage.getItem(lsKey);
-              if (rawLocal) {
-                const parsedLocal = JSON.parse(rawLocal);
-                syncToDB(tableName, parsedLocal);
-                return parsedLocal;
-              }
-            } catch(e) {}
-          }
         }
       }
+    } catch (err) {
+      console.warn('[AeronCloudDB Load Warning]:', err.message);
     }
 
-    // Fallback to local server endpoint
-    const fallbackRes = await fetch('/api/load-db?table=' + tableName);
-    if (fallbackRes.ok) {
-      const data = await fallbackRes.json();
-      if (data !== undefined && data !== null) return data;
-    }
-  } catch (err) {
-    console.warn('[Load DB Notice]:', err.message);
+    try {
+      const lsKey = _TABLE_LS_MAP[tableName];
+      if (lsKey) {
+        const cached = localStorage.getItem(lsKey);
+        if (cached !== null) return JSON.parse(cached);
+      }
+    } catch(e) {}
+
+    return fallbackVal;
   }
-  return defaultVal;
-}
+};
 
+var syncToDB = (table, data) => window.AeronCloudDB.save(table, data);
+var loadFromDB = (table, fallback) => window.AeronCloudDB.load(table, fallback);
 window.syncToDB = syncToDB;
 window.loadFromDB = loadFromDB;
 

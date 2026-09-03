@@ -36,22 +36,7 @@ function useAeronAccounting({ setShipments }) {
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
-  const isHydrated = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('accounting', transactions);
-    }
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('purchase_orders', purchaseOrders);
-    }
-  }, [purchaseOrders]);
+  // ⚡ Action-Driven Direct Cloud Sync
 
   // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
@@ -85,7 +70,7 @@ function useAeronAccounting({ setShipments }) {
     hydrateAccountingFromCloud();
 
     window.addEventListener('focus', hydrateAccountingFromCloud);
-    const poller = setInterval(hydrateAccountingFromCloud, 10000);
+    const poller = setInterval(hydrateAccountingFromCloud, 3000);
 
     return () => {
       isMounted = false;

@@ -36,6 +36,9 @@ function useAeronLogistics({ setActiveView }) {
 
   const handleUpdateCategories = useCallback((updatedList) => {
     setProductCategories(updatedList);
+    if (typeof window.syncToDB === 'function') {
+      window.syncToDB('product_categories', updatedList);
+    }
   }, []);
 
   // 1. Central Product Catalog State (No hardcoded resurrection)
@@ -108,42 +111,7 @@ function useAeronLogistics({ setActiveView }) {
   const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
   const [editingFDA, setEditingFDA] = useState(null);
 
-  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
-
-  useEffect(() => {
-    localStorage.setItem('aeron_products', JSON.stringify(products));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('products', products);
-    }
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('sold_products', soldProducts);
-    }
-  }, [soldProducts]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('shipments', shipments);
-    }
-  }, [shipments]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('repair_tickets', repairTickets);
-    }
-  }, [repairTickets]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
-    if (isHydrated.current && typeof syncToDB === 'function') {
-      syncToDB('fda_registrations', fdaRegistrations);
-    }
-  }, [fdaRegistrations]);
+  // ⚡ Action-Driven Direct Cloud Sync: State updates only trigger cloud sync on explicit user actions!
 
   // ⚡ Universal Hydration with Focus Listener & Heartbeat Poller
   useEffect(() => {
@@ -205,7 +173,7 @@ function useAeronLogistics({ setActiveView }) {
     hydrateLogisticsFromCloud();
 
     window.addEventListener('focus', hydrateLogisticsFromCloud);
-    const poller = setInterval(hydrateLogisticsFromCloud, 10000);
+    const poller = setInterval(hydrateLogisticsFromCloud, 3000);
 
     return () => {
       isMounted = false;
@@ -216,15 +184,22 @@ function useAeronLogistics({ setActiveView }) {
 
   // Handlers
   const handleSaveProduct = useCallback((productData) => {
-    if (productData.id) {
-      setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
-    } else {
-      const newProd = {
-        ...productData,
-        id: 'prod-' + Date.now()
-      };
-      setProducts(prev => [newProd, ...prev]);
-    }
+    setProducts(prev => {
+      let updated;
+      if (productData.id) {
+        updated = prev.map(p => p.id === productData.id ? productData : p);
+      } else {
+        const newProd = {
+          ...productData,
+          id: 'prod-' + Date.now()
+        };
+        updated = [newProd, ...prev];
+      }
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('products', updated);
+      }
+      return updated;
+    });
     setIsProductModalOpen(false);
     setEditingProduct(null);
   }, []);
