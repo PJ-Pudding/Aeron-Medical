@@ -2783,20 +2783,27 @@ function useAeronAccounting({ setShipments }) {
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    syncToDB('accounting', transactions);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('accounting', transactions);
+    }
   }, [transactions]);
 
   useEffect(() => {
     localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    syncToDB('purchase_orders', purchaseOrders);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('purchase_orders', purchaseOrders);
+    }
   }, [purchaseOrders]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest transactions & purchase orders from Supabase Cloud on mount
+  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
     let isMounted = true;
+
     async function hydrateAccountingFromCloud() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
@@ -2804,23 +2811,34 @@ function useAeronAccounting({ setShipments }) {
 
         // 1. Transactions
         const remoteTxns = await fetcher('accounting', null);
-        if (isMounted && Array.isArray(remoteTxns) && remoteTxns.length > 0) {
+        if (isMounted && Array.isArray(remoteTxns)) {
           setTransactions(remoteTxns);
           localStorage.setItem('aeron_accounting_txns', JSON.stringify(remoteTxns));
         }
 
         // 2. Purchase Orders
         const remotePOs = await fetcher('purchase_orders', null);
-        if (isMounted && Array.isArray(remotePOs) && remotePOs.length > 0) {
+        if (isMounted && Array.isArray(remotePOs)) {
           setPurchaseOrders(remotePOs);
           localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
         }
       } catch (e) {
         console.warn('[Accounting Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
       }
     }
+
     hydrateAccountingFromCloud();
-    return () => { isMounted = false; };
+
+    window.addEventListener('focus', hydrateAccountingFromCloud);
+    const poller = setInterval(hydrateAccountingFromCloud, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateAccountingFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers
@@ -2950,20 +2968,27 @@ function useAeronHR({ currentUser }) {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    syncToDB('leave_requests', leaveRequests);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('leave_requests', leaveRequests);
+    }
   }, [leaveRequests]);
 
   useEffect(() => {
     localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    syncToDB('attendance_logs', attendanceLogs);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('attendance_logs', attendanceLogs);
+    }
   }, [attendanceLogs]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest leave requests & attendance logs from Supabase Cloud on mount
+  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
     let isMounted = true;
+
     async function hydrateHRFromCloud() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
@@ -2971,23 +2996,34 @@ function useAeronHR({ currentUser }) {
 
         // 1. Leave Requests
         const remoteLeaves = await fetcher('leave_requests', null);
-        if (isMounted && Array.isArray(remoteLeaves) && remoteLeaves.length > 0) {
+        if (isMounted && Array.isArray(remoteLeaves)) {
           setLeaveRequests(remoteLeaves);
           localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
         }
 
         // 2. Attendance Logs
         const remoteAttendance = await fetcher('attendance_logs', null);
-        if (isMounted && Array.isArray(remoteAttendance) && remoteAttendance.length > 0) {
+        if (isMounted && Array.isArray(remoteAttendance)) {
           setAttendanceLogs(remoteAttendance);
           localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
         }
       } catch (e) {
         console.warn('[HR Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
       }
     }
+
     hydrateHRFromCloud();
-    return () => { isMounted = false; };
+
+    window.addEventListener('focus', hydrateHRFromCloud);
+    const poller = setInterval(hydrateHRFromCloud, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateHRFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers
@@ -3054,12 +3090,16 @@ function useAeronLogistics({ setActiveView }) {
   const [productCategories, setProductCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_product_categories');
-      return saved ? JSON.parse(saved) : (window.PRODUCT_CATEGORIES || [
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return (window.PRODUCT_CATEGORIES && window.PRODUCT_CATEGORIES.length > 0) ? window.PRODUCT_CATEGORIES : [
         'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
         'เครื่องช่วยหายใจ (Ventilator)',
         'เครื่องมือแพทย์อื่นๆ',
         'Power drill (ปืน,สว่าน เจาะกระดูก)'
-      ]);
+      ];
     } catch(e) {
       return window.PRODUCT_CATEGORIES || [];
     }
@@ -3082,7 +3122,11 @@ function useAeronLogistics({ setActiveView }) {
   const [products, setProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_products');
-      return saved ? JSON.parse(saved) : window.CENTRAL_PRODUCT_CATALOG || [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return (window.CENTRAL_PRODUCT_CATALOG && window.CENTRAL_PRODUCT_CATALOG.length > 0) ? window.CENTRAL_PRODUCT_CATALOG : [];
     } catch (e) {
       console.warn('localStorage parse fallback for aeron_products:', e);
       return window.CENTRAL_PRODUCT_CATALOG || [];
@@ -20901,56 +20945,32 @@ function App() {
     return fdaRegistrations.filter(f => f.status !== 'อนุมัติใบอนุญาตแล้ว').length;
   }, [fdaRegistrations]);
 
-  // Save to LocalStorage & Sync to db/*.json subfolder
-  useEffect(() => {
-    localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    syncToDB('projects', projects);
-  }, [projects]);
+  // ⚡ Members Master Sync with Hydration Guard
+  const isMembersHydrated = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('gov_hospital_members', JSON.stringify(members));
-    syncToDB('members', members);
+    if (isMembersHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('members', members);
+    }
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem('aeron_products', JSON.stringify(products));
-    syncToDB('products', products);
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    syncToDB('demo_bookings', demoBookings);
-  }, [demoBookings]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    syncToDB('purchase_orders', purchaseOrders);
-  }, [purchaseOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
-    syncToDB('repair_tickets', repairTickets);
-  }, [repairTickets]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
-    syncToDB('sold_products', soldProducts);
-  }, [soldProducts]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
-    syncToDB('shipments', shipments);
-  }, [shipments]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
-    syncToDB('fda_registrations', fdaRegistrations);
-  }, [fdaRegistrations]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    syncToDB('cost_calculations', costCalculations);
-  }, [costCalculations]);
+    async function hydrateMembers() {
+      try {
+        const fetcher = window.loadFromDB;
+        if (!fetcher) return;
+        const remoteMembers = await fetcher('members', null);
+        if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
+          setMembers(remoteMembers);
+        }
+      } catch(e) {}
+      finally {
+        isMembersHydrated.current = true;
+      }
+    }
+    hydrateMembers();
+  }, []);
 
   const filteredProjects = useMemo(() => {
     return scopedProjects.filter(p => {

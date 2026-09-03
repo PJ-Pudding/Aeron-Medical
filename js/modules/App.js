@@ -400,56 +400,32 @@ function App() {
     return fdaRegistrations.filter(f => f.status !== 'อนุมัติใบอนุญาตแล้ว').length;
   }, [fdaRegistrations]);
 
-  // Save to LocalStorage & Sync to db/*.json subfolder
-  useEffect(() => {
-    localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    syncToDB('projects', projects);
-  }, [projects]);
+  // ⚡ Members Master Sync with Hydration Guard
+  const isMembersHydrated = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('gov_hospital_members', JSON.stringify(members));
-    syncToDB('members', members);
+    if (isMembersHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('members', members);
+    }
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem('aeron_products', JSON.stringify(products));
-    syncToDB('products', products);
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    syncToDB('demo_bookings', demoBookings);
-  }, [demoBookings]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    syncToDB('purchase_orders', purchaseOrders);
-  }, [purchaseOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
-    syncToDB('repair_tickets', repairTickets);
-  }, [repairTickets]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
-    syncToDB('sold_products', soldProducts);
-  }, [soldProducts]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
-    syncToDB('shipments', shipments);
-  }, [shipments]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
-    syncToDB('fda_registrations', fdaRegistrations);
-  }, [fdaRegistrations]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    syncToDB('cost_calculations', costCalculations);
-  }, [costCalculations]);
+    async function hydrateMembers() {
+      try {
+        const fetcher = window.loadFromDB;
+        if (!fetcher) return;
+        const remoteMembers = await fetcher('members', null);
+        if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
+          setMembers(remoteMembers);
+        }
+      } catch(e) {}
+      finally {
+        isMembersHydrated.current = true;
+      }
+    }
+    hydrateMembers();
+  }, []);
 
   const filteredProjects = useMemo(() => {
     return scopedProjects.filter(p => {

@@ -10,12 +10,16 @@ function useAeronLogistics({ setActiveView }) {
   const [productCategories, setProductCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_product_categories');
-      return saved ? JSON.parse(saved) : (window.PRODUCT_CATEGORIES || [
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return (window.PRODUCT_CATEGORIES && window.PRODUCT_CATEGORIES.length > 0) ? window.PRODUCT_CATEGORIES : [
         'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
         'เครื่องช่วยหายใจ (Ventilator)',
         'เครื่องมือแพทย์อื่นๆ',
         'Power drill (ปืน,สว่าน เจาะกระดูก)'
-      ]);
+      ];
     } catch(e) {
       return window.PRODUCT_CATEGORIES || [];
     }
@@ -38,7 +42,11 @@ function useAeronLogistics({ setActiveView }) {
   const [products, setProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_products');
-      return saved ? JSON.parse(saved) : window.CENTRAL_PRODUCT_CATALOG || [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return (window.CENTRAL_PRODUCT_CATALOG && window.CENTRAL_PRODUCT_CATALOG.length > 0) ? window.CENTRAL_PRODUCT_CATALOG : [];
     } catch (e) {
       console.warn('localStorage parse fallback for aeron_products:', e);
       return window.CENTRAL_PRODUCT_CATALOG || [];

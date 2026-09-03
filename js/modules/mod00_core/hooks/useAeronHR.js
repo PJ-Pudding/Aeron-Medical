@@ -30,20 +30,27 @@ function useAeronHR({ currentUser }) {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    syncToDB('leave_requests', leaveRequests);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('leave_requests', leaveRequests);
+    }
   }, [leaveRequests]);
 
   useEffect(() => {
     localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    syncToDB('attendance_logs', attendanceLogs);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('attendance_logs', attendanceLogs);
+    }
   }, [attendanceLogs]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest leave requests & attendance logs from Supabase Cloud on mount
+  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
     let isMounted = true;
+
     async function hydrateHRFromCloud() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
@@ -51,23 +58,34 @@ function useAeronHR({ currentUser }) {
 
         // 1. Leave Requests
         const remoteLeaves = await fetcher('leave_requests', null);
-        if (isMounted && Array.isArray(remoteLeaves) && remoteLeaves.length > 0) {
+        if (isMounted && Array.isArray(remoteLeaves)) {
           setLeaveRequests(remoteLeaves);
           localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
         }
 
         // 2. Attendance Logs
         const remoteAttendance = await fetcher('attendance_logs', null);
-        if (isMounted && Array.isArray(remoteAttendance) && remoteAttendance.length > 0) {
+        if (isMounted && Array.isArray(remoteAttendance)) {
           setAttendanceLogs(remoteAttendance);
           localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
         }
       } catch (e) {
         console.warn('[HR Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
       }
     }
+
     hydrateHRFromCloud();
-    return () => { isMounted = false; };
+
+    window.addEventListener('focus', hydrateHRFromCloud);
+    const poller = setInterval(hydrateHRFromCloud, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateHRFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers

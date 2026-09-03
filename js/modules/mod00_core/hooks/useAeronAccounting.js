@@ -36,20 +36,27 @@ function useAeronAccounting({ setShipments }) {
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Protected by Hydration Guard)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    syncToDB('accounting', transactions);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('accounting', transactions);
+    }
   }, [transactions]);
 
   useEffect(() => {
     localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-    syncToDB('purchase_orders', purchaseOrders);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('purchase_orders', purchaseOrders);
+    }
   }, [purchaseOrders]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest transactions & purchase orders from Supabase Cloud on mount
+  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
   useEffect(() => {
     let isMounted = true;
+
     async function hydrateAccountingFromCloud() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
@@ -57,23 +64,34 @@ function useAeronAccounting({ setShipments }) {
 
         // 1. Transactions
         const remoteTxns = await fetcher('accounting', null);
-        if (isMounted && Array.isArray(remoteTxns) && remoteTxns.length > 0) {
+        if (isMounted && Array.isArray(remoteTxns)) {
           setTransactions(remoteTxns);
           localStorage.setItem('aeron_accounting_txns', JSON.stringify(remoteTxns));
         }
 
         // 2. Purchase Orders
         const remotePOs = await fetcher('purchase_orders', null);
-        if (isMounted && Array.isArray(remotePOs) && remotePOs.length > 0) {
+        if (isMounted && Array.isArray(remotePOs)) {
           setPurchaseOrders(remotePOs);
           localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
         }
       } catch (e) {
         console.warn('[Accounting Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
       }
     }
+
     hydrateAccountingFromCloud();
-    return () => { isMounted = false; };
+
+    window.addEventListener('focus', hydrateAccountingFromCloud);
+    const poller = setInterval(hydrateAccountingFromCloud, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateAccountingFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers
