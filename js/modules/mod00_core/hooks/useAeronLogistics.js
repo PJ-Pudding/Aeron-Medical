@@ -143,14 +143,11 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products
+        // 1. Products (Authoritative Cloud State - Accepts empty array [] after deletion)
         const remoteProducts = await fetcher('products', null);
-        if (isMounted && Array.isArray(remoteProducts) && remoteProducts.length > 0) {
+        if (isMounted && Array.isArray(remoteProducts)) {
           setProducts(remoteProducts);
           localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
-        } else if (isMounted && products && products.length > 0) {
-          // If local has products and cloud is empty, upload local products to Cloud DB!
-          syncToDB('products', products);
         }
 
         // 2. Categories

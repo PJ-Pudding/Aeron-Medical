@@ -77,21 +77,21 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
 
         // 1. Projects
         const remoteProjects = await fetcher('projects', null);
-        if (isMounted && Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+        if (isMounted && Array.isArray(remoteProjects)) {
           setProjects(remoteProjects);
           localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
         }
 
         // 2. Cost Calculations
         const remoteCost = await fetcher('cost_calculations', null);
-        if (isMounted && Array.isArray(remoteCost) && remoteCost.length > 0) {
+        if (isMounted && Array.isArray(remoteCost)) {
           setCostCalculations(remoteCost);
           localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
         }
 
         // 3. Demo Bookings
         const remoteDemo = await fetcher('demo_bookings', null);
-        if (isMounted && Array.isArray(remoteDemo) && remoteDemo.length > 0) {
+        if (isMounted && Array.isArray(remoteDemo)) {
           setDemoBookings(remoteDemo);
           localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
         }

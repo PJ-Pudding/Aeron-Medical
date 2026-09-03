@@ -33,21 +33,52 @@ window.formatCurrency = formatCurrency;
 window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
-// 🌐 DIRECT SUPABASE CLOUD REST API ENGINE
-// 100% Direct Real-Time Cloud Sync (Localhost, Render, Mobile)
+// 🌐 DIRECT SUPABASE CLOUD REST API ENGINE (TRUE TIMESTAMP LWW)
+// 100% Direct Real-Time Cloud Sync with Last-Write-Wins Conflict Resolution
 // ====================================================
 
 const _SB_HOST = 'aelmtxmanctdjxiwsent.supabase.co';
 const _SB_KEY = ['sb_secret_', '-JrhGrx3_Sqsoxe5keJRSQ_eq3TT_03'].join('');
 
-// Helper: Direct Cloud Save
+const _TABLE_LS_MAP = {
+  projects: 'gov_hospital_projects',
+  members: 'gov_hospital_members',
+  products: 'aeron_products',
+  product_categories: 'aeron_product_categories',
+  demo_bookings: 'aeron_demo_bookings',
+  purchase_orders: 'aeron_purchase_orders',
+  shipments: 'aeron_shipments',
+  sold_products: 'aeron_sold_products',
+  repair_tickets: 'aeron_repair_tickets',
+  fda_registrations: 'aeron_fda_registrations',
+  cost_calculations: 'aeron_cost_calculations',
+  accounting: 'aeron_accounting_txns',
+  leave_requests: 'aeron_leave_requests',
+  attendance_logs: 'aeron_attendance_logs',
+  users: 'aeron_system_users',
+  forecast_hospital_collections: 'aeron_forecast_hospital_collections',
+  forecast_projected_expenses: 'aeron_forecast_projected_expenses',
+  petty_cash_accounts: 'aeron_petty_cash_accounts',
+  accounting_frozen_months: 'aeron_accounting_frozen_months',
+  accounting_recurring: 'aeron_accounting_recurring',
+  messenger_trips: 'aeron_messenger_trips'
+};
+
+// Helper: Direct Cloud Save with Timestamp Record
 async function syncToDB(tableName, data) {
   if (!tableName) return;
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+
+  try {
+    localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
+  } catch(e) {}
+
   try {
     const payload = JSON.stringify({
       table_name: tableName,
       data: data,
-      updated_at: new Date().toISOString()
+      updated_at: nowIso
     });
 
     const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
@@ -75,9 +106,16 @@ async function syncToDB(tableName, data) {
   }
 }
 
-// Helper: Direct Cloud Load
+// Helper: Direct Cloud Load with Timestamp Last-Write-Wins Resolution
 async function loadFromDB(tableName, defaultVal) {
   if (!tableName) return defaultVal;
+
+  let localTs = 0;
+  try {
+    const localTsStr = localStorage.getItem('aeron_ts_' + tableName);
+    localTs = localTsStr ? parseInt(localTsStr, 10) : 0;
+  } catch(e) {}
+
   try {
     const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
     const res = await fetch(url, {
@@ -91,7 +129,33 @@ async function loadFromDB(tableName, defaultVal) {
     if (res.ok) {
       const records = await res.json();
       if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
-        return records[0].data;
+        const cloudRecord = records[0];
+        const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : 0;
+
+        // Last-Write-Wins: If Cloud timestamp is newer or equal, Cloud is the authoritative source!
+        if (cloudTs >= localTs) {
+          try {
+            localStorage.setItem('aeron_ts_' + tableName, cloudTs.toString());
+            const lsKey = _TABLE_LS_MAP[tableName];
+            if (lsKey) {
+              localStorage.setItem(lsKey, JSON.stringify(cloudRecord.data));
+            }
+          } catch(e) {}
+          return cloudRecord.data;
+        } else {
+          // Local has newer un-synced edits: push local to Cloud!
+          const lsKey = _TABLE_LS_MAP[tableName];
+          if (lsKey) {
+            try {
+              const rawLocal = localStorage.getItem(lsKey);
+              if (rawLocal) {
+                const parsedLocal = JSON.parse(rawLocal);
+                syncToDB(tableName, parsedLocal);
+                return parsedLocal;
+              }
+            } catch(e) {}
+          }
+        }
       }
     }
 
@@ -3248,14 +3312,11 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products
+        // 1. Products (Authoritative Cloud State - Accepts empty array [] after deletion)
         const remoteProducts = await fetcher('products', null);
-        if (isMounted && Array.isArray(remoteProducts) && remoteProducts.length > 0) {
+        if (isMounted && Array.isArray(remoteProducts)) {
           setProducts(remoteProducts);
           localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
-        } else if (isMounted && products && products.length > 0) {
-          // If local has products and cloud is empty, upload local products to Cloud DB!
-          syncToDB('products', products);
         }
 
         // 2. Categories
@@ -3538,21 +3599,21 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
 
         // 1. Projects
         const remoteProjects = await fetcher('projects', null);
-        if (isMounted && Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+        if (isMounted && Array.isArray(remoteProjects)) {
           setProjects(remoteProjects);
           localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
         }
 
         // 2. Cost Calculations
         const remoteCost = await fetcher('cost_calculations', null);
-        if (isMounted && Array.isArray(remoteCost) && remoteCost.length > 0) {
+        if (isMounted && Array.isArray(remoteCost)) {
           setCostCalculations(remoteCost);
           localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
         }
 
         // 3. Demo Bookings
         const remoteDemo = await fetcher('demo_bookings', null);
-        if (isMounted && Array.isArray(remoteDemo) && remoteDemo.length > 0) {
+        if (isMounted && Array.isArray(remoteDemo)) {
           setDemoBookings(remoteDemo);
           localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
         }

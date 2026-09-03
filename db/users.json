@@ -1,9 +1,9 @@
-[
+﻿[
   {
     "id": "usr_owner",
-    "name": "คุณตู้ (CEO / Owner)",
+    "name": "à¸„à¸¸à¸“à¸•à¸¹à¹‰ (CEO / Owner)",
     "role": "OWNER",
-    "avatar": "👑",
+    "avatar": "ðŸ‘‘",
     "memberId": "m1",
     "password": "123456",
     "username": "owner",
@@ -25,9 +25,9 @@
   },
   {
     "id": "usr_head_admin",
-    "name": "เกศรา (Head Admin)",
+    "name": "à¹€à¸à¸¨à¸£à¸² (Head Admin)",
     "role": "HEAD_ADMIN",
-    "avatar": "👩‍💼",
+    "avatar": "ðŸ‘©â€ðŸ’¼",
     "memberId": "m2",
     "password": "123456",
     "username": "head_admin",
@@ -48,9 +48,9 @@
   },
   {
     "id": "usr_admin",
-    "name": "วิชัย (Admin Officer)",
+    "name": "à¸§à¸´à¸Šà¸±à¸¢ (Admin Officer)",
     "role": "ADMIN",
-    "avatar": "🏢",
+    "avatar": "ðŸ¢",
     "memberId": "m3",
     "password": "123456",
     "username": "admin",
@@ -70,9 +70,9 @@
   },
   {
     "id": "usr_sales_head",
-    "name": "อนันต์ ผู้โชคดี (Sales Head)",
+    "name": "à¸­à¸™à¸±à¸™à¸•à¹Œ à¸œà¸¹à¹‰à¹‚à¸Šà¸„à¸”à¸µ (Sales Head)",
     "role": "SALES_HEAD",
-    "avatar": "👨‍💼",
+    "avatar": "ðŸ‘¨â€ðŸ’¼",
     "memberId": "m3",
     "password": "123456",
     "username": "sales_head",
@@ -97,9 +97,9 @@
   },
   {
     "id": "usr_sales_somchai",
-    "name": "สมชาย สายลุย (Sales Specialist)",
+    "name": "à¸ªà¸¡à¸Šà¸²à¸¢ à¸ªà¸²à¸¢à¸¥à¸¸à¸¢ (Sales Specialist)",
     "role": "SALES",
-    "avatar": "👨‍⚕️",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
     "memberId": "m1",
     "password": "123456",
     "username": "sales_somchai",
@@ -117,9 +117,9 @@
   },
   {
     "id": "usr_messenger",
-    "name": "สมปอง (Messenger Dispatch)",
+    "name": "à¸ªà¸¡à¸›à¸­à¸‡ (Messenger Dispatch)",
     "role": "MESSENGER",
-    "avatar": "🛵",
+    "avatar": "ðŸ›µ",
     "memberId": "m4",
     "password": "123456",
     "username": "messenger",
