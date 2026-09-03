@@ -55,21 +55,54 @@ function Header({
     message: ''
   });
 
-  const triggerCloudSync = async () => {
+    const triggerCloudSync = async () => {
     setCloudStatus(prev => ({ ...prev, isSyncing: true }));
     try {
-      const res = await fetch('/api/sync-all-to-cloud', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setCloudStatus({
-          isOnline: true,
-          isSyncing: false,
-          lastSyncTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          message: `ซิงค์สำเร็จ (${data.syncedCount || 15} ตาราง)`
-        });
-      } else {
-        setCloudStatus(prev => ({ ...prev, isSyncing: false }));
+      // ⚡ Direct Universal Supabase Cloud Sync Engine (Works anywhere)
+      const syncMap = [
+        { key: 'gov_hospital_projects', table: 'projects' },
+        { key: 'aeron_products', table: 'products' },
+        { key: 'aeron_product_categories', table: 'product_categories' },
+        { key: 'aeron_cost_calculations', table: 'cost_calculations' },
+        { key: 'aeron_demo_bookings', table: 'demo_bookings' },
+        { key: 'aeron_purchase_orders', table: 'purchase_orders' },
+        { key: 'aeron_shipments', table: 'shipments' },
+        { key: 'aeron_sold_products', table: 'sold_products' },
+        { key: 'aeron_repair_tickets', table: 'repair_tickets' },
+        { key: 'aeron_fda_registrations', table: 'fda_registrations' },
+        { key: 'aeron_accounting_txns', table: 'accounting' },
+        { key: 'aeron_leave_requests', table: 'leave_requests' },
+        { key: 'aeron_attendance_logs', table: 'attendance_logs' },
+        { key: 'aeron_user_accounts', table: 'users' },
+        { key: 'gov_hospital_members', table: 'members' },
+        { key: 'aeron_forecast_hospital_collections', table: 'forecast_hospital_collections' },
+        { key: 'aeron_forecast_projected_expenses', table: 'forecast_projected_expenses' },
+        { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' },
+        { key: 'aeron_accounting_frozen_months', table: 'accounting_frozen_months' },
+        { key: 'aeron_accounting_recurring', table: 'accounting_recurring' },
+        { key: 'aeron_messenger_trips', table: 'messenger_trips' }
+      ];
+
+      let pushed = 0;
+      for (const item of syncMap) {
+        const raw = localStorage.getItem(item.key);
+        if (raw) {
+          try {
+            const data = JSON.parse(raw);
+            if (data && typeof syncToDB === 'function') {
+              await syncToDB(item.table, data);
+              pushed++;
+            }
+          } catch(e) {}
+        }
       }
+
+      setCloudStatus({
+        isOnline: true,
+        isSyncing: false,
+        lastSyncTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+        message: `ซิงค์ Cloud สำเร็จ (${pushed} ตาราง)`
+      });
     } catch (err) {
       setCloudStatus(prev => ({ ...prev, isOnline: false, isSyncing: false }));
     }

@@ -54,6 +54,7 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
   const handleSaveAll = () => {
     try {
       localStorage.setItem('aeron_petty_cash_accounts', JSON.stringify(pettyAccounts));
+      if (typeof syncToDB === 'function') syncToDB('petty_cash_accounts', pettyAccounts);
       if (onSave) onSave(pettyAccounts);
       onClose();
     } catch (e) {

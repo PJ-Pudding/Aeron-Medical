@@ -29,18 +29,45 @@ function CashForecastView({
     } catch(e) { return {}; }
   });
 
-  // Sync custom inputs to localStorage
+  // ⚡ Live Cloud Sync & Local Storage Persistence
   useEffect(() => {
     try {
       localStorage.setItem('aeron_forecast_hospital_collections', JSON.stringify(customHospitalCollections));
+      if (typeof syncToDB === 'function') {
+        syncToDB('forecast_hospital_collections', customHospitalCollections);
+      }
     } catch(e) {}
   }, [customHospitalCollections]);
 
   useEffect(() => {
     try {
       localStorage.setItem('aeron_forecast_projected_expenses', JSON.stringify(customProjectedExpenses));
+      if (typeof syncToDB === 'function') {
+        syncToDB('forecast_projected_expenses', customProjectedExpenses);
+      }
     } catch(e) {}
   }, [customProjectedExpenses]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest live forecast adjustments from Supabase
+  useEffect(() => {
+    async function hydrateForecast() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteColl = await fetcher('forecast_hospital_collections', null);
+        if (remoteColl && typeof remoteColl === 'object' && Object.keys(remoteColl).length > 0) {
+          setCustomHospitalCollections(remoteColl);
+        }
+        const remoteExp = await fetcher('forecast_projected_expenses', null);
+        if (remoteExp && typeof remoteExp === 'object' && Object.keys(remoteExp).length > 0) {
+          setCustomProjectedExpenses(remoteExp);
+        }
+      } catch(e) {
+        console.warn('[Forecast Hydration Notice]:', e.message);
+      }
+    }
+    hydrateForecast();
+  }, []);
 
   // Handlers for cell editing
   const handleCollectionChange = (monthKey, val) => {

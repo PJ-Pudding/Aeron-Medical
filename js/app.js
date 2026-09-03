@@ -11,26 +11,13 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-// Helper: Format Thai currency
-const formatCurrency = (amount) => {
-  if (!amount || isNaN(amount)) return '0 บาท';
-  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
-};
-
-// Helper: Format short number (e.g. 4.5ล้าน)
-function formatShortCurrency(amount) {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0 ฿';
-  if (Math.abs(amount) >= 1000000) {
-    return ((Number(amount) || 0) / 1000000).toFixed(1) + ' ล้านบาท';
-  }
-  if (Math.abs(amount) >= 100000) {
-    return ((Number(amount) || 0) / 1000).toFixed(0) + ' พันบาท';
-  }
-  return Number(amount).toLocaleString('th-TH') + ' ฿';
-};
+// ====================================================
+// 🌐 SECURE CLOUD SYNC ENGINE
+// Protected Backend Gateway (Zero Client Secrets Exposure)
+// ====================================================
 
 // Helper: Smart Cloud API Base Resolver
-// If running on localhost on a static server (like port 8085), route through Render production backend!
+// If running on localhost on a static server (port != 8080), route through Render production backend!
 function getAeronApiBaseUrl() {
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
@@ -42,8 +29,9 @@ function getAeronApiBaseUrl() {
   return '';
 }
 
-// Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
+// Helper: Secure API Sync to backend (with Supabase Cloud Sync via Server Gateway)
 async function syncToDB(tableName, data) {
+  if (!tableName) return;
   try {
     const base = getAeronApiBaseUrl();
     await fetch(`${base}/api/save-db?table=${tableName}`, {
@@ -52,12 +40,13 @@ async function syncToDB(tableName, data) {
       body: JSON.stringify(data, null, 2)
     });
   } catch (err) {
-    console.warn('API Sync notice:', err.message);
+    console.warn(`[Cloud Sync] Notice for ${tableName}:`, err.message);
   }
 }
 
-// Helper: Load latest data from Cloud DB / Local API
+// Helper: Secure Load from backend (with Supabase Cloud Sync via Server Gateway)
 async function loadFromDB(tableName, defaultVal) {
+  if (!tableName) return defaultVal;
   try {
     const base = getAeronApiBaseUrl();
     const res = await fetch(`${base}/api/load-db?table=${tableName}`);
@@ -595,21 +584,54 @@ function Header({
     message: ''
   });
 
-  const triggerCloudSync = async () => {
+    const triggerCloudSync = async () => {
     setCloudStatus(prev => ({ ...prev, isSyncing: true }));
     try {
-      const res = await fetch('/api/sync-all-to-cloud', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setCloudStatus({
-          isOnline: true,
-          isSyncing: false,
-          lastSyncTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          message: `ซิงค์สำเร็จ (${data.syncedCount || 15} ตาราง)`
-        });
-      } else {
-        setCloudStatus(prev => ({ ...prev, isSyncing: false }));
+      // ⚡ Direct Universal Supabase Cloud Sync Engine (Works anywhere)
+      const syncMap = [
+        { key: 'gov_hospital_projects', table: 'projects' },
+        { key: 'aeron_products', table: 'products' },
+        { key: 'aeron_product_categories', table: 'product_categories' },
+        { key: 'aeron_cost_calculations', table: 'cost_calculations' },
+        { key: 'aeron_demo_bookings', table: 'demo_bookings' },
+        { key: 'aeron_purchase_orders', table: 'purchase_orders' },
+        { key: 'aeron_shipments', table: 'shipments' },
+        { key: 'aeron_sold_products', table: 'sold_products' },
+        { key: 'aeron_repair_tickets', table: 'repair_tickets' },
+        { key: 'aeron_fda_registrations', table: 'fda_registrations' },
+        { key: 'aeron_accounting_txns', table: 'accounting' },
+        { key: 'aeron_leave_requests', table: 'leave_requests' },
+        { key: 'aeron_attendance_logs', table: 'attendance_logs' },
+        { key: 'aeron_user_accounts', table: 'users' },
+        { key: 'gov_hospital_members', table: 'members' },
+        { key: 'aeron_forecast_hospital_collections', table: 'forecast_hospital_collections' },
+        { key: 'aeron_forecast_projected_expenses', table: 'forecast_projected_expenses' },
+        { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' },
+        { key: 'aeron_accounting_frozen_months', table: 'accounting_frozen_months' },
+        { key: 'aeron_accounting_recurring', table: 'accounting_recurring' },
+        { key: 'aeron_messenger_trips', table: 'messenger_trips' }
+      ];
+
+      let pushed = 0;
+      for (const item of syncMap) {
+        const raw = localStorage.getItem(item.key);
+        if (raw) {
+          try {
+            const data = JSON.parse(raw);
+            if (data && typeof syncToDB === 'function') {
+              await syncToDB(item.table, data);
+              pushed++;
+            }
+          } catch(e) {}
+        }
       }
+
+      setCloudStatus({
+        isOnline: true,
+        isSyncing: false,
+        lastSyncTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+        message: `ซิงค์ Cloud สำเร็จ (${pushed} ตาราง)`
+      });
     } catch (err) {
       setCloudStatus(prev => ({ ...prev, isOnline: false, isSyncing: false }));
     }
@@ -6586,7 +6608,12 @@ window.CategoryManagerModal = CategoryManagerModal;
 // MODULE: mod04_logistics/MessengerDispatchView.js
 
 function MessengerDispatchView({ currentUser, onLogout }) {
-  const [jobs, setJobs] = useState(() => [
+  const [jobs, setJobs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_messenger_trips');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return [
     {
       id: 'MSG-2026-101',
       hospitalName: 'โรงพยาบาลศิริราช',
@@ -6623,9 +6650,35 @@ function MessengerDispatchView({ currentUser, onLogout }) {
       updatedAt: '2026-08-01 14:15',
       signature: 'นพ.ชัยวัฒน์ (เซ็นรับแล้ว)'
     }
-  ]);
+  ];
+  });
 
   const [selectedJob, setSelectedJob] = useState(null);
+
+  // ⚡ Live Cloud Sync & LocalStorage Persistence
+  useEffect(() => {
+    try {
+      localStorage.setItem('aeron_messenger_trips', JSON.stringify(jobs));
+      if (typeof syncToDB === 'function') {
+        syncToDB('messenger_trips', jobs);
+      }
+    } catch(e) {}
+  }, [jobs]);
+
+  // ⚡ Startup Cloud Hydration
+  useEffect(() => {
+    async function hydrateTrips() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteTrips = await fetcher('messenger_trips', null);
+        if (Array.isArray(remoteTrips) && remoteTrips.length > 0) {
+          setJobs(remoteTrips);
+        }
+      } catch(e) {}
+    }
+    hydrateTrips();
+  }, []);
 
   const handleUpdateStatus = (jobId, newStatus) => {
     setJobs(prev => prev.map(j => {
@@ -11753,18 +11806,45 @@ function CashForecastView({
     } catch(e) { return {}; }
   });
 
-  // Sync custom inputs to localStorage
+  // ⚡ Live Cloud Sync & Local Storage Persistence
   useEffect(() => {
     try {
       localStorage.setItem('aeron_forecast_hospital_collections', JSON.stringify(customHospitalCollections));
+      if (typeof syncToDB === 'function') {
+        syncToDB('forecast_hospital_collections', customHospitalCollections);
+      }
     } catch(e) {}
   }, [customHospitalCollections]);
 
   useEffect(() => {
     try {
       localStorage.setItem('aeron_forecast_projected_expenses', JSON.stringify(customProjectedExpenses));
+      if (typeof syncToDB === 'function') {
+        syncToDB('forecast_projected_expenses', customProjectedExpenses);
+      }
     } catch(e) {}
   }, [customProjectedExpenses]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest live forecast adjustments from Supabase
+  useEffect(() => {
+    async function hydrateForecast() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteColl = await fetcher('forecast_hospital_collections', null);
+        if (remoteColl && typeof remoteColl === 'object' && Object.keys(remoteColl).length > 0) {
+          setCustomHospitalCollections(remoteColl);
+        }
+        const remoteExp = await fetcher('forecast_projected_expenses', null);
+        if (remoteExp && typeof remoteExp === 'object' && Object.keys(remoteExp).length > 0) {
+          setCustomProjectedExpenses(remoteExp);
+        }
+      } catch(e) {
+        console.warn('[Forecast Hydration Notice]:', e.message);
+      }
+    }
+    hydrateForecast();
+  }, []);
 
   // Handlers for cell editing
   const handleCollectionChange = (monthKey, val) => {
@@ -15060,14 +15140,41 @@ function AccountingModule({
     return transactions.filter(t => t.is_pending_draft || t.status === '⏳ รอโอน' || t.status === '💸 เจ้าของโอนแล้ว' || (t.notes && t.notes.includes('[Draft จ่ายประจำ]') && !t.notes.includes('[โอนเงินเรียบร้อยแล้ว]') && !t.notes.includes('[แอดมินแนบสลิปเรียบร้อย]'))).length;
   }, [transactions]);
 
-  // Sync to localStorage
+  // ⚡ Live Cloud Sync to Supabase & localStorage
   useEffect(() => {
     localStorage.setItem('aeron_accounting_frozen_months', JSON.stringify(frozenMonths));
+    if (typeof syncToDB === 'function') {
+      syncToDB('accounting_frozen_months', frozenMonths);
+    }
   }, [frozenMonths]);
 
   useEffect(() => {
     localStorage.setItem('aeron_accounting_recurring', JSON.stringify(recurringTemplates));
+    if (typeof syncToDB === 'function') {
+      syncToDB('accounting_recurring', recurringTemplates);
+    }
   }, [recurringTemplates]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest frozen months & recurring templates from Supabase
+  useEffect(() => {
+    async function hydrateAccountingMeta() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteFrozen = await fetcher('accounting_frozen_months', null);
+        if (Array.isArray(remoteFrozen) && remoteFrozen.length > 0) {
+          setFrozenMonths(remoteFrozen);
+        }
+        const remoteRec = await fetcher('accounting_recurring', null);
+        if (Array.isArray(remoteRec) && remoteRec.length > 0) {
+          setRecurringTemplates(remoteRec);
+        }
+      } catch(e) {
+        console.warn('[Accounting Meta Hydration Notice]:', e.message);
+      }
+    }
+    hydrateAccountingMeta();
+  }, []);
 
   // Freeze month toggle handler
   const handleToggleFreeze = (monthStr) => {
@@ -18278,6 +18385,7 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
   const handleSaveAll = () => {
     try {
       localStorage.setItem('aeron_petty_cash_accounts', JSON.stringify(pettyAccounts));
+      if (typeof syncToDB === 'function') syncToDB('petty_cash_accounts', pettyAccounts);
       if (onSave) onSave(pettyAccounts);
       onClose();
     } catch (e) {

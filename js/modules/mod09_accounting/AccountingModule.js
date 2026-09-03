@@ -47,14 +47,41 @@ function AccountingModule({
     return transactions.filter(t => t.is_pending_draft || t.status === '⏳ รอโอน' || t.status === '💸 เจ้าของโอนแล้ว' || (t.notes && t.notes.includes('[Draft จ่ายประจำ]') && !t.notes.includes('[โอนเงินเรียบร้อยแล้ว]') && !t.notes.includes('[แอดมินแนบสลิปเรียบร้อย]'))).length;
   }, [transactions]);
 
-  // Sync to localStorage
+  // ⚡ Live Cloud Sync to Supabase & localStorage
   useEffect(() => {
     localStorage.setItem('aeron_accounting_frozen_months', JSON.stringify(frozenMonths));
+    if (typeof syncToDB === 'function') {
+      syncToDB('accounting_frozen_months', frozenMonths);
+    }
   }, [frozenMonths]);
 
   useEffect(() => {
     localStorage.setItem('aeron_accounting_recurring', JSON.stringify(recurringTemplates));
+    if (typeof syncToDB === 'function') {
+      syncToDB('accounting_recurring', recurringTemplates);
+    }
   }, [recurringTemplates]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest frozen months & recurring templates from Supabase
+  useEffect(() => {
+    async function hydrateAccountingMeta() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteFrozen = await fetcher('accounting_frozen_months', null);
+        if (Array.isArray(remoteFrozen) && remoteFrozen.length > 0) {
+          setFrozenMonths(remoteFrozen);
+        }
+        const remoteRec = await fetcher('accounting_recurring', null);
+        if (Array.isArray(remoteRec) && remoteRec.length > 0) {
+          setRecurringTemplates(remoteRec);
+        }
+      } catch(e) {
+        console.warn('[Accounting Meta Hydration Notice]:', e.message);
+      }
+    }
+    hydrateAccountingMeta();
+  }, []);
 
   // Freeze month toggle handler
   const handleToggleFreeze = (monthStr) => {

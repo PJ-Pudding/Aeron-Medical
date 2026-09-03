@@ -1,36 +1,20 @@
-[
+﻿[
   {
     "id": "usr_owner",
     "username": "owner",
-    "password": "123456",
-    "name": "คุณตู้ (CEO / Owner)",
+    "name": "à¸„à¸¸à¸“à¸•à¸¹à¹‰ (CEO / Owner)",
     "role": "OWNER",
-    "avatar": "👑",
-    "memberId": "m1",
-    "allowedTabs": [
-      "dashboard",
-      "clients",
-      "project",
-      "logistic",
-      "calendar",
-      "report",
-      "finance",
-      "hr",
-      "accounting",
-      "messenger"
-    ],
-    "canApproveHR": true,
-    "canViewAuditLogs": true,
-    "canViewAllFinancials": true
+    "avatar": "ðŸ‘‘",
+    "memberId": "m1"
   },
   {
     "id": "usr_head_admin",
     "username": "head_admin",
-    "password": "123456",
-    "name": "เกศรา (Head Admin)",
+    "name": "à¸„à¸¸à¸“à¸ˆà¸µà¹‰à¸” (Head Admin)",
     "role": "HEAD_ADMIN",
-    "avatar": "👩‍💼",
+    "avatar": "ðŸ‘©â€ðŸ’¼",
     "memberId": "m2",
+    "password": "123456",
     "allowedTabs": [
       "dashboard",
       "clients",
@@ -42,18 +26,24 @@
       "hr",
       "accounting"
     ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
     "canApproveHR": true,
-    "canViewAuditLogs": true,
+    "canViewAuditLogs": false,
     "canViewAllFinancials": true
   },
   {
     "id": "usr_admin",
     "username": "admin",
-    "password": "123456",
-    "name": "วิชัย (Admin Officer)",
+    "name": "à¸„à¸¸à¸“à¸¡à¸¸à¸ (Admin Officer)",
     "role": "ADMIN",
-    "avatar": "🏢",
+    "avatar": "ðŸ¢",
     "memberId": "m3",
+    "password": "123456",
     "allowedTabs": [
       "clients",
       "project",
@@ -63,6 +53,12 @@
       "finance",
       "hr",
       "accounting"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
     ],
     "canApproveHR": false,
     "canViewAuditLogs": false,
@@ -71,17 +67,14 @@
   {
     "id": "usr_sales_head",
     "username": "sales_head",
-    "password": "123456",
-    "name": "อนันต์ ผู้โชคดี (Sales Head)",
+    "name": "à¸„à¸¸à¸“à¹‚à¸«à¸™à¹ˆà¸‡ (Sales Head Bkk1)",
     "role": "SALES_HEAD",
-    "avatar": "👨‍💼",
+    "avatar": "ðŸ‘¨â€ðŸ’¼",
     "memberId": "m3",
     "subordinates": [
-      "m1",
-      "m2",
-      "m3",
-      "m4"
+      "m2"
     ],
+    "password": "123456",
     "allowedTabs": [
       "dashboard",
       "clients",
@@ -98,11 +91,11 @@
   {
     "id": "usr_sales_somchai",
     "username": "sales_somchai",
-    "password": "123456",
-    "name": "สมชาย สายลุย (Sales Specialist)",
+    "name": "à¸„à¸¸à¸“ à¸›à¸­ (Sales Specialist)",
     "role": "SALES",
-    "avatar": "👨‍⚕️",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
     "memberId": "m1",
+    "password": "123456",
     "allowedTabs": [
       "clients",
       "project",
@@ -111,6 +104,12 @@
       "report",
       "hr"
     ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
     "canApproveHR": false,
     "canViewAuditLogs": false,
     "canViewAllFinancials": false
@@ -118,16 +117,151 @@
   {
     "id": "usr_messenger",
     "username": "messenger",
-    "password": "123456",
-    "name": "สมปอง (Messenger Dispatch)",
+    "name": "à¸„à¸¸à¸“à¸šà¸­à¸¢ (Messenger Dispatch)",
     "role": "MESSENGER",
-    "avatar": "🛵",
+    "avatar": "ðŸ›µ",
     "memberId": "m4",
+    "password": "123456",
     "allowedTabs": [
       "messenger"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
     ],
     "canApproveHR": false,
     "canViewAuditLogs": false,
     "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_1787649029621",
+    "username": "sales esarn1",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¹à¸ˆà¸‡ (Sales ESarn 1)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649029621"
+  },
+  {
+    "id": "usr_1787649065561",
+    "username": "sales bkk2",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“ à¹€à¸›à¸´à¹‰à¸¥ (Sales Bkk2)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649065561"
+  },
+  {
+    "id": "usr_1787649116794",
+    "username": "sales bkk3",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¸­à¸¸à¹‹à¸¡à¸­à¸´à¹ˆà¸¡ (Sales Bkk3)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787649116794"
+  },
+  {
+    "id": "usr_1787651638976",
+    "username": "sales esarn2",
+    "password": "123456",
+    "name": "à¸„à¸¸à¸“à¸¡à¸´à¹‰à¸§ (Sales ESarn2)",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1787651638976"
+  },
+  {
+    "id": "usr_1788323989312",
+    "username": "test",
+    "password": "123456",
+    "name": "Test",
+    "role": "SALES",
+    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788323989312"
   }
 ]

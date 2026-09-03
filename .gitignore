@@ -1,0 +1,10 @@
+# Security: Prevent secret credentials from being committed
+.env
+.env.local
+.env.*.local
+
+# Build outputs & Backups
+node_modules
+backups/
+scratch/
+*.log

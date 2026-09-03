@@ -5,26 +5,13 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-// Helper: Format Thai currency
-const formatCurrency = (amount) => {
-  if (!amount || isNaN(amount)) return '0 บาท';
-  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
-};
-
-// Helper: Format short number (e.g. 4.5ล้าน)
-function formatShortCurrency(amount) {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0 ฿';
-  if (Math.abs(amount) >= 1000000) {
-    return ((Number(amount) || 0) / 1000000).toFixed(1) + ' ล้านบาท';
-  }
-  if (Math.abs(amount) >= 100000) {
-    return ((Number(amount) || 0) / 1000).toFixed(0) + ' พันบาท';
-  }
-  return Number(amount).toLocaleString('th-TH') + ' ฿';
-};
+// ====================================================
+// 🌐 SECURE CLOUD SYNC ENGINE
+// Protected Backend Gateway (Zero Client Secrets Exposure)
+// ====================================================
 
 // Helper: Smart Cloud API Base Resolver
-// If running on localhost on a static server (like port 8085), route through Render production backend!
+// If running on localhost on a static server (port != 8080), route through Render production backend!
 function getAeronApiBaseUrl() {
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
@@ -36,8 +23,9 @@ function getAeronApiBaseUrl() {
   return '';
 }
 
-// Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
+// Helper: Secure API Sync to backend (with Supabase Cloud Sync via Server Gateway)
 async function syncToDB(tableName, data) {
+  if (!tableName) return;
   try {
     const base = getAeronApiBaseUrl();
     await fetch(`${base}/api/save-db?table=${tableName}`, {
@@ -46,12 +34,13 @@ async function syncToDB(tableName, data) {
       body: JSON.stringify(data, null, 2)
     });
   } catch (err) {
-    console.warn('API Sync notice:', err.message);
+    console.warn(`[Cloud Sync] Notice for ${tableName}:`, err.message);
   }
 }
 
-// Helper: Load latest data from Cloud DB / Local API
+// Helper: Secure Load from backend (with Supabase Cloud Sync via Server Gateway)
 async function loadFromDB(tableName, defaultVal) {
+  if (!tableName) return defaultVal;
   try {
     const base = getAeronApiBaseUrl();
     const res = await fetch(`${base}/api/load-db?table=${tableName}`);

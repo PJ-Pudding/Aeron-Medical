@@ -1,7 +1,12 @@
 // MODULE: mod04_logistics/MessengerDispatchView.js
 
 function MessengerDispatchView({ currentUser, onLogout }) {
-  const [jobs, setJobs] = useState(() => [
+  const [jobs, setJobs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_messenger_trips');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return [
     {
       id: 'MSG-2026-101',
       hospitalName: 'โรงพยาบาลศิริราช',
@@ -38,9 +43,35 @@ function MessengerDispatchView({ currentUser, onLogout }) {
       updatedAt: '2026-08-01 14:15',
       signature: 'นพ.ชัยวัฒน์ (เซ็นรับแล้ว)'
     }
-  ]);
+  ];
+  });
 
   const [selectedJob, setSelectedJob] = useState(null);
+
+  // ⚡ Live Cloud Sync & LocalStorage Persistence
+  useEffect(() => {
+    try {
+      localStorage.setItem('aeron_messenger_trips', JSON.stringify(jobs));
+      if (typeof syncToDB === 'function') {
+        syncToDB('messenger_trips', jobs);
+      }
+    } catch(e) {}
+  }, [jobs]);
+
+  // ⚡ Startup Cloud Hydration
+  useEffect(() => {
+    async function hydrateTrips() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+        const remoteTrips = await fetcher('messenger_trips', null);
+        if (Array.isArray(remoteTrips) && remoteTrips.length > 0) {
+          setJobs(remoteTrips);
+        }
+      } catch(e) {}
+    }
+    hydrateTrips();
+  }, []);
 
   const handleUpdateStatus = (jobId, newStatus) => {
     setJobs(prev => prev.map(j => {

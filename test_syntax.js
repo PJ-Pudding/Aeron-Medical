@@ -1,9 +1,10 @@
 const fs = require('fs');
+const path = require('path');
 
-const appContent = fs.readFileSync('d:\\Team Projects\\js\\app.js', 'utf8');
-const initialContent = fs.readFileSync('d:\\Team Projects\\js\\initialData.js', 'utf8');
+const appContent = fs.readFileSync(path.join(__dirname, 'js', 'app.compiled.js'), 'utf8');
+const initialContent = fs.readFileSync(path.join(__dirname, 'js', 'initialData.js'), 'utf8');
 
-console.log('App size:', appContent.length);
+console.log('App compiled size:', appContent.length);
 console.log('InitialData size:', initialContent.length);
 
 // Check syntax error patterns:
