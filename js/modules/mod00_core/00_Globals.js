@@ -37,7 +37,9 @@ function getAeronApiBaseUrl() {
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
     const port = window.location.port;
-    if ((host === 'localhost' || host === '127.0.0.1') && port !== '8080') {
+    // If running on local server port 8085 or on Render, use direct relative endpoint ''
+    // Only forward to Render if on a foreign static port (e.g. 5500) without local backend
+    if ((host === 'localhost' || host === '127.0.0.1') && port !== '8085' && port !== '') {
       return 'https://aeron-medical.onrender.com';
     }
   }
