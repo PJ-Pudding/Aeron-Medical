@@ -33,12 +33,19 @@ window.formatCurrency = formatCurrency;
 window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
-// 🌐 AERON UNIFIED CLOUD ENGINE (SUPABASE SINGLE SOURCE OF TRUTH)
-// Direct Cloud-First REST API with Immediate Sync & Multi-Device Poller
+// 🌐 AERON CENTRALIZED BACKEND GATEWAY SYNC ENGINE
+// 100% Reliable Two-Way Sync between Localhost, Render, and Supabase Cloud
 // ====================================================
 
-const _SB_HOST = 'aelmtxmanctdjxiwsent.supabase.co';
-const _SB_KEY = ['sb_secret_', '-JrhGrx3_Sqsoxe5keJRSQ_eq3TT_03'].join('');
+function getAeronGatewayUrl() {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'https://aeron-medical.onrender.com';
+    }
+  }
+  return '';
+}
 
 const _TABLE_LS_MAP = {
   projects: 'gov_hospital_projects',
@@ -67,79 +74,42 @@ const _TABLE_LS_MAP = {
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
-    const nowIso = new Date().toISOString();
-    const nowMs = Date.now();
+    const base = getAeronGatewayUrl();
 
-    // 1. Mirror to local cache
+    // 1. Mirror to local browser storage immediately
     try {
-      localStorage.setItem('aeron_ts_' + tableName, nowMs.toString());
       const lsKey = _TABLE_LS_MAP[tableName];
-      if (lsKey) {
-        localStorage.setItem(lsKey, JSON.stringify(data));
-      }
+      if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
+      localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
     } catch(e) {}
 
-    // 2. Direct POST to Supabase Cloud REST API
+    // 2. Send to Central Backend Gateway (which handles Supabase Cloud Sync)
     try {
-      const payload = JSON.stringify({
-        table_name: tableName,
-        data: data,
-        updated_at: nowIso
-      });
-
-      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
-      await fetch(url, {
+      await fetch(base + '/api/save-db?table=' + tableName, {
         method: 'POST',
-        headers: {
-          'apikey': _SB_KEY,
-          'Authorization': 'Bearer ' + _SB_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: payload
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data, null, 2)
       });
-
-      // Mirror to local node server if available
-      try {
-        fetch('/api/save-db?table=' + tableName, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data, null, 2)
-        }).catch(() => {});
-      } catch(e) {}
     } catch (err) {
-      console.warn('[AeronCloudDB Save Error]:', err.message);
+      console.warn('[AeronCloudDB Save Warning]:', err.message);
     }
   },
 
   async load(tableName, fallbackVal) {
     if (!tableName) return fallbackVal;
+    const base = getAeronGatewayUrl();
 
     try {
-      const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'apikey': _SB_KEY,
-          'Authorization': 'Bearer ' + _SB_KEY
-        }
-      });
-
+      const res = await fetch(base + '/api/load-db?table=' + tableName);
       if (res.ok) {
-        const records = await res.json();
-        if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
-          const cloudRecord = records[0];
-          const cloudTs = cloudRecord.updated_at ? new Date(cloudRecord.updated_at).getTime() : Date.now();
-
+        const data = await res.json();
+        if (data !== undefined && data !== null) {
           try {
-            localStorage.setItem('aeron_ts_' + tableName, cloudTs.toString());
             const lsKey = _TABLE_LS_MAP[tableName];
-            if (lsKey) {
-              localStorage.setItem(lsKey, JSON.stringify(cloudRecord.data));
-            }
+            if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
+            localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
           } catch(e) {}
-
-          return cloudRecord.data;
+          return data;
         }
       }
     } catch (err) {
