@@ -1,6 +1,9 @@
 // MODULE: mod04_logistics/ProductModal.js
 
-function ProductModal({ product, onSave, onClose }) {
+function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_CATEGORIES || []), onUpdateCategories }) {
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [formData, setFormData] = useState(() => {
     if (product) {
       return {
@@ -22,6 +25,21 @@ function ProductModal({ product, onSave, onClose }) {
   });
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
+  
+  const handleQuickAddCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    const currentCats = categories || window.PRODUCT_CATEGORIES || [];
+    if (!currentCats.includes(trimmed)) {
+      const updated = [...currentCats, trimmed];
+      if (onUpdateCategories) onUpdateCategories(updated);
+      else window.PRODUCT_CATEGORIES = updated;
+    }
+    setFormData(prev => ({ ...prev, category: trimmed }));
+    setIsAddingCategory(false);
+    setNewCategoryInput('');
+  };
+
   const [componentsList, setComponentsList] = useState(() => {
     if (product && Array.isArray(product.masterChecklistItems) && product.masterChecklistItems.length > 0) {
       return product.masterChecklistItems.map(item => ({
@@ -152,16 +170,65 @@ function ProductModal({ product, onSave, onClose }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-300">หมวดหมู่/ประเภทสินค้า</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none"
-                >
-                  {window.PRODUCT_CATEGORIES.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-300">หมวดหมู่/ประเภทสินค้า</label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCategory(!isAddingCategory)}
+                      className="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white transition-all font-bold flex items-center gap-1 shadow-sm"
+                      title="พิมพ์เพิ่มประเภทใหม่ทันที"
+                    >
+                      <span>➕ เพิ่มใหม่</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryManagerOpen(true)}
+                      className="text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all font-bold flex items-center gap-1 shadow-sm"
+                      title="เปิดหน้าต่างจัดการฐานข้อมูลประเภทสินค้า"
+                    >
+                      <span>⚙️ จัดการฐานข้อมูล</span>
+                    </button>
+                  </div>
+                </div>
+
+                {isAddingCategory ? (
+                  <div className="flex items-center gap-1.5 animate-fade-in pt-0.5">
+                    <input
+                      type="text"
+                      placeholder="พิมพ์ชื่อประเภทใหม่ เช่น เครื่องเอกซเรย์..."
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickAddCategory(); } }}
+                      className="flex-1 bg-slate-950 border border-emerald-500 rounded-xl px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-400 font-bold"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleQuickAddCategory}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0"
+                    >
+                      บันทึก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsAddingCategory(false); setNewCategoryInput(''); }}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl text-xs shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none focus:border-indigo-500"
+                  >
+                    {(categories || window.PRODUCT_CATEGORIES || []).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -449,6 +516,18 @@ function ProductModal({ product, onSave, onClose }) {
           </div>
         </form>
       </div>
+
+      {/* Category Master Data Manager Modal */}
+      {isCategoryManagerOpen && (
+        <CategoryManagerModal
+          isOpen={isCategoryManagerOpen}
+          onClose={() => setIsCategoryManagerOpen(false)}
+          categories={categories || window.PRODUCT_CATEGORIES || []}
+          onUpdateCategories={onUpdateCategories}
+        />
+      )}
     </div>
   );
 }
+
+window.ProductModal = ProductModal;

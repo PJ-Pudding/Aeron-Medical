@@ -13,8 +13,9 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   useEffect(() => {
     async function refreshUsers() {
       try {
-        if (typeof loadFromDB === 'function') {
-          const remoteUsers = await loadFromDB('users', null);
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (fetcher) {
+          const remoteUsers = await fetcher('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
             const rawStr = JSON.stringify(remoteUsers);
             if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {

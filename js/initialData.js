@@ -74,8 +74,15 @@ window.STAGES = [
     accentColor: '#06b6d4'
   },
   {
+    id: 'stage_complete',
+    title: '8. ตรวจรับ & รับเช็ค หรือยอดโอน 💰',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    headerBg: 'from-emerald-900/40 to-slate-900',
+    accentColor: '#10b981'
+  },
+  {
     id: 'stage_lost',
-    title: '8. ไม่ผ่าน / แพ้งาน ❌',
+    title: '9. ไม่ผ่าน / แพ้งาน ❌',
     badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
     headerBg: 'from-rose-900/40 to-slate-900',
     accentColor: '#f43f5e'

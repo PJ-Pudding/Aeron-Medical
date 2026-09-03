@@ -16,16 +16,84 @@ try {
 }
 
 function App() {
-  // Projects State
-  const [projects, setProjects] = useState(() => {
-    try {
-      const saved = localStorage.getItem('gov_hospital_projects');
-      return saved ? JSON.parse(saved) : window.INITIAL_PROJECTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for gov_hospital_projects:', e);
-      return window.INITIAL_PROJECTS || [];
-    }
-  });
+  // Navigation & View Sub-states
+  const [activeView, setActiveView] = useState('manager');
+  const [toastNotification, setToastNotification] = useState(null);
+  const [isGlobalCategoryManagerOpen, setIsGlobalCategoryManagerOpen] = useState(false);
+    
+  // 1. Logistics Domain Hook (Products, Shipments, Sold Assets, Repairs, FDA)
+  const logistics = useAeronLogistics({ setActiveView });
+  const {
+    productCategories, setProductCategories,
+    handleUpdateCategories,
+    products, setProducts,
+    soldProducts, setSoldProducts,
+    shipments, setShipments,
+    repairTickets, setRepairTickets,
+    fdaRegistrations, setFdaRegistrations,
+    isProductModalOpen, setIsProductModalOpen,
+    editingProduct, setEditingProduct,
+    isSoldModalOpen, setIsSoldModalOpen,
+    editingSoldAsset, setEditingSoldAsset,
+    isShipmentModalOpen, setIsShipmentModalOpen,
+    editingShipment, setEditingShipment,
+    isRepairModalOpen, setIsRepairModalOpen,
+    editingRepairTicket, setEditingRepairTicket,
+    isFDAModalOpen, setIsFDAModalOpen,
+    editingFDA, setEditingFDA,
+    handleSaveProduct,
+    handleSaveSoldAsset,
+    handleDeleteSoldAsset,
+    handleSaveShipment,
+    handleDeleteShipment,
+    handleSaveRepairTicket,
+    handleDeleteRepairTicket,
+    handleOpenRepairFromCatalog,
+    handleSaveFDA,
+    handleDeleteFDA
+  } = logistics;
+
+  // 2. Accounting Domain Hook (Transactions, Bank Accounts, Purchase Orders)
+  const accounting = useAeronAccounting({ setShipments });
+  const {
+    transactions, setTransactions,
+    purchaseOrders, setPurchaseOrders,
+    isPOModalOpen, setIsPOModalOpen,
+    editingPO, setEditingPO,
+    handleSaveTransaction,
+    handleDeleteTransaction,
+    handleSavePO,
+    handleDeletePO
+  } = accounting;
+
+  // 3. Projects Domain Hook (Kanban Projects, Cost Sheets, Demo Bookings)
+  const projectsHook = useAeronProjects({ soldProducts, setSoldProducts, setToastNotification });
+  const {
+    projects, setProjects,
+    costCalculations, setCostCalculations,
+    demoBookings, setDemoBookings,
+    isModalOpen, setIsModalOpen,
+    editingProject, setEditingProject,
+    isLogModalOpen, setIsLogModalOpen,
+    logTargetProject, setLogTargetProject,
+    isCostModalOpen, setIsCostModalOpen,
+    editingCostCalc, setEditingCostCalc,
+    isHistoryModalOpen, setIsHistoryModalOpen,
+    historyTargetProject, setHistoryTargetProject,
+    isChecklistModalOpen, setIsChecklistModalOpen,
+    checklistTargetBooking, setChecklistTargetBooking,
+    isDemoBookingModalOpen, setIsDemoBookingModalOpen,
+    editingDemoBooking, setEditingDemoBooking,
+    handleMoveProject,
+    handleSaveProject,
+    handleDeleteProject,
+    handleAddWeeklyLog,
+    handleSaveDemoBooking,
+    handleUpdateBookingStatus,
+    handleSaveCostCalc,
+    handleDeleteCostCalc,
+    handleOpenHistoryModal
+  } = projectsHook;
 
   // Team Members State
   const [members, setMembers] = useState(() => {
@@ -38,102 +106,25 @@ function App() {
     }
   });
 
-  // Central Product Catalog State
-  const [products, setProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_products');
-      return saved ? JSON.parse(saved) : window.CENTRAL_PRODUCT_CATALOG || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_products:', e);
-      return window.CENTRAL_PRODUCT_CATALOG || [];
-    }
-  });
-
-  // Demo Bookings State
-  const [demoBookings, setDemoBookings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_demo_bookings');
-      return saved ? JSON.parse(saved) : window.INITIAL_DEMO_BOOKINGS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_demo_bookings:', e);
-      return window.INITIAL_DEMO_BOOKINGS || [];
-    }
-  });
-
-  // Vendor Purchase Orders State
-  const [purchaseOrders, setPurchaseOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_purchase_orders');
-      return saved ? JSON.parse(saved) : window.INITIAL_PURCHASE_ORDERS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_purchase_orders:', e);
-      return window.INITIAL_PURCHASE_ORDERS || [];
-    }
-  });
-
-  // Repair Tickets State
-  const [repairTickets, setRepairTickets] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_repair_tickets');
-      return saved ? JSON.parse(saved) : window.INITIAL_REPAIR_TICKETS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_repair_tickets:', e);
-      return window.INITIAL_REPAIR_TICKETS || [];
-    }
-  });
-
-  // Delivered / Sold Products State
-  const [soldProducts, setSoldProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_sold_products');
-      return saved ? JSON.parse(saved) : window.INITIAL_SOLD_PRODUCTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_sold_products:', e);
-      return window.INITIAL_SOLD_PRODUCTS || [];
-    }
-  });
-
-  // Import Logistics / Shipments State
-  const [shipments, setShipments] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_shipments');
-      return saved ? JSON.parse(saved) : window.INITIAL_SHIPMENTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_shipments:', e);
-      return window.INITIAL_SHIPMENTS || [];
-    }
-  });
-
-  // MOD-09 Accounting Transactions State
-  const [transactions, setTransactions] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_accounting_txns');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
-          return parsed;
-        }
-      }
-      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
-    } catch(e) { return window.INITIAL_ACCOUNTING_TRANSACTIONS || []; }
-  });
-  // Thai FDA Registrations State
-  const [fdaRegistrations, setFdaRegistrations] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_fda_registrations');
-      return saved ? JSON.parse(saved) : window.INITIAL_FDA_REGISTRATIONS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_fda_registrations:', e);
-      return window.INITIAL_FDA_REGISTRATIONS || [];
-    }
-  });
-
-
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
   // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
+
+  // 4. HR Domain Hook (Leave Requests, Attendance Logs)
+  const hr = useAeronHR({ currentUser });
+  const {
+    leaveRequests, setLeaveRequests,
+    attendanceLogs, setAttendanceLogs,
+    isLeaveModalOpen, setIsLeaveModalOpen,
+    isAttendanceModalOpen, setIsAttendanceModalOpen,
+    handleApproveLeave,
+    handleDeleteLeave,
+    handleSaveLeave,
+    handleDeleteAttendance,
+    handleSaveAttendance
+  } = hr;
 
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
@@ -160,8 +151,9 @@ function App() {
   useEffect(() => {
     async function syncRemoteUsers() {
       try {
-        if (typeof loadFromDB === 'function') {
-          const remoteUsers = await loadFromDB('users', null);
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (fetcher) {
+          const remoteUsers = await fetcher('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
             const rawStr = JSON.stringify(remoteUsers);
             if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
@@ -181,115 +173,36 @@ function App() {
   const [financeSubView, setFinanceSubView] = useState('cost_calculation');
   const [hrSubView, setHRSubView] = useState('leave_attendance');
   const [accountingSubTab, setAccountingSubTab] = useState('daily_entries');
-  const [activeView, setActiveView] = useState('manager');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClientType, setFilterClientType] = useState('all'); // all, รัฐบาล, เอกชน
   const [filterBudgetType, setFilterBudgetType] = useState('all'); // all, งบลงทุน, งบเงินบำรุง, งบบริจาค...
 
   // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState(null);
-
-  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [logTargetProject, setLogTargetProject] = useState(null);
 
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [demoPrefill, setDemoPrefill] = useState(null);
 
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-
-  const [isPOModalOpen, setIsPOModalOpen] = useState(false);
-  const [editingPO, setEditingPO] = useState(null);
-  const [toastNotification, setToastNotification] = useState(null);
-
-  const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
-  const [editingRepairTicket, setEditingRepairTicket] = useState(null);
-
-  const [isSoldModalOpen, setIsSoldModalOpen] = useState(false);
-  const [editingSoldAsset, setEditingSoldAsset] = useState(null);
-
-  const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-  const [editingShipment, setEditingShipment] = useState(null);
-
-  const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
-  const [editingFDA, setEditingFDA] = useState(null);
-
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [historyTargetProject, setHistoryTargetProject] = useState(null);
-  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
-  const [checklistTargetBooking, setChecklistTargetBooking] = useState(null);
-
-  const [costCalculations, setCostCalculations] = useState(() => {
-    const saved = localStorage.getItem('aeron_cost_calculations');
-    return saved ? JSON.parse(saved) : (window.INITIAL_COST_CALCULATIONS || []);
-  });
-  // Activity / Audit Log State
+    // Activity / Audit Log State
   const [activityLogs, setActivityLogs] = useState(window.INITIAL_ACTIVITY_LOGS || []);
 
   // Leave & Attendance States
-  const [leaveRequests, setLeaveRequests] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_leave_requests');
-      return saved ? JSON.parse(saved) : (window.INITIAL_LEAVE_REQUESTS || []);
-    } catch(e) { return window.INITIAL_LEAVE_REQUESTS || []; }
-  });
-  const [attendanceLogs, setAttendanceLogs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_attendance_logs');
-      return saved ? JSON.parse(saved) : (window.INITIAL_ATTENDANCE_LOGS || []);
-    } catch(e) { return window.INITIAL_ATTENDANCE_LOGS || []; }
-  });
-  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
-  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  const [isCostModalOpen, setIsCostModalOpen] = useState(false);
-  const [editingCostCalc, setEditingCostCalc] = useState(null);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Universal Report Hub & Modal States
   const [isUniversalReportModalOpen, setIsUniversalReportModalOpen] = useState(false);
   const [activeReportId, setActiveReportId] = useState(null);
 
-  const handleOpenReport = (reportId) => {
+  const handleOpenReport = useCallback((reportId) => {
     setActiveReportId(reportId);
     setIsUniversalReportModalOpen(true);
-  };
-
-  const handleOpenHistoryModal = (proj) => {
-    setHistoryTargetProject(proj);
-    setIsHistoryModalOpen(true);
-  };
+  }, []);
 
   const handleOpenVoiceModal = (p) => {
     setToastNotification({ title: '🎙️ Voice AI', message: `พร้อมรับคำสั่งเสียงสำหรับโครงการ ${p ? p.hospitalName : ''}` });
   };
 
-  const handleUpdateBookingStatus = (bookingId, newStatus) => {
-    setDemoBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
-  };
-
-  const handleSaveCostCalc = (calcData) => {
-    setCostCalculations(prev => {
-      const idx = prev.findIndex(c => c.id === calcData.id || c.projectId === calcData.projectId);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...calcData, id: copy[idx].id };
-        return copy;
-      } else {
-        return [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
-      }
-    });
-    setIsCostModalOpen(false);
-    setEditingCostCalc(null);
-  };
-
-  const handleDeleteCostCalc = (calcId) => {
-    if (window.confirm('ยืนยันลบสเปรดชีตคำนวณต้นทุนนี้?')) {
-      setCostCalculations(prev => prev.filter(c => c.id !== calcId));
-    }
-  };
 
   // Scoped Projects based on User Role Scope
   const scopedProjects = useMemo(() => getScopedProjects(currentUser, projects), [projects, currentUser]);
@@ -538,7 +451,6 @@ function App() {
     syncToDB('cost_calculations', costCalculations);
   }, [costCalculations]);
 
-
   const filteredProjects = useMemo(() => {
     return scopedProjects.filter(p => {
       // Member view filter
@@ -575,357 +487,6 @@ function App() {
     });
   }, [projects, activeView, members, filterClientType, filterBudgetType, searchTerm]);
 
-  // Handle move project stage in Kanban
-  const handleMoveProject = (projectId, targetStageId) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
-        if (isWon && p.status !== targetStageId) {
-          setToastNotification({
-            show: true,
-            title: `🎉 เซลส์ ${p.assignee} เปลี่ยนสถานะโครงการเป็นชนะงาน/ได้สัญญา!`,
-            message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกย้ายเข้าสู่หน้ารอสั่งซื้อ PO จาก Vendor`,
-            projectId: p.id
-          });
-        }
-
-        const isDelivered = targetStageId === 'stage_delivery' || targetStageId === 'stage_completed';
-        if (isDelivered && p.status !== targetStageId) {
-          const exists = soldProducts.some(sp => sp.projectId === p.id);
-          if (!exists) {
-            const delivDate = p.procurementDate || new Date().toISOString().split('T')[0];
-            const delivYr = new Date(delivDate).getFullYear();
-            const newAsset = {
-              id: 'sold-' + Date.now(),
-              assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-              contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
-              projectId: p.id,
-              hospitalName: p.hospitalName,
-              department: 'แผนกห้องผ่าตัด / CCU',
-              productName: p.productName || 'เครื่องมือแพทย์ AERON',
-              brand: p.productBrand || 'AERON MEDICAL',
-              productCategory: p.productCategory || 'อุปกรณ์ทางการแพทย์',
-              serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
-              freebies: 'กระดาษบันทึกมาตรฐาน 10 ม้วน, สายสัญญาณสำรอง, รถเข็นสแตนเลส, คู่มือการใช้งานภาษาไทย',
-              salesPerson: p.assignee,
-              contactPerson: p.decisionMakers || 'อาจารย์แพทย์ / หัวหน้าพยาบาล',
-              deliveryDate: delivDate,
-              projectValue: p.budget || 0,
-              dfAmount: p.dfAmount || '100,000 บาท',
-              bidGuaranteeAmount: Math.round((p.budget || 0) * 0.05),
-              bidGuaranteeRefundDate: `${delivYr}-12-15`,
-              warrantyYears: 1,
-              warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
-              nextPmDate: `${delivYr}-12-15`,
-              pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
-              pmStatus: '⏳ ถึงกำหนดทำ PM',
-              status: 'รับมอบเรียบร้อย'
-            };
-            setSoldProducts(prevSold => [newAsset, ...prevSold]);
-
-            setToastNotification({
-              show: true,
-              title: `🚚 ส่งมอบสินค้าสำเร็จ! บันทึกเข้าตาราง "สินค้าที่ขายแล้ว" อัตโนมัติ`,
-              message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกบันทึกเข้าสู่หน้ารายการสินค้าที่ขายแล้ว พร้อมตั้งวันหมดประกันและนัด PM อัตโนมัติ`,
-              projectId: p.id
-            });
-          }
-        }
-
-        return { ...p, status: targetStageId };
-      }
-      return p;
-    }));
-  };
-
-  // Add Project
-  const handleSaveProject = (projectData) => {
-    if (projectData.id) {
-      setProjects(prev => prev.map(p => p.id === projectData.id ? projectData : p));
-    } else {
-      const newProj = {
-        ...projectData,
-        id: 'proj-' + Date.now(),
-        createdDate: new Date().toISOString().split('T')[0],
-        weeklyLogs: []
-      };
-      setProjects(prev => [newProj, ...prev]);
-    }
-    setIsModalOpen(false);
-    setEditingProject(null);
-  };
-
-  // Delete Project
-  const handleDeleteProject = (projectId) => {
-    if (window.confirm('คุณต้องการลบโครงการนี้ออกจากระบบใช่หรือไม่?')) {
-      setProjects(prev => prev.filter(p => p.id !== projectId));
-    }
-  };
-
-  // Add Weekly Log Note
-  const handleAddWeeklyLog = (projectId, note, author) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const newLog = {
-          date: new Date().toISOString().split('T')[0],
-          author: author || p.assignee,
-          note
-        };
-        const updatedLogs = [newLog, ...(p.weeklyLogs || [])];
-        const updatedProj = {
-          ...p,
-          weeklyLogs: updatedLogs
-        };
-
-        if (historyTargetProject && historyTargetProject.id === projectId) {
-          setHistoryTargetProject(updatedProj);
-        }
-
-        return updatedProj;
-      }
-      return p;
-    }));
-    setIsLogModalOpen(false);
-    setLogTargetProject(null);
-  };
-
-  // Save Demo Booking
-  const handleSaveDemoBooking = (bookingData) => {
-    if (bookingData.id) {
-      setDemoBookings(prev => prev.map(b => b.id === bookingData.id ? bookingData : b));
-    } else {
-      const newBooking = {
-        ...bookingData,
-        id: 'booking-' + Date.now()
-      };
-      setDemoBookings(prev => [newBooking, ...prev]);
-
-      if (bookingData.projectId) {
-        setProjects(prev => prev.map(p => {
-          if (p.id === bookingData.projectId) {
-            return {
-              ...p,
-              demoStatus: 'นัดหมายแล้ว',
-              demoStartDate: bookingData.startDate,
-              demoEndDate: bookingData.endDate
-            };
-          }
-          return p;
-        }));
-      }
-    }
-
-    setIsDemoModalOpen(false);
-    setDemoPrefill(null);
-  };
-
-  // Save Central Product
-  const handleSaveProduct = (productData) => {
-    if (productData.id) {
-      setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
-    } else {
-      const newProd = {
-        ...productData,
-        id: 'prod-' + Date.now()
-      };
-      setProducts(prev => [newProd, ...prev]);
-    }
-    setIsProductModalOpen(false);
-    setEditingProduct(null);
-  };
-
-  // Save Purchase Order (PO) with Auto-Linking to Shipment Tracking
-  const handleSavePO = (poData) => {
-    let savedPO = poData;
-    if (poData.id) {
-      setPurchaseOrders(prev => prev.map(po => po.id === poData.id ? poData : po));
-    } else {
-      savedPO = {
-        ...poData,
-        id: 'po-' + Date.now()
-      };
-      setPurchaseOrders(prev => [savedPO, ...prev]);
-    }
-
-    // Auto Link: Create Shipment Tracking Entry if not existing
-    if (savedPO.poNumber) {
-      setShipments(prevShipments => {
-        const exists = prevShipments.some(s => s.poNumber === savedPO.poNumber || s.poId === savedPO.id);
-        if (!exists) {
-          const delivYr = new Date().getFullYear();
-          const newShipment = {
-            id: 'shp-' + Date.now(),
-            shipmentNumber: `SHP-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-            poNumber: savedPO.poNumber,
-            poId: savedPO.id,
-            productName: savedPO.productName || 'เครื่องมือแพทย์ AERON',
-            productCategory: savedPO.productCategory || 'อุปกรณ์แพทย์',
-            quantity: savedPO.quantity || 1,
-            vendorName: savedPO.vendorName || 'Vendor Manufacturer',
-            vendorCountry: savedPO.vendorCountry || 'ต่างประเทศ',
-            hospitalDestination: savedPO.hospitalName || 'โรงพยาบาลเป้าหมาย',
-            shippingCompany: 'DHL Global Forwarding',
-            trackingNumber: `AWB-${Math.floor(Math.random() * 89999999) + 10000000}`,
-            cbm: 2.5,
-            grossWeight: 150.0,
-            transportType: '✈️ ทางอากาศ (Air Freight)',
-            shippingCost: 35000,
-            dutyTaxes: 12000,
-            customsBroker: 'V-Cargo Logistics (Thailand)',
-            etd: savedPO.poDate || new Date().toISOString().split('T')[0],
-            eta: savedPO.expectedDelivery || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-            status: 'รอจ่ายเงิน',
-            notes: `ออก PO ส่งให้ Vendor ${savedPO.vendorName} เรียบร้อยแล้ว`
-          };
-          return [newShipment, ...prevShipments];
-        }
-        return prevShipments;
-      });
-    }
-
-    setIsPOModalOpen(false);
-    setEditingPO(null);
-  };
-
-  // Delete Purchase Order
-  const handleDeletePO = (poId) => {
-    if (window.confirm('คุณต้องการลบใบสั่งซื้อ PO นี้ออกจากระบบใช่หรือไม่?')) {
-      setPurchaseOrders(prev => prev.filter(po => po.id !== poId));
-    }
-  };
-
-  // Save Repair Ticket (Bi-directional Link with Demo Catalog)
-  const handleSaveRepairTicket = (ticketData) => {
-    if (ticketData.id) {
-      setRepairTickets(prev => prev.map(t => t.id === ticketData.id ? ticketData : t));
-    } else {
-      const newTicket = {
-        ...ticketData,
-        id: 'rep-' + Date.now()
-      };
-      setRepairTickets(prev => [newTicket, ...prev]);
-    }
-
-    // Auto Link back to Central Demo Catalog if category is "สินค้า Demo"
-    if (ticketData.category === 'สินค้า Demo' && ticketData.sn) {
-      const isFixed = ticketData.status === 'ซ่อมเสร็จแล้ว' || ticketData.status === 'ส่งคืนลูกค้า';
-      const newUnitStatus = isFixed ? 'พร้อมใช้งาน' : 'ส่งซ่อม';
-
-      setProducts(prevProducts => prevProducts.map(p => {
-        const hasMatchingUnit = (p.demoUnits || []).some(u => u.sn === ticketData.sn);
-        if (hasMatchingUnit) {
-          const updatedUnits = p.demoUnits.map(u => {
-            if (u.sn === ticketData.sn) {
-              return {
-                ...u,
-                status: newUnitStatus,
-                location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
-              };
-            }
-            return u;
-          });
-          return { ...p, demoUnits: updatedUnits };
-        }
-        return p;
-      }));
-    }
-
-    setIsRepairModalOpen(false);
-    setEditingRepairTicket(null);
-  };
-
-  // Delete Repair Ticket
-  const handleDeleteRepairTicket = (ticketId) => {
-    if (window.confirm('คุณต้องการลบรายการส่งซ่อมนี้ใช่หรือไม่?')) {
-      setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
-    }
-  };
-
-  // Open Repair Modal from Demo Catalog
-  const handleOpenRepairFromCatalog = (product, unit) => {
-    setEditingRepairTicket({
-      category: 'สินค้า Demo',
-      productName: product.name,
-      productCategory: product.category,
-      sn: unit ? unit.sn : '',
-      repairedItems: unit ? (unit.accessories || 'ตัวเครื่องหลัก และ อุปกรณ์ประกอบ') : 'ตัวเครื่องหลัก',
-      lastHospital: unit ? (unit.location || 'สำนักงาน AERON (กรุงเทพฯ)') : 'สำนักงาน AERON',
-      location: 'ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)',
-      status: 'ส่งซ่อมอยู่',
-      repairVendor: 'AERON Service Center (กรุงเทพฯ)',
-      sentDate: new Date().toISOString().split('T')[0]
-    });
-    setActiveView('repair_service');
-    setIsRepairModalOpen(true);
-  };
-
-  useEffect(() => {
-    localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    syncToDB('leave_requests', leaveRequests);
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    syncToDB('attendance_logs', attendanceLogs);
-  }, [attendanceLogs]);
-  useEffect(() => {
-    localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    syncToDB('accounting', transactions);
-  }, [transactions]);
-  // MOD-09 Accounting Handlers
-  const handleSaveTransaction = (txnData) => {
-    setTransactions(prev => {
-      const idx = prev.findIndex(t => t.id === txnData.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...txnData };
-        return copy;
-      } else {
-        return [{ ...txnData }, ...prev];
-      }
-    });
-  };
-
-  const handleDeleteTransaction = (txnId) => {
-    if (window.confirm('ยืนยันลบรายการบัญชีนี้?')) {
-      setTransactions(prev => prev.filter(t => t.id !== txnId));
-    }
-  };
-  // Leave & Attendance Handlers
-  const handleApproveLeave = (leaveId, newStatus = '✅ อนุมัติแล้ว') => {
-    setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'หัวหน้างาน' } : l));
-  };
-
-  const handleDeleteLeave = (leaveId) => {
-    if (window.confirm('ยืนยันลบคำขอลานี้?')) {
-      setLeaveRequests(prev => prev.filter(l => l.id !== leaveId));
-    }
-  };
-
-  const handleSaveLeave = (leaveData) => {
-    if (leaveData.id) {
-      setLeaveRequests(prev => prev.map(l => l.id === leaveData.id ? leaveData : l));
-    } else {
-      setLeaveRequests(prev => [{ ...leaveData, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev]);
-    }
-    setIsLeaveModalOpen(false);
-  };
-
-  const handleDeleteAttendance = (attId) => {
-    if (window.confirm('ยืนยันลบรายการนี้?')) {
-      setAttendanceLogs(prev => prev.filter(a => a.id !== attId));
-    }
-  };
-
-  const handleSaveAttendance = (attData) => {
-    if (attData.id) {
-      setAttendanceLogs(prev => prev.map(a => a.id === attData.id ? attData : a));
-    } else {
-      setAttendanceLogs(prev => [{ ...attData, id: 'att-' + Date.now() }, ...prev]);
-    }
-    setIsAttendanceModalOpen(false);
-  };
-
   // Export Data to CSV
   const exportToCSV = () => {
     const headers = ["ชื่องาน/โครงการ", "โรงพยาบาล", "ประเภทลูกค้า", "ผู้รับผิดชอบ", "ชนิดสินค้า/รุ่น", "แบรนด์", "งบประมาณ(บาท)", "ประเภทงบประมาณ", "ทิศทางงบ", "สถานะขั้นตอน", "กำหนดจัดซื้อ", "สถานะเดโม่", "วันนัดเดโม่", "อาจารย์ผู้ตัดสินใจ", "ค่า DF", "คู่แข่ง", "โอกาสได้งาน(%)"];
@@ -961,72 +522,6 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  // Save Delivered / Sold Asset
-  const handleSaveSoldAsset = (assetData) => {
-    if (assetData.id) {
-      setSoldProducts(prev => prev.map(a => a.id === assetData.id ? assetData : a));
-    } else {
-      const newAsset = {
-        ...assetData,
-        id: 'sold-' + Date.now()
-      };
-      setSoldProducts(prev => [newAsset, ...prev]);
-    }
-    setIsSoldModalOpen(false);
-    setEditingSoldAsset(null);
-  };
-
-  // Delete Delivered / Sold Asset
-  const handleDeleteSoldAsset = (assetId) => {
-    if (window.confirm('คุณต้องการลบรายการสินค้าที่ขายแล้วนี้ใช่หรือไม่?')) {
-      setSoldProducts(prev => prev.filter(a => a.id !== assetId));
-    }
-  };
-
-  // Save Shipment Tracking Record
-  const handleSaveShipment = (shipmentData) => {
-    if (shipmentData.id) {
-      setShipments(prev => prev.map(s => s.id === shipmentData.id ? shipmentData : s));
-    } else {
-      const newShipment = {
-        ...shipmentData,
-        id: 'shp-' + Date.now()
-      };
-      setShipments(prev => [newShipment, ...prev]);
-    }
-    setIsShipmentModalOpen(false);
-    setEditingShipment(null);
-  };
-
-  // Delete Shipment Record
-  const handleDeleteShipment = (shipmentId) => {
-    if (window.confirm('คุณต้องการลบรายการนำเข้าลูกค้านี้ใช่หรือไม่?')) {
-      setShipments(prev => prev.filter(s => s.id !== shipmentId));
-    }
-  };
-
-  // Save FDA Registration Record
-  const handleSaveFDA = (fdaData) => {
-    if (fdaData.id) {
-      setFdaRegistrations(prev => prev.map(f => f.id === fdaData.id ? fdaData : f));
-    } else {
-      const newFDA = {
-        ...fdaData,
-        id: 'fda-' + Date.now()
-      };
-      setFdaRegistrations(prev => [newFDA, ...prev]);
-    }
-    setIsFDAModalOpen(false);
-    setEditingFDA(null);
-  };
-
-  // Delete FDA Registration Record
-  const handleDeleteFDA = (fdaId) => {
-    if (window.confirm('คุณต้องการลบรายการยื่นขอ อย. นี้ใช่หรือไม่?')) {
-      setFdaRegistrations(prev => prev.filter(f => f.id !== fdaId));
-    }
   };
 
   // Reset Demo Data
@@ -1211,7 +706,6 @@ function App() {
           {/* TAB 4: Logistic */}
           {activeSidebarTab === 'logistic' && checkTabAccess(currentUser?.role, 'logistic') && (
             <div className="space-y-6">
-              
 
               {logisticSubView === 'product_catalog' && (
                 <ProductCatalogView 
@@ -1279,7 +773,6 @@ function App() {
           {/* TAB 6: Report */}
           {activeSidebarTab === 'report' && checkTabAccess(currentUser?.role, 'report') && (
             <div className="space-y-6">
-              
 
               {(reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports') && (
                 <CentralReportsHubView 
@@ -1356,7 +849,6 @@ function App() {
           {/* TAB 7: Finance */}
           {activeSidebarTab === 'finance' && checkTabAccess(currentUser?.role, 'finance') && (
             <div className="space-y-6">
-              
 
               {financeSubView === 'cost_calculation' && (
                 <CostCalculationView 
@@ -1367,6 +859,16 @@ function App() {
                   onEditCalc={(calc) => { setEditingCostCalc(calc); setIsCostModalOpen(true); }}
                   onDeleteCalc={handleDeleteCostCalc}
                   onOpenReport={handleOpenReport}
+                />
+              )}
+
+              {financeSubView === 'cash_forecast' && (
+                <CashForecastView
+                  projects={projects}
+                  purchaseOrders={purchaseOrders}
+                  transactions={transactions}
+                  costCalculations={costCalculations}
+                  currentUser={currentUser}
                 />
               )}
 
@@ -1383,10 +885,13 @@ function App() {
             </div>
           )}
 
-                              {/* TAB 9: ACCOUNTING */}
+          {/* TAB 9: ACCOUNTING */}
           {activeSidebarTab === 'accounting' && checkTabAccess(currentUser?.role, 'accounting') && (
             <AccountingModule
               transactions={transactions}
+              purchaseOrders={purchaseOrders}
+              projects={projects}
+              products={products}
               initialFrozenMonths={window.INITIAL_ACCOUNTING_FROZEN_MONTHS}
               initialRecurringTemplates={window.INITIAL_ACCOUNTING_RECURRING}
               currentUser={currentUser}
@@ -1394,6 +899,8 @@ function App() {
               onSubTabChange={setAccountingSubTab}
               onSaveTxn={handleSaveTransaction}
               onDeleteTxn={handleDeleteTransaction}
+              onOpenPOModal={(po) => { setEditingPO(po || null); setIsPOModalOpen(true); }}
+              onDeletePO={handleDeletePO}
             />
           )}
 
@@ -1409,7 +916,6 @@ function App() {
           {activeSidebarTab === 'hr' && checkTabAccess(currentUser?.role, 'hr') && (
             <div className="space-y-6">
               {/* Sub-view Toggle Tabs */}
-              
 
               {hrSubView === 'leave_attendance' && (
                 <LeaveAttendanceView
@@ -1513,6 +1019,8 @@ function App() {
       {isProductModalOpen && (
         <ProductModal
           product={editingProduct}
+          categories={productCategories}
+          onUpdateCategories={handleUpdateCategories}
           onSave={handleSaveProduct}
           onClose={() => { setIsProductModalOpen(false); setEditingProduct(null); }}
         />
@@ -1735,6 +1243,14 @@ function App() {
         />
       )}
 
+      {/* Global Category Master Data Manager Modal */}
+      <CategoryManagerModal
+        isOpen={isGlobalCategoryManagerOpen}
+        onClose={() => setIsGlobalCategoryManagerOpen(false)}
+        categories={productCategories || window.PRODUCT_CATEGORIES || []}
+        onUpdateCategories={handleUpdateCategories}
+      />
+
       {/* Login & Role Switcher Modal */}
       {(isLoginModalOpen || !currentUser) && (
         <LoginModal
@@ -1746,6 +1262,8 @@ function App() {
     </div>
   );
 }
+
+window.App = App;
 
 // Mount App to DOM
 const rootElement = document.getElementById('root');

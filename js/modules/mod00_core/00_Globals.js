@@ -508,3 +508,5 @@ window.getScopedProjects = getScopedProjects;
 window.canEditProject = canEditProject;
 window.canViewMemberKanban = canViewMemberKanban;
 window.getYTDDateRange = getYTDDateRange;
+window.syncToDB = syncToDB;
+window.loadFromDB = loadFromDB;

@@ -1,6 +1,6 @@
 // MODULE: mod04_logistics/ProductCatalogView.js
 
-function ProductCatalogView({ products = [], demoBookings = [], onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal }) {
+function ProductCatalogView({ products = [], demoBookings = [], categories = [], onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal, onOpenCategoryManager }) {
   const [expandedProduct, setExpandedProduct] = useState(null);
 
   const statusConfig = {

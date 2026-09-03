@@ -1,6 +1,20 @@
 // MODULE: mod09_accounting/AccountingModule.js
 
-function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn, accountingSubTab = 'daily_entries', onSubTabChange }) {
+function AccountingModule({ 
+  transactions = [], 
+  purchaseOrders = [],
+  projects = [],
+  products = [],
+  initialFrozenMonths = [], 
+  initialRecurringTemplates = [], 
+  currentUser, 
+  onSaveTxn, 
+  onDeleteTxn, 
+  onOpenPOModal,
+  onDeletePO,
+  accountingSubTab = 'daily_entries', 
+  onSubTabChange 
+}) {
   const [localSubTab, setLocalSubTab] = useState(accountingSubTab || 'daily_entries');
   const subTab = accountingSubTab || localSubTab;
   const setSubTab = (newTab) => {
@@ -230,6 +244,15 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
             </button>
 
             <button
+              onClick={() => setSubTab('purchase_orders')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'purchase_orders' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📦 ใบสั่งซื้อ PO (Vendor)
+            </button>
+
+            <button
               onClick={() => setSubTab('pending_transfers')}
               className={`px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
                 subTab === 'pending_transfers' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-amber-300 hover:text-white'
@@ -283,6 +306,18 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
           onEditTxn={handleEditTxn}
           onDeleteTxn={handleDeleteTxn}
           onImportTxns={handleImportTxns}
+        />
+      )}
+
+      {/* SUB TAB: Purchase Orders */}
+      {subTab === 'purchase_orders' && (
+        <PurchaseOrderView
+          purchaseOrders={purchaseOrders}
+          projects={projects}
+          products={products}
+          onOpenNewModal={onOpenPOModal}
+          onEditPO={(po) => onOpenPOModal ? onOpenPOModal(po) : null}
+          onDeletePO={onDeletePO}
         />
       )}
 

@@ -100,7 +100,8 @@ function Header({
     let targetTab = 'dashboard';
     if (newView === 'manager') targetTab = 'dashboard';
     else if (newView === 'kanban_all') targetTab = 'project';
-    else if (newView === 'cost_calculation' || newView === 'purchase_orders') targetTab = 'finance';
+    else if (newView === 'cost_calculation' || newView === 'cash_forecast') targetTab = 'finance';
+    else if (newView === 'purchase_orders' || newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') targetTab = 'accounting';
     else if (newView === 'demo_calendar') targetTab = 'calendar';
     else if (['product_catalog', 'shipment_tracking', 'repair_service', 'sold_products'].includes(newView)) targetTab = 'logistic';
     else if (newView === 'reports_hub' || newView === 'fda_registration') targetTab = 'report';
@@ -122,9 +123,12 @@ function Header({
     } else if (newView === 'cost_calculation') {
       setActiveSidebarTab('finance');
       setFinanceSubView('cost_calculation');
-    } else if (newView === 'purchase_orders') {
+    } else if (newView === 'cash_forecast') {
       setActiveSidebarTab('finance');
-      setFinanceSubView('purchase_orders');
+      setFinanceSubView('cash_forecast');
+    } else if (newView === 'purchase_orders') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('purchase_orders');
     } else if (newView === 'demo_calendar') {
       setActiveSidebarTab('calendar');
     } else if (newView === 'product_catalog') {
@@ -559,7 +563,7 @@ function Header({
         {activeSidebarTab === 'finance' && (
           <div className="flex items-center gap-2 flex-shrink-0 w-full">
             <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>💰 การเงิน & จัดซื้อ:</span>
+              <span>💰 การเงิน & วางแผน:</span>
             </span>
 
             <button
@@ -570,18 +574,18 @@ function Header({
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🧮 คำนวณต้นทุน & กำไร (Cost Calculator)
+              📊 คำนวณต้นทุนโครงการ (Cost Sheet)
             </button>
 
             <button
-              onClick={() => setFinanceSubView('purchase_orders')}
+              onClick={() => setFinanceSubView('cash_forecast')}
               className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'purchase_orders'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                financeSubView === 'cash_forecast'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 font-black shadow-md shadow-indigo-600/30'
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🛒 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
+              🔮 ประมาณการกระแสเงินสด (Cash Forecast)
             </button>
           </div>
         )}
@@ -675,6 +679,17 @@ function Header({
               }`}
             >
               📋 บันทึกรายรับ-รายจ่ายรายวัน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('purchase_orders')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'purchase_orders'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📦 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
             </button>
 
             <button

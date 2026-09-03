@@ -514,6 +514,8 @@ window.getScopedProjects = getScopedProjects;
 window.canEditProject = canEditProject;
 window.canViewMemberKanban = canViewMemberKanban;
 window.getYTDDateRange = getYTDDateRange;
+window.syncToDB = syncToDB;
+window.loadFromDB = loadFromDB;
 
 
 // --- Module File: js/modules/mod00_core/Header.js ---
@@ -619,7 +621,8 @@ function Header({
     let targetTab = 'dashboard';
     if (newView === 'manager') targetTab = 'dashboard';
     else if (newView === 'kanban_all') targetTab = 'project';
-    else if (newView === 'cost_calculation' || newView === 'purchase_orders') targetTab = 'finance';
+    else if (newView === 'cost_calculation' || newView === 'cash_forecast') targetTab = 'finance';
+    else if (newView === 'purchase_orders' || newView === 'daily_transactions' || newView === 'accounting' || newView === 'financial_statements') targetTab = 'accounting';
     else if (newView === 'demo_calendar') targetTab = 'calendar';
     else if (['product_catalog', 'shipment_tracking', 'repair_service', 'sold_products'].includes(newView)) targetTab = 'logistic';
     else if (newView === 'reports_hub' || newView === 'fda_registration') targetTab = 'report';
@@ -641,9 +644,12 @@ function Header({
     } else if (newView === 'cost_calculation') {
       setActiveSidebarTab('finance');
       setFinanceSubView('cost_calculation');
-    } else if (newView === 'purchase_orders') {
+    } else if (newView === 'cash_forecast') {
       setActiveSidebarTab('finance');
-      setFinanceSubView('purchase_orders');
+      setFinanceSubView('cash_forecast');
+    } else if (newView === 'purchase_orders') {
+      setActiveSidebarTab('accounting');
+      setAccountingSubTab('purchase_orders');
     } else if (newView === 'demo_calendar') {
       setActiveSidebarTab('calendar');
     } else if (newView === 'product_catalog') {
@@ -1078,7 +1084,7 @@ function Header({
         {activeSidebarTab === 'finance' && (
           <div className="flex items-center gap-2 flex-shrink-0 w-full">
             <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>💰 การเงิน & จัดซื้อ:</span>
+              <span>💰 การเงิน & วางแผน:</span>
             </span>
 
             <button
@@ -1089,18 +1095,18 @@ function Header({
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🧮 คำนวณต้นทุน & กำไร (Cost Calculator)
+              📊 คำนวณต้นทุนโครงการ (Cost Sheet)
             </button>
 
             <button
-              onClick={() => setFinanceSubView('purchase_orders')}
+              onClick={() => setFinanceSubView('cash_forecast')}
               className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'purchase_orders'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                financeSubView === 'cash_forecast'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 font-black shadow-md shadow-indigo-600/30'
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
               }`}
             >
-              🛒 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
+              🔮 ประมาณการกระแสเงินสด (Cash Forecast)
             </button>
           </div>
         )}
@@ -1194,6 +1200,17 @@ function Header({
               }`}
             >
               📋 บันทึกรายรับ-รายจ่ายรายวัน
+            </button>
+
+            <button
+              onClick={() => setAccountingSubTab('purchase_orders')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+                accountingSubTab === 'purchase_orders'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              📦 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
             </button>
 
             <button
@@ -1457,8 +1474,9 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   useEffect(() => {
     async function refreshUsers() {
       try {
-        if (typeof loadFromDB === 'function') {
-          const remoteUsers = await loadFromDB('users', null);
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (fetcher) {
+          const remoteUsers = await fetcher('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
             const rawStr = JSON.stringify(remoteUsers);
             if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
@@ -2662,6 +2680,808 @@ function UserAccountManagementModal({ isOpen, onClose, currentUser, onAccountsUp
     </div>
   );
 }
+
+
+// --- Module File: js/modules/mod00_core/hooks/useAeronAccounting.js ---
+// ====================================================
+// MODULE: mod00_core/hooks/useAeronAccounting.js
+// 💰 Domain Hook: Accounting Transactions, Bank Accounts & Purchase Orders
+// ====================================================
+
+function useAeronAccounting({ setShipments }) {
+  // 1. Transactions State
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_accounting_txns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
+          return parsed;
+        }
+      }
+      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
+    } catch(e) {
+      console.warn('localStorage parse fallback for aeron_accounting_txns:', e);
+      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
+    }
+  });
+
+  // 2. Vendor Purchase Orders State
+  const [purchaseOrders, setPurchaseOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_purchase_orders');
+      return saved ? JSON.parse(saved) : window.INITIAL_PURCHASE_ORDERS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_purchase_orders:', e);
+      return window.INITIAL_PURCHASE_ORDERS || [];
+    }
+  });
+
+  // Modals
+  const [isPOModalOpen, setIsPOModalOpen] = useState(false);
+  const [editingPO, setEditingPO] = useState(null);
+
+  // Sync to localStorage & DB
+  useEffect(() => {
+    localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
+    syncToDB('accounting', transactions);
+  }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
+    syncToDB('purchase_orders', purchaseOrders);
+  }, [purchaseOrders]);
+
+  // Handlers
+  const handleSaveTransaction = useCallback((txnData) => {
+    setTransactions(prev => {
+      const idx = prev.findIndex(t => t.id === txnData.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...txnData };
+        return copy;
+      } else {
+        return [{ ...txnData }, ...prev];
+      }
+    });
+  }, []);
+
+  const handleDeleteTransaction = useCallback((txnId) => {
+    if (window.confirm('ต้องการลบรายการนี้?')) {
+      setTransactions(prev => prev.filter(t => t.id !== txnId));
+    }
+  }, []);
+
+  // Save Purchase Order with Auto-Linking to Shipment Tracking
+  const handleSavePO = useCallback((poData) => {
+    let savedPO = poData;
+    if (poData.id) {
+      setPurchaseOrders(prev => prev.map(po => po.id === poData.id ? poData : po));
+    } else {
+      savedPO = {
+        ...poData,
+        id: 'po-' + Date.now()
+      };
+      setPurchaseOrders(prev => [savedPO, ...prev]);
+    }
+
+    // Auto Link: Create Shipment Tracking Entry if not existing
+    if (savedPO.poNumber && setShipments) {
+      setShipments(prevShipments => {
+        const exists = (prevShipments || []).some(s => s.poNumber === savedPO.poNumber || s.poId === savedPO.id);
+        if (!exists) {
+          const delivYr = new Date().getFullYear();
+          const newShipment = {
+            id: 'shp-' + Date.now(),
+            shipmentNumber: `SHP-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
+            poNumber: savedPO.poNumber,
+            poId: savedPO.id,
+            productName: savedPO.productName || 'เครื่องมือแพทย์ AERON',
+            productCategory: savedPO.productCategory || 'อุปกรณ์การแพทย์',
+            quantity: savedPO.quantity || 1,
+            vendorName: savedPO.vendorName || 'Vendor Manufacturer',
+            vendorCountry: savedPO.vendorCountry || 'ต่างประเทศ',
+            hospitalDestination: savedPO.hospitalName || 'โรงพยาบาลปลายทาง',
+            shippingCompany: 'DHL Global Forwarding',
+            trackingNumber: `AWB-${Math.floor(Math.random() * 89999999) + 10000000}`,
+            cbm: 2.5,
+            grossWeight: 150.0,
+            transportType: '✈️ ขนส่งทางอากาศ (Air Freight)',
+            shippingCost: 35000,
+            dutyTaxes: 12000,
+            customsBroker: 'V-Cargo Logistics (Thailand)',
+            etd: savedPO.poDate || new Date().toISOString().split('T')[0],
+            eta: savedPO.expectedDelivery || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+            status: 'รอดำเนินการ',
+            notes: `เปิด PO ส่งให้ Vendor ${savedPO.vendorName} เรียบร้อยแล้ว`
+          };
+          return [newShipment, ...prevShipments];
+        }
+        return prevShipments;
+      });
+    }
+
+    setIsPOModalOpen(false);
+    setEditingPO(null);
+  }, [setShipments]);
+
+  const handleDeletePO = useCallback((poId) => {
+    if (window.confirm('คุณต้องการลบใบสั่งซื้อ PO นี้ออกจากระบบใช่หรือไม่?')) {
+      setPurchaseOrders(prev => prev.filter(po => po.id !== poId));
+    }
+  }, []);
+
+  return {
+    transactions, setTransactions,
+    purchaseOrders, setPurchaseOrders,
+    isPOModalOpen, setIsPOModalOpen,
+    editingPO, setEditingPO,
+    handleSaveTransaction,
+    handleDeleteTransaction,
+    handleSavePO,
+    handleDeletePO
+  };
+}
+
+window.useAeronAccounting = useAeronAccounting;
+
+
+// --- Module File: js/modules/mod00_core/hooks/useAeronHR.js ---
+// ====================================================
+// MODULE: mod00_core/hooks/useAeronHR.js
+// 👥 Domain Hook: HR, Leave Requests, Attendance Logs
+// ====================================================
+
+function useAeronHR({ currentUser }) {
+  // 1. Leave Requests State
+  const [leaveRequests, setLeaveRequests] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_leave_requests');
+      return saved ? JSON.parse(saved) : window.INITIAL_LEAVE_REQUESTS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_leave_requests:', e);
+      return window.INITIAL_LEAVE_REQUESTS || [];
+    }
+  });
+
+  // 2. Attendance Logs State
+  const [attendanceLogs, setAttendanceLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_attendance_logs');
+      return saved ? JSON.parse(saved) : window.INITIAL_ATTENDANCE_LOGS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_attendance_logs:', e);
+      return window.INITIAL_ATTENDANCE_LOGS || [];
+    }
+  });
+
+  // Modals
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+
+  // Sync to localStorage & DB
+  useEffect(() => {
+    localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
+    syncToDB('leave_requests', leaveRequests);
+  }, [leaveRequests]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
+    syncToDB('attendance_logs', attendanceLogs);
+  }, [attendanceLogs]);
+
+  // Handlers
+  const handleApproveLeave = useCallback((leaveId, newStatus = '✅ อนุมัติแล้ว') => {
+    setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ' } : l));
+  }, [currentUser]);
+
+  const handleDeleteLeave = useCallback((leaveId) => {
+    if (window.confirm('ต้องการลบใบขอนี้?')) {
+      setLeaveRequests(prev => prev.filter(l => l.id !== leaveId));
+    }
+  }, []);
+
+  const handleSaveLeave = useCallback((leaveData) => {
+    if (leaveData.id) {
+      setLeaveRequests(prev => prev.map(l => l.id === leaveData.id ? leaveData : l));
+    } else {
+      setLeaveRequests(prev => [{ ...leaveData, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev]);
+    }
+    setIsLeaveModalOpen(false);
+  }, []);
+
+  const handleDeleteAttendance = useCallback((attId) => {
+    if (window.confirm('ต้องการลบรายการนี้?')) {
+      setAttendanceLogs(prev => prev.filter(a => a.id !== attId));
+    }
+  }, []);
+
+  const handleSaveAttendance = useCallback((attData) => {
+    if (attData.id) {
+      setAttendanceLogs(prev => prev.map(a => a.id === attData.id ? attData : a));
+    } else {
+      setAttendanceLogs(prev => [{ ...attData, id: 'att-' + Date.now() }, ...prev]);
+    }
+    setIsAttendanceModalOpen(false);
+  }, []);
+
+  return {
+    leaveRequests, setLeaveRequests,
+    attendanceLogs, setAttendanceLogs,
+    isLeaveModalOpen, setIsLeaveModalOpen,
+    isAttendanceModalOpen, setIsAttendanceModalOpen,
+    handleApproveLeave,
+    handleDeleteLeave,
+    handleSaveLeave,
+    handleDeleteAttendance,
+    handleSaveAttendance
+  };
+}
+
+window.useAeronHR = useAeronHR;
+
+
+// --- Module File: js/modules/mod00_core/hooks/useAeronLogistics.js ---
+// ====================================================
+// MODULE: mod00_core/hooks/useAeronLogistics.js
+// 📦 Domain Hook: Central Products, Shipments, Sold Assets, Repairs & FDA
+// ====================================================
+
+function useAeronLogistics({ setActiveView }) {
+  // 0. Product Categories Master State
+  const [productCategories, setProductCategories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_product_categories');
+      return saved ? JSON.parse(saved) : (window.PRODUCT_CATEGORIES || [
+        'เครื่องตรวจคลื่นหัวใจ (ECG/EKG)',
+        'ระบบเครื่องอัลตราซาวด์ (Ultrasound)',
+        'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
+        'เครื่องช่วยหายใจ (Ventilator)',
+        'ระบบเฝ้าระวังผู้ป่วยวิกฤต (Central Monitor)',
+        'เครื่องมือแพทย์อื่นๆ'
+      ]);
+    } catch(e) {
+      return window.PRODUCT_CATEGORIES || [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('aeron_product_categories', JSON.stringify(productCategories));
+    syncToDB('product_categories', productCategories);
+    window.PRODUCT_CATEGORIES = productCategories;
+  }, [productCategories]);
+
+  const handleUpdateCategories = useCallback((updatedList) => {
+    setProductCategories(updatedList);
+  }, []);
+
+  // 1. Central Product Catalog State
+  const [products, setProducts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_products');
+      return saved ? JSON.parse(saved) : window.CENTRAL_PRODUCT_CATALOG || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_products:', e);
+      return window.CENTRAL_PRODUCT_CATALOG || [];
+    }
+  });
+
+  // 2. Delivered / Sold Products State (Assets)
+  const [soldProducts, setSoldProducts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_sold_products');
+      return saved ? JSON.parse(saved) : window.INITIAL_SOLD_PRODUCTS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_sold_products:', e);
+      return window.INITIAL_SOLD_PRODUCTS || [];
+    }
+  });
+
+  // 3. Import Logistics / Shipments State
+  const [shipments, setShipments] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_shipments');
+      return saved ? JSON.parse(saved) : window.INITIAL_SHIPMENTS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_shipments:', e);
+      return window.INITIAL_SHIPMENTS || [];
+    }
+  });
+
+  // 4. Repair Tickets State
+  const [repairTickets, setRepairTickets] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_repair_tickets');
+      return saved ? JSON.parse(saved) : window.INITIAL_REPAIR_TICKETS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_repair_tickets:', e);
+      return window.INITIAL_REPAIR_TICKETS || [];
+    }
+  });
+
+  // 5. Thai FDA Registrations State
+  const [fdaRegistrations, setFdaRegistrations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_fda_registrations');
+      return saved ? JSON.parse(saved) : window.INITIAL_FDA_REGISTRATIONS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_fda_registrations:', e);
+      return window.INITIAL_FDA_REGISTRATIONS || [];
+    }
+  });
+
+  // Modals
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [isSoldModalOpen, setIsSoldModalOpen] = useState(false);
+  const [editingSoldAsset, setEditingSoldAsset] = useState(null);
+  const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+  const [editingShipment, setEditingShipment] = useState(null);
+  const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
+  const [editingRepairTicket, setEditingRepairTicket] = useState(null);
+  const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
+  const [editingFDA, setEditingFDA] = useState(null);
+
+  // Sync to localStorage & DB
+  useEffect(() => {
+    localStorage.setItem('aeron_products', JSON.stringify(products));
+    syncToDB('products', products);
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
+    syncToDB('sold_products', soldProducts);
+  }, [soldProducts]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
+    syncToDB('shipments', shipments);
+  }, [shipments]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
+    syncToDB('repair_tickets', repairTickets);
+  }, [repairTickets]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
+    syncToDB('fda_registrations', fdaRegistrations);
+  }, [fdaRegistrations]);
+
+  // Handlers
+  const handleSaveProduct = useCallback((productData) => {
+    if (productData.id) {
+      setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
+    } else {
+      const newProd = {
+        ...productData,
+        id: 'prod-' + Date.now()
+      };
+      setProducts(prev => [newProd, ...prev]);
+    }
+    setIsProductModalOpen(false);
+    setEditingProduct(null);
+  }, []);
+
+  const handleSaveSoldAsset = useCallback((assetData) => {
+    if (assetData.id) {
+      setSoldProducts(prev => prev.map(a => a.id === assetData.id ? assetData : a));
+    } else {
+      const newAsset = {
+        ...assetData,
+        id: 'sold-' + Date.now()
+      };
+      setSoldProducts(prev => [newAsset, ...prev]);
+    }
+    setIsSoldModalOpen(false);
+    setEditingSoldAsset(null);
+  }, []);
+
+  const handleDeleteSoldAsset = useCallback((assetId) => {
+    if (window.confirm('คุณต้องการลบรายการเครื่องที่ส่งมอบนี้ใช่หรือไม่?')) {
+      setSoldProducts(prev => prev.filter(a => a.id !== assetId));
+    }
+  }, []);
+
+  const handleSaveShipment = useCallback((shipmentData) => {
+    if (shipmentData.id) {
+      setShipments(prev => prev.map(s => s.id === shipmentData.id ? shipmentData : s));
+    } else {
+      const newShipment = {
+        ...shipmentData,
+        id: 'shp-' + Date.now()
+      };
+      setShipments(prev => [newShipment, ...prev]);
+    }
+    setIsShipmentModalOpen(false);
+    setEditingShipment(null);
+  }, []);
+
+  const handleDeleteShipment = useCallback((shipmentId) => {
+    if (window.confirm('คุณต้องการลบรายการนำเข้าสินค้านี้ใช่หรือไม่?')) {
+      setShipments(prev => prev.filter(s => s.id !== shipmentId));
+    }
+  }, []);
+
+  const handleSaveRepairTicket = useCallback((ticketData) => {
+    if (ticketData.id) {
+      setRepairTickets(prev => prev.map(t => t.id === ticketData.id ? ticketData : t));
+    } else {
+      const newTicket = {
+        ...ticketData,
+        id: 'rep-' + Date.now()
+      };
+      setRepairTickets(prev => [newTicket, ...prev]);
+    }
+
+    // Auto Link back to Central Demo Catalog if category is "เครื่อง Demo"
+    if (ticketData.category === 'เครื่อง Demo' && ticketData.sn) {
+      const isFixed = ticketData.status === 'ซ่อมเสร็จแล้ว' || ticketData.status === 'ส่งคืนเรียบร้อย';
+      const newUnitStatus = isFixed ? 'พร้อมใช้งาน' : 'ส่งซ่อม';
+
+      setProducts(prevProducts => prevProducts.map(p => {
+        if (p.demoUnits && p.demoUnits.some(u => u.sn === ticketData.sn)) {
+          const updatedUnits = p.demoUnits.map(u => {
+            if (u.sn === ticketData.sn) {
+              return {
+                ...u,
+                status: newUnitStatus,
+                location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
+              };
+            }
+            return u;
+          });
+          return { ...p, demoUnits: updatedUnits };
+        }
+        return p;
+      }));
+    }
+
+    setIsRepairModalOpen(false);
+    setEditingRepairTicket(null);
+  }, []);
+
+  const handleDeleteRepairTicket = useCallback((ticketId) => {
+    if (window.confirm('คุณต้องการลบรายการส่งซ่อมนี้ใช่หรือไม่?')) {
+      setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
+    }
+  }, []);
+
+  const handleOpenRepairFromCatalog = useCallback((product, unit) => {
+    setEditingRepairTicket({
+      category: 'เครื่อง Demo',
+      productName: product.name,
+      productCategory: product.category,
+      brand: product.brand,
+      sn: unit ? unit.sn : '',
+      repairedItems: unit ? (unit.accessories || 'ตัวเครื่องหลัก และ อุปกรณ์ประกอบ') : 'ตัวเครื่องหลัก',
+      lastHospital: unit ? (unit.location || 'สำนักงาน AERON (กรุงเทพฯ)') : 'สำนักงาน AERON',
+      location: 'ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)',
+      status: 'ส่งซ่อมอยู่',
+      repairVendor: 'AERON Service Center (กรุงเทพฯ)',
+      sentDate: new Date().toISOString().split('T')[0]
+    });
+    if (setActiveView) setActiveView('repair_service');
+    setIsRepairModalOpen(true);
+  }, [setActiveView]);
+
+  const handleSaveFDA = useCallback((fdaData) => {
+    if (fdaData.id) {
+      setFdaRegistrations(prev => prev.map(f => f.id === fdaData.id ? fdaData : f));
+    } else {
+      const newFDA = {
+        ...fdaData,
+        id: 'fda-' + Date.now()
+      };
+      setFdaRegistrations(prev => [newFDA, ...prev]);
+    }
+    setIsFDAModalOpen(false);
+    setEditingFDA(null);
+  }, []);
+
+  const handleDeleteFDA = useCallback((fdaId) => {
+    if (window.confirm('คุณต้องการลบรายการ อย. นี้ใช่หรือไม่?')) {
+      setFdaRegistrations(prev => prev.filter(f => f.id !== fdaId));
+    }
+  }, []);
+
+  return {
+    productCategories, setProductCategories,
+    handleUpdateCategories,
+    products, setProducts,
+    soldProducts, setSoldProducts,
+    shipments, setShipments,
+    repairTickets, setRepairTickets,
+    fdaRegistrations, setFdaRegistrations,
+    isProductModalOpen, setIsProductModalOpen,
+    editingProduct, setEditingProduct,
+    isSoldModalOpen, setIsSoldModalOpen,
+    editingSoldAsset, setEditingSoldAsset,
+    isShipmentModalOpen, setIsShipmentModalOpen,
+    editingShipment, setEditingShipment,
+    isRepairModalOpen, setIsRepairModalOpen,
+    editingRepairTicket, setEditingRepairTicket,
+    isFDAModalOpen, setIsFDAModalOpen,
+    editingFDA, setEditingFDA,
+    handleSaveProduct,
+    handleSaveSoldAsset,
+    handleDeleteSoldAsset,
+    handleSaveShipment,
+    handleDeleteShipment,
+    handleSaveRepairTicket,
+    handleDeleteRepairTicket,
+    handleOpenRepairFromCatalog,
+    handleSaveFDA,
+    handleDeleteFDA
+  };
+}
+
+window.useAeronLogistics = useAeronLogistics;
+
+
+// --- Module File: js/modules/mod00_core/hooks/useAeronProjects.js ---
+// ====================================================
+// MODULE: mod00_core/hooks/useAeronProjects.js
+// 🎯 Domain Hook: Hospital Projects, Kanban, Cost Calculations & Demo Bookings
+// ====================================================
+
+function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification }) {
+  // 1. Projects State
+  const [projects, setProjects] = useState(() => {
+    try {
+      const saved = localStorage.getItem('gov_hospital_projects');
+      return saved ? JSON.parse(saved) : window.INITIAL_PROJECTS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for gov_hospital_projects:', e);
+      return window.INITIAL_PROJECTS || [];
+    }
+  });
+
+  // 2. Cost Calculations State
+  const [costCalculations, setCostCalculations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_cost_calculations');
+      return saved ? JSON.parse(saved) : window.INITIAL_COST_CALCULATIONS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_cost_calculations:', e);
+      return window.INITIAL_COST_CALCULATIONS || [];
+    }
+  });
+
+  // 3. Demo Bookings State
+  const [demoBookings, setDemoBookings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_demo_bookings');
+      return saved ? JSON.parse(saved) : window.INITIAL_DEMO_BOOKINGS || [];
+    } catch (e) {
+      console.warn('localStorage parse fallback for aeron_demo_bookings:', e);
+      return window.INITIAL_DEMO_BOOKINGS || [];
+    }
+  });
+
+  // Modals & Target States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [logTargetProject, setLogTargetProject] = useState(null);
+  const [isCostModalOpen, setIsCostModalOpen] = useState(false);
+  const [editingCostCalc, setEditingCostCalc] = useState(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyTargetProject, setHistoryTargetProject] = useState(null);
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [checklistTargetBooking, setChecklistTargetBooking] = useState(null);
+  const [isDemoBookingModalOpen, setIsDemoBookingModalOpen] = useState(false);
+  const [editingDemoBooking, setEditingDemoBooking] = useState(null);
+
+  // Sync to localStorage & DB
+  useEffect(() => {
+    localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
+    syncToDB('projects', projects);
+  }, [projects]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
+    syncToDB('cost_calculations', costCalculations);
+  }, [costCalculations]);
+
+  useEffect(() => {
+    localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
+    syncToDB('demo_bookings', demoBookings);
+  }, [demoBookings]);
+
+  // Handlers
+  const handleOpenHistoryModal = useCallback((proj) => {
+    setHistoryTargetProject(proj);
+    setIsHistoryModalOpen(true);
+  }, []);
+
+  const handleUpdateBookingStatus = useCallback((bookingId, newStatus) => {
+    setDemoBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+  }, []);
+
+  const handleSaveCostCalc = useCallback((calcData) => {
+    setCostCalculations(prev => {
+      const idx = prev.findIndex(c => c.id === calcData.id || c.projectId === calcData.projectId);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...calcData, id: copy[idx].id };
+        return copy;
+      } else {
+        return [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
+      }
+    });
+    setIsCostModalOpen(false);
+    setEditingCostCalc(null);
+  }, []);
+
+  const handleDeleteCostCalc = useCallback((calcId) => {
+    if (window.confirm('ยืนยันการลบการคำนวณต้นทุนนี้?')) {
+      setCostCalculations(prev => prev.filter(c => c.id !== calcId));
+    }
+  }, []);
+
+  // Handle move project stage in Kanban
+  const handleMoveProject = useCallback((projectId, targetStageId) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === projectId) {
+        const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
+        if (isWon && p.status !== targetStageId && setToastNotification) {
+          setToastNotification({
+            show: true,
+            title: `🎉 คุณ ${p.assignee} ได้รับการอนุมัติโครงการได้ชนะ/ได้สัญญา!`,
+            message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกเลื่อนสู่สถานะสั่งซื้อ PO กับ Vendor`,
+            projectId: p.id
+          });
+        }
+
+        const isDelivered = targetStageId === 'stage_delivery' || targetStageId === 'stage_completed';
+        if (isDelivered && p.status !== targetStageId && setSoldProducts) {
+          setSoldProducts(prevSold => {
+            const exists = (prevSold || []).some(sp => sp.projectId === p.id);
+            if (!exists) {
+              const delivDate = p.procurementDate || new Date().toISOString().split('T')[0];
+              const delivYr = new Date(delivDate).getFullYear();
+              const newAsset = {
+                id: 'sold-' + Date.now(),
+                assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
+                contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
+                projectId: p.id,
+                hospitalName: p.hospitalName,
+                department: 'แผนกห้องผ่าตัด / CCU',
+                productName: p.productName || 'เครื่องมือแพทย์ AERON',
+                brand: p.productBrand || 'AERON MEDICAL',
+                productCategory: p.productCategory || 'อุปกรณ์ทางการแพทย์',
+                serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
+                freebies: 'สายไฟ AC, ตัวแปลงสัญญาณ 10 ชิ้น, คู่มือการใช้งานภาษาไทย/อังกฤษ',
+                salesPerson: p.assignee,
+                contactPerson: p.decisionMakers || 'ผอ.แพทย์ / หัวหน้าพัสดุ',
+                deliveryDate: delivDate,
+                projectValue: p.budget || 0,
+                dfAmount: p.dfAmount || '100,000 บาท',
+                bidGuaranteeAmount: Math.round((p.budget || 0) * 0.05),
+                bidGuaranteeRefundDate: `${delivYr}-12-15`,
+                warrantyYears: 1,
+                warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
+                nextPmDate: `${delivYr}-12-15`,
+                pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
+                pmStatus: '🟢 ตามกำหนดการ PM',
+                status: 'ติดตั้งเรียบร้อย'
+              };
+              return [newAsset, ...prevSold];
+            }
+            return prevSold;
+          });
+        }
+
+        return { ...p, status: targetStageId };
+      }
+      return p;
+    }));
+  }, [setSoldProducts, setToastNotification]);
+
+  // Add / Save Project
+  const handleSaveProject = useCallback((projectData) => {
+    if (projectData.id) {
+      setProjects(prev => prev.map(p => p.id === projectData.id ? projectData : p));
+    } else {
+      const newProj = {
+        ...projectData,
+        id: 'proj-' + Date.now(),
+        createdDate: new Date().toISOString().split('T')[0],
+        weeklyLogs: []
+      };
+      setProjects(prev => [newProj, ...prev]);
+    }
+    setIsModalOpen(false);
+    setEditingProject(null);
+  }, []);
+
+  // Delete Project
+  const handleDeleteProject = useCallback((projectId) => {
+    if (window.confirm('คุณต้องการลบโครงการนี้ออกจากระบบใช่หรือไม่?')) {
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+    }
+  }, []);
+
+  // Add Weekly Log Note
+  const handleAddWeeklyLog = useCallback((projectId, note, author) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === projectId) {
+        const newLog = {
+          date: new Date().toISOString().split('T')[0],
+          author: author || p.assignee,
+          note
+        };
+        return {
+          ...p,
+          weeklyLogs: [newLog, ...(p.weeklyLogs || [])]
+        };
+      }
+      return p;
+    }));
+    setIsLogModalOpen(false);
+    setLogTargetProject(null);
+  }, []);
+
+  // Save Demo Booking
+  const handleSaveDemoBooking = useCallback((bookingData) => {
+    if (bookingData.id) {
+      setDemoBookings(prev => prev.map(b => b.id === bookingData.id ? bookingData : b));
+    } else {
+      const newBooking = {
+        ...bookingData,
+        id: 'booking-' + Date.now()
+      };
+      setDemoBookings(prev => [newBooking, ...prev]);
+
+      if (bookingData.projectId) {
+        setProjects(prev => prev.map(p => {
+          if (p.id === bookingData.projectId) {
+            return {
+              ...p,
+              demoStatus: 'นัดหมายแล้ว',
+              demoStartDate: bookingData.startDate,
+              demoEndDate: bookingData.endDate
+            };
+          }
+          return p;
+        }));
+      }
+    }
+
+    setIsDemoBookingModalOpen(false);
+    setEditingDemoBooking(null);
+  }, []);
+
+  return {
+    projects, setProjects,
+    costCalculations, setCostCalculations,
+    demoBookings, setDemoBookings,
+    isModalOpen, setIsModalOpen,
+    editingProject, setEditingProject,
+    isLogModalOpen, setIsLogModalOpen,
+    logTargetProject, setLogTargetProject,
+    isCostModalOpen, setIsCostModalOpen,
+    editingCostCalc, setEditingCostCalc,
+    isHistoryModalOpen, setIsHistoryModalOpen,
+    historyTargetProject, setHistoryTargetProject,
+    isChecklistModalOpen, setIsChecklistModalOpen,
+    checklistTargetBooking, setChecklistTargetBooking,
+    isDemoBookingModalOpen, setIsDemoBookingModalOpen,
+    editingDemoBooking, setEditingDemoBooking,
+    handleMoveProject,
+    handleSaveProject,
+    handleDeleteProject,
+    handleAddWeeklyLog,
+    handleSaveDemoBooking,
+    handleUpdateBookingStatus,
+    handleSaveCostCalc,
+    handleDeleteCostCalc,
+    handleOpenHistoryModal
+  };
+}
+
+window.useAeronProjects = useAeronProjects;
 
 
 // --- Module File: js/modules/mod01_dashboard/ManagerDashboard.js ---
@@ -5374,6 +6194,234 @@ function WeeklyLogModal({ project, members = [], onSave, onClose }) {
 }
 
 
+// --- Module File: js/modules/mod04_logistics/CategoryManagerModal.js ---
+// ====================================================
+// MODULE: mod04_logistics/CategoryManagerModal.js
+// ⚙️ Category Master Data Manager Modal (เพิ่ม/แก้ไข/ลบ/รีเซ็ต ประเภทสินค้า)
+// ====================================================
+
+function CategoryManagerModal({
+  isOpen,
+  onClose,
+  categories = [],
+  onUpdateCategories
+}) {
+  const [catList, setCatList] = useState(categories || []);
+  const [newCatInput, setNewCatInput] = useState('');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editValue, setEditValue] = useState('');
+
+  useEffect(() => {
+    if (categories && categories.length > 0) {
+      setCatList(categories);
+    }
+  }, [categories]);
+
+  if (!isOpen) return null;
+
+  const handleAdd = () => {
+    const trimmed = newCatInput.trim();
+    if (!trimmed) return;
+    if (catList.includes(trimmed)) {
+      alert('มีประเภทสินค้านี้อยู่ในระบบแล้ว');
+      return;
+    }
+    const updated = [...catList, trimmed];
+    setCatList(updated);
+    setNewCatInput('');
+    if (onUpdateCategories) onUpdateCategories(updated);
+  };
+
+  const handleStartEdit = (index, val) => {
+    setEditingIndex(index);
+    setEditValue(val);
+  };
+
+  const handleSaveEdit = (index) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    const updated = [...catList];
+    updated[index] = trimmed;
+    setCatList(updated);
+    setEditingIndex(null);
+    setEditValue('');
+    if (onUpdateCategories) onUpdateCategories(updated);
+  };
+
+  const handleDelete = (index) => {
+    const item = catList[index];
+    if (window.confirm(`คุณต้องการลบประเภทสินค้า "${item}" ออกจากระบบใช่หรือไม่?`)) {
+      const updated = catList.filter((_, i) => i !== index);
+      setCatList(updated);
+      if (onUpdateCategories) onUpdateCategories(updated);
+    }
+  };
+
+  const handleResetDefaults = () => {
+    if (window.confirm('คุณต้องการรีเซ็ตประเภทสินค้ากลับเป็นค่ามาตรฐาน 6 หมวดหมู่ของโรงพยาบาลใช่หรือไม่?')) {
+      const defaults = [
+        'เครื่องตรวจคลื่นหัวใจ (ECG/EKG)',
+        'ระบบเครื่องอัลตราซาวด์ (Ultrasound)',
+        'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
+        'เครื่องช่วยหายใจ (Ventilator)',
+        'ระบบเฝ้าระวังผู้ป่วยวิกฤต (Central Monitor)',
+        'เครื่องมือแพทย์อื่นๆ'
+      ];
+      setCatList(defaults);
+      if (onUpdateCategories) onUpdateCategories(defaults);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in font-sans">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        
+        {/* Header */}
+        <div className="p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl border border-indigo-500/30 shadow-md">
+              ⚙️
+            </div>
+            <div>
+              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                <span>จัดการฐานข้อมูลประเภทสินค้า</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono font-bold">
+                  MASTER DATA
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                เพิ่ม แก้ไข หรือลบหมวดหมู่สินค้าสำหรับการลงทะเบียนและตัวกรอง
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
+          
+          {/* Quick Add Box */}
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <span>➕</span> <span>เพิ่มประเภทสินค้าใหม่ในฐานข้อมูล</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="เช่น เครื่องวัดสัญญาณชีพ, เครื่องฟอกไต, เครื่องเอกซเรย์..."
+                value={newCatInput}
+                onChange={(e) => setNewCatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-sans"
+              />
+              <button
+                onClick={handleAdd}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0"
+              >
+                <span>➕ เพิ่มรายการ</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Current Categories Table/List */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>รายการประเภทสินค้าปัจจุบัน ({catList.length} หมวดหมู่):</span>
+              <button
+                onClick={handleResetDefaults}
+                className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 underline"
+              >
+                <span>🔄 คืนค่าเริ่มต้น</span>
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-800 border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/40">
+              {catList.map((cat, idx) => (
+                <div key={idx} className="p-3 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-colors">
+                  
+                  {editingIndex === idx ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(idx)}
+                        className="flex-1 bg-slate-900 border border-indigo-500 rounded-lg px-2.5 py-1 text-xs text-white outline-none font-sans"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveEdit(idx)}
+                        className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-bold"
+                      >
+                        บันทึก
+                      </button>
+                      <button
+                        onClick={() => setEditingIndex(null)}
+                        className="px-2 py-1 bg-slate-800 text-slate-400 rounded-lg text-[11px]"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] font-mono shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-medium text-slate-200 truncate">
+                          {cat}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleStartEdit(idx, cat)}
+                          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-indigo-300 transition-all text-xs"
+                          title="แก้ไขชื่อ"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDelete(idx)}
+                          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/50 text-slate-400 hover:text-rose-400 transition-all text-xs"
+                          title="ลบรายการ"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+          >
+            ปิดหน้าต่าง
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+window.CategoryManagerModal = CategoryManagerModal;
+
+
 // --- Module File: js/modules/mod04_logistics/MessengerDispatchView.js ---
 // MODULE: mod04_logistics/MessengerDispatchView.js
 
@@ -5558,7 +6606,7 @@ function MessengerDispatchView({ currentUser, onLogout }) {
 // --- Module File: js/modules/mod04_logistics/ProductCatalogView.js ---
 // MODULE: mod04_logistics/ProductCatalogView.js
 
-function ProductCatalogView({ products = [], demoBookings = [], onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal }) {
+function ProductCatalogView({ products = [], demoBookings = [], categories = [], onOpenNewProduct, onEditProduct, onDeleteProduct, onOpenRepairModal, onOpenCategoryManager }) {
   const [expandedProduct, setExpandedProduct] = useState(null);
 
   const statusConfig = {
@@ -5795,7 +6843,10 @@ function ProductCatalogView({ products = [], demoBookings = [], onOpenNewProduct
 // --- Module File: js/modules/mod04_logistics/ProductModal.js ---
 // MODULE: mod04_logistics/ProductModal.js
 
-function ProductModal({ product, onSave, onClose }) {
+function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_CATEGORIES || []), onUpdateCategories }) {
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [formData, setFormData] = useState(() => {
     if (product) {
       return {
@@ -5817,6 +6868,21 @@ function ProductModal({ product, onSave, onClose }) {
   });
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
+  
+  const handleQuickAddCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    const currentCats = categories || window.PRODUCT_CATEGORIES || [];
+    if (!currentCats.includes(trimmed)) {
+      const updated = [...currentCats, trimmed];
+      if (onUpdateCategories) onUpdateCategories(updated);
+      else window.PRODUCT_CATEGORIES = updated;
+    }
+    setFormData(prev => ({ ...prev, category: trimmed }));
+    setIsAddingCategory(false);
+    setNewCategoryInput('');
+  };
+
   const [componentsList, setComponentsList] = useState(() => {
     if (product && Array.isArray(product.masterChecklistItems) && product.masterChecklistItems.length > 0) {
       return product.masterChecklistItems.map(item => ({
@@ -5947,16 +7013,65 @@ function ProductModal({ product, onSave, onClose }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-300">หมวดหมู่/ประเภทสินค้า</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none"
-                >
-                  {window.PRODUCT_CATEGORIES.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-300">หมวดหมู่/ประเภทสินค้า</label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCategory(!isAddingCategory)}
+                      className="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white transition-all font-bold flex items-center gap-1 shadow-sm"
+                      title="พิมพ์เพิ่มประเภทใหม่ทันที"
+                    >
+                      <span>➕ เพิ่มใหม่</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryManagerOpen(true)}
+                      className="text-[11px] px-2 py-0.5 rounded-lg bg-slate-800 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all font-bold flex items-center gap-1 shadow-sm"
+                      title="เปิดหน้าต่างจัดการฐานข้อมูลประเภทสินค้า"
+                    >
+                      <span>⚙️ จัดการฐานข้อมูล</span>
+                    </button>
+                  </div>
+                </div>
+
+                {isAddingCategory ? (
+                  <div className="flex items-center gap-1.5 animate-fade-in pt-0.5">
+                    <input
+                      type="text"
+                      placeholder="พิมพ์ชื่อประเภทใหม่ เช่น เครื่องเอกซเรย์..."
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickAddCategory(); } }}
+                      className="flex-1 bg-slate-950 border border-emerald-500 rounded-xl px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-emerald-400 font-bold"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleQuickAddCategory}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0"
+                    >
+                      บันทึก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsAddingCategory(false); setNewCategoryInput(''); }}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl text-xs shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none focus:border-indigo-500"
+                  >
+                    {(categories || window.PRODUCT_CATEGORIES || []).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -6244,9 +7359,21 @@ function ProductModal({ product, onSave, onClose }) {
           </div>
         </form>
       </div>
+
+      {/* Category Master Data Manager Modal */}
+      {isCategoryManagerOpen && (
+        <CategoryManagerModal
+          isOpen={isCategoryManagerOpen}
+          onClose={() => setIsCategoryManagerOpen(false)}
+          categories={categories || window.PRODUCT_CATEGORIES || []}
+          onUpdateCategories={onUpdateCategories}
+        />
+      )}
     </div>
   );
 }
+
+window.ProductModal = ProductModal;
 
 
 // --- Module File: js/modules/mod04_logistics/RepairServiceView.js ---
@@ -10434,6 +11561,662 @@ function ReportPreviewModal({ report = null, projects = [], messengerTrips = [],
 }
 
 
+// --- Module File: js/modules/mod07_finance/CashForecastView.js ---
+// MODULE: mod07_finance/CashForecastView.js
+// 🔮 Cash Flow Forecast & Budget Planning Engine (Rolling TTM Runway, Pipeline Inflow/Outflow & Editable Plans)
+
+function CashForecastView({
+  projects = [],
+  purchaseOrders = [],
+  transactions = [],
+  costCalculations = [],
+  currentUser = null
+}) {
+  const [delayDays, setDelayDays] = useState(0); // What-if delay slider (0, 15, 30, 45, 60 days)
+  const [customStartingCash, setCustomStartingCash] = useState(12450000); // Current liquid cash default
+  const [selectedHorizon, setSelectedHorizon] = useState('6m'); // 3m, 6m, 12m
+  const [overrideMonthlyOpex, setOverrideMonthlyOpex] = useState(null);
+
+  // 1. State for User-Editable Hospital Collections (เงินสดรับเข้า - เก็บเงินจากโรงพยาบาล)
+  const [customHospitalCollections, setCustomHospitalCollections] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_forecast_hospital_collections');
+      return saved ? JSON.parse(saved) : {};
+    } catch(e) { return {}; }
+  });
+
+  // 2. State for User-Editable Projected Expenses (เงินสดจ่ายออก - ค่าใช้จ่ายที่คาดการณ์)
+  const [customProjectedExpenses, setCustomProjectedExpenses] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aeron_forecast_projected_expenses');
+      return saved ? JSON.parse(saved) : {};
+    } catch(e) { return {}; }
+  });
+
+  // Sync custom inputs to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('aeron_forecast_hospital_collections', JSON.stringify(customHospitalCollections));
+    } catch(e) {}
+  }, [customHospitalCollections]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aeron_forecast_projected_expenses', JSON.stringify(customProjectedExpenses));
+    } catch(e) {}
+  }, [customProjectedExpenses]);
+
+  // Handlers for cell editing
+  const handleCollectionChange = (monthKey, val) => {
+    const num = val === '' ? 0 : Number(val);
+    setCustomHospitalCollections(prev => ({ ...prev, [monthKey]: num }));
+  };
+
+  const handleExpenseChange = (monthKey, val) => {
+    const num = val === '' ? 0 : Number(val);
+    setCustomProjectedExpenses(prev => ({ ...prev, [monthKey]: num }));
+  };
+
+  // Dynamic Rolling Trailing 12 Months (T12M / LTM) Calculation
+  const { avgMonthlyOpex, totalT12Expenses, t12Count, t12RangeLabel } = useMemo(() => {
+    const now = new Date();
+    const curYr = now.getFullYear();
+    const curM = now.getMonth();
+
+    // Generate rolling 12 months prior to the current month (e.g. 2025-09 to 2026-08)
+    const t12Keys = [];
+    const t12BeKeys = [];
+    for (let i = 12; i >= 1; i--) {
+      const d = new Date(curYr, curM - i, 1);
+      const yr = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      t12Keys.push(`${yr}-${m}`);
+      t12BeKeys.push(`${yr + 543}-${m}`);
+    }
+
+    const rangeLabel = `${t12Keys[0]} ถึง ${t12Keys[t12Keys.length - 1]}`;
+
+    if (!transactions || transactions.length === 0) {
+      return { avgMonthlyOpex: 1564311, totalT12Expenses: 18771730, t12Count: 1013, t12RangeLabel: rangeLabel };
+    }
+
+    const t12Expenses = transactions.filter(t => {
+      const isExp = t.type === 'expense' || t.transaction_type === 'รายจ่าย';
+      if (!isExp) return false;
+      const d = String(t.date || t.transaction_date || t.created_at || '');
+      const prefix = d.slice(0, 7);
+      return t12Keys.includes(prefix) || t12BeKeys.includes(prefix);
+    });
+
+    const totalExp = t12Expenses.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const avg = totalExp > 0 ? Math.round(totalExp / 12) : 1564311;
+
+    return {
+      avgMonthlyOpex: avg,
+      totalT12Expenses: totalExp,
+      t12Count: t12Expenses.length,
+      t12RangeLabel: rangeLabel
+    };
+  }, [transactions]);
+
+  const effectiveMonthlyOpex = overrideMonthlyOpex !== null ? overrideMonthlyOpex : avgMonthlyOpex;
+
+  // Generate rolling forecast months
+  const forecastMonths = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    const count = selectedHorizon === '3m' ? 3 : selectedHorizon === '12m' ? 12 : 6;
+    
+    for (let i = 0; i < count; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const yr = d.getFullYear();
+      const mIdx = d.getMonth();
+      const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const key = `${yr}-${String(mIdx + 1).padStart(2, '0')}`;
+      const label = `${monthNames[mIdx]} ${yr + 543} (${monthNamesEn[mIdx]})`;
+      months.push({ key, yr, mIdx, label, index: i });
+    }
+    return months;
+  }, [selectedHorizon]);
+
+  // Calculate Inflows, Outflows and Ending Balances for each forecast month
+  const forecastMatrix = useMemo(() => {
+    let runningCash = Number(customStartingCash) || 0;
+
+    return forecastMonths.map((m, idx) => {
+      // 1. Inflows: Stage 8 Projects (ตรวจรับ & รับเช็ค - หัก ณ ที่จ่าย 1%) + User Editable Collections
+      const monthInflowProjects = (projects || []).filter(p => {
+        const isStage8Complete = p.status === 'stage_complete';
+        if (!isStage8Complete) return false;
+
+        let baseDateStr = p.deliveryDate || p.procurementDate || p.createdDate;
+        if (!baseDateStr) return false;
+
+        let baseDate = new Date(baseDateStr);
+        if (delayDays > 0) {
+          baseDate = new Date(baseDate.getTime() + delayDays * 24 * 60 * 60 * 1000);
+        }
+
+        const pYr = baseDate.getFullYear();
+        const pM = baseDate.getMonth();
+        return pYr === m.yr && pM === m.mIdx;
+      });
+
+      // Calculate net inflow after 1% Withholding Tax (หัก ณ ที่จ่าย 1%)
+      const projectInflowTotal = monthInflowProjects.reduce((s, p) => {
+        const rawBudget = Number(p.budget) || 0;
+        const netAfter1PercentWHT = rawBudget * 0.99; // หัก ณ ที่จ่าย 1%
+        return s + netAfter1PercentWHT;
+      }, 0);
+
+      const retentionInflow = Math.round(projectInflowTotal * 0.05);
+      const manualHospitalCollection = Number(customHospitalCollections[m.key]) || 0;
+      const totalInflow = projectInflowTotal + manualHospitalCollection;
+
+      // 2. Outflows: Purchase Orders + OPEX + Duties + User Editable Projected Expenses
+      const monthPOs = (purchaseOrders || []).filter(po => {
+        let poDateStr = po.expectedDelivery || po.poDate;
+        if (!poDateStr) return false;
+        const poDate = new Date(poDateStr);
+        return poDate.getFullYear() === m.yr && poDate.getMonth() === m.mIdx;
+      });
+
+      const poOutflowTotal = monthPOs.reduce((s, po) => s + (Number(po.totalAmountTHB || po.totalAmount) || 0), 0);
+      const estimatedDuties = Math.round(poOutflowTotal * 0.03); // 3% Estimated customs/import fees
+      const opexOutflow = effectiveMonthlyOpex;
+      const manualProjectedExpense = Number(customProjectedExpenses[m.key]) || 0;
+
+      const totalOutflow = poOutflowTotal + estimatedDuties + opexOutflow + manualProjectedExpense;
+
+      // 3. Net Cash Flow & Ending Balance
+      const netMonthlyCashFlow = totalInflow - totalOutflow;
+      const startingCash = runningCash;
+      runningCash = startingCash + netMonthlyCashFlow;
+
+      return {
+        ...m,
+        startingCash,
+        inflowProjects: monthInflowProjects,
+        projectInflowTotal,
+        retentionInflow,
+        manualHospitalCollection,
+        totalInflow,
+        poList: monthPOs,
+        poOutflowTotal,
+        estimatedDuties,
+        opexOutflow,
+        manualProjectedExpense,
+        totalOutflow,
+        netMonthlyCashFlow,
+        endingCash: runningCash,
+        isDeficit: runningCash < 0,
+        isTight: runningCash > 0 && runningCash < 3000000
+      };
+    });
+  }, [forecastMonths, projects, purchaseOrders, effectiveMonthlyOpex, customStartingCash, delayDays, customHospitalCollections, customProjectedExpenses]);
+
+  // Aggregate Horizon Summary
+  const horizonSummary = useMemo(() => {
+    const totalIn = forecastMatrix.reduce((s, m) => s + m.totalInflow, 0);
+    const totalOut = forecastMatrix.reduce((s, m) => s + m.totalOutflow, 0);
+    const minCash = forecastMatrix.reduce((min, m) => Math.min(min, m.endingCash), customStartingCash);
+    const maxCash = forecastMatrix.reduce((max, m) => Math.max(max, m.endingCash), customStartingCash);
+    const endCash = forecastMatrix[forecastMatrix.length - 1]?.endingCash || customStartingCash;
+    const hasDeficit = forecastMatrix.some(m => m.isDeficit);
+    const firstDeficitMonth = forecastMatrix.find(m => m.isDeficit);
+
+    return { totalIn, totalOut, minCash, maxCash, endCash, hasDeficit, firstDeficitMonth };
+  }, [forecastMatrix, customStartingCash]);
+
+  return (
+    <div className="space-y-6 animate-fade-in text-slate-100 font-sans pb-12">
+      
+      {/* Top Header & Simulation Controls */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl backdrop-blur-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl border border-indigo-500/30 shadow-md">
+              🔮
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                <span>ประมาณการกระแสเงินสด & วางแผนสภาพคล่อง (Cash Forecast & Runway)</span>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono font-bold">
+                  PROACTIVE FINANCIAL PLANNING
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                พยากรณ์เงินสดรับเข้าจากโครงการ Sales Kanban เทียบกับภาระจ่าย PO & ค่าใช้จ่าย พร้อมช่องปรับแผนรับ-จ่ายอิสระ
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Horizon Switcher & What-If Simulation Controls */}
+        <div className="flex flex-wrap items-center gap-3 bg-slate-950/70 p-2 rounded-2xl border border-slate-800">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-400 font-medium">ช่วงเวลา:</span>
+            {['3m', '6m', '12m'].map(h => (
+              <button
+                key={h}
+                onClick={() => setSelectedHorizon(h)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  selectedHorizon === h
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                {h === '3m' ? '3 เดือน' : h === '6m' ? '6 เดือน' : '1 ปีเต็ม'}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+
+          {/* Delay Slider */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 font-medium">จำลอง รพ. เบิกจ่ายช้า:</span>
+            <select
+              value={delayDays}
+              onChange={(e) => setDelayDays(Number(e.target.value))}
+              className="bg-slate-900 border border-slate-700 text-amber-300 text-xs rounded-xl px-2.5 py-1 font-bold focus:outline-none focus:border-amber-400"
+            >
+              <option value={0}>⚡ ตามกำหนดปกติ (0 วัน)</option>
+              <option value={15}>⏳ ล่าช้า +15 วัน</option>
+              <option value={30}>⏳ ล่าช้า +30 วัน (1 เดือน)</option>
+              <option value={45}>⚠️ ล่าช้า +45 วัน</option>
+              <option value={60}>🚨 ล่าช้า +60 วัน (2 เดือน)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Big KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Card 1: Starting Cash */}
+        <div className="glass-card p-5 rounded-3xl border border-slate-800 bg-slate-900/60 space-y-2 relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
+            <span>💵 เงินสดสภาพคล่องตั้งต้น</span>
+            <span>🏦</span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-white font-mono">
+            {formatCurrency(customStartingCash)}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            ยอดเงินสดใน 5 บัญชีธนาคาร + เงินสดย่อย
+          </div>
+        </div>
+
+        {/* Card 2: Projected Inflow */}
+        <div className="glass-card p-5 rounded-3xl border border-emerald-500/30 bg-emerald-950/20 space-y-2">
+          <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
+            <span>📥 เงินสดคาดว่าจะรับเข้า ({selectedHorizon === '3m' ? '3 เดือน' : selectedHorizon === '12m' ? '12 เดือน' : '6 เดือน'})</span>
+            <span>💰</span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
+            +{formatCurrency(horizonSummary.totalIn)}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            จากโครงการ Stage 8 (หัก 1%) & แผนเก็บเงิน รพ.
+          </div>
+        </div>
+
+        {/* Card 3: Projected Outflow */}
+        <div className="glass-card p-5 rounded-3xl border border-rose-500/30 bg-rose-950/20 space-y-2">
+          <div className="flex items-center justify-between text-rose-300 text-xs font-bold">
+            <span>📤 เงินสดคาดว่าจะจ่ายออก</span>
+            <span>🛒</span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-rose-400 font-mono">
+            -{formatCurrency(horizonSummary.totalOut)}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            ภาระจ่าย Vendor PO + ค่าใช้จ่ายดำเนินงาน TTM
+          </div>
+        </div>
+
+        {/* Card 4: Projected Ending Cash & Runway Health */}
+        <div className={`glass-card p-5 rounded-3xl border space-y-2 ${
+          horizonSummary.hasDeficit 
+            ? 'border-rose-500/50 bg-rose-950/30' 
+            : horizonSummary.endCash < 3000000 
+            ? 'border-amber-500/50 bg-amber-950/30' 
+            : 'border-indigo-500/30 bg-indigo-950/20'
+        }`}>
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className={horizonSummary.hasDeficit ? 'text-rose-300' : 'text-indigo-300'}>
+              🛡️ สภาพคล่องสุทธิปลายงวด
+            </span>
+            <span>{horizonSummary.hasDeficit ? '⚠️' : '✅'}</span>
+          </div>
+          <div className={`text-2xl sm:text-3xl font-black font-mono ${
+            horizonSummary.hasDeficit ? 'text-rose-400' : 'text-indigo-300'
+          }`}>
+            {formatCurrency(horizonSummary.endCash)}
+          </div>
+          <div className="text-[11px] flex items-center justify-between">
+            <span className="text-slate-400">สถานะสุขภาพเงินสด:</span>
+            <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+              horizonSummary.hasDeficit
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+            }`}>
+              {horizonSummary.hasDeficit ? '🚨 มีช่วงเงินสดติดลบ' : '✨ สภาพคล่องเพียงพอ'}
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Alert Banner if Cash Deficit Detected */}
+      {horizonSummary.hasDeficit && (
+        <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 flex items-start gap-3 text-xs text-rose-200 animate-pulse">
+          <span className="text-lg">🚨</span>
+          <div>
+            <div className="font-bold text-sm text-rose-300">แจ้งเตือนจุดเสี่ยงสภาพคล่อง (Liquidity Deficit Warning):</div>
+            <p className="mt-0.5 text-rose-200/90">
+              ตรวจพบว่าในเดือน <strong>{horizonSummary.firstDeficitMonth?.label}</strong> เงินสดคงเหลือจะติดลบ ({formatCurrency(horizonSummary.firstDeficitMonth?.endingCash)}) เนื่องจากมียอดจ่าย PO/ค่าใช้จ่ายสูงกว่าเงินรับเข้าจาก รพ. แนะนำให้ระบุแผนเก็บเงิน รพ. หรือเตรียมขอวงเงินสินเชื่อ P/N
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 6-Month Visual Bar Breakdown */}
+      <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <span>📊 แนวโน้มกระแสเงินสดรับ-จ่ายรายเดือน (Rolling Cash Trajectory)</span>
+          </h3>
+          <div className="flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> รับเข้า (Inflow)
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-400 font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> จ่ายออก (Outflow)
+            </span>
+            <span className="flex items-center gap-1.5 text-amber-300 font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> เงินสดคงเหลือสิ้นเดือน
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+          {forecastMatrix.map((m, idx) => (
+            <div 
+              key={m.key} 
+              className={`p-3.5 rounded-2xl border transition-all space-y-2 ${
+                m.isDeficit 
+                  ? 'bg-rose-950/30 border-rose-500/40 shadow-lg shadow-rose-950/20' 
+                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <div className="text-xs font-bold text-slate-300 border-b border-slate-800/80 pb-1.5 flex items-center justify-between">
+                <span>{m.label}</span>
+                <span className="text-[10px] text-slate-500 font-mono">M{idx + 1}</span>
+              </div>
+
+              <div className="space-y-1 text-[11px] font-mono">
+                <div className="flex justify-between text-emerald-400">
+                  <span className="text-slate-400 font-sans">รับ:</span>
+                  <span>+{formatShortCurrency(m.totalInflow)}</span>
+                </div>
+                <div className="flex justify-between text-rose-400">
+                  <span className="text-slate-400 font-sans">จ่าย:</span>
+                  <span>-{formatShortCurrency(m.totalOutflow)}</span>
+                </div>
+                <div className="border-t border-slate-800 pt-1 flex justify-between font-bold">
+                  <span className="text-slate-400 font-sans">สุทธิ:</span>
+                  <span className={m.netMonthlyCashFlow >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                    {m.netMonthlyCashFlow >= 0 ? '+' : ''}{formatShortCurrency(m.netMonthlyCashFlow)}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`mt-2 p-2 rounded-xl text-center font-mono font-bold text-xs ${
+                m.isDeficit 
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                  : 'bg-slate-900 text-amber-300 border border-slate-700'
+              }`}>
+                <div className="text-[9.5px] text-slate-400 font-sans font-normal">เงินสดสิ้นเดือน:</div>
+                <div className="truncate">{formatCurrency(m.endingCash)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Detailed Forecast Spreadsheet Matrix Table */}
+      <div className="glass-panel rounded-3xl border border-slate-800 overflow-hidden shadow-2xl space-y-0">
+        <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+              <span>📋 ตารางแจกแจงกระแสเงินสดรับ-จ่ายเชิงลึก (Detailed Cash Forecast Matrix)</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              💡 คุณสามารถ <strong>พิมพ์แก้ไขช่อง "เก็บเงินจาก รพ." และ "ค่าใช้จ่ายที่คาดการณ์"</strong> ในตารางด้านล่างได้อิสระ ระบบจะคำนวณเงินสดยกไปให้อัตโนมัติ
+            </p>
+          </div>
+          <div className="text-xs text-emerald-300 font-mono font-bold bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/30 flex items-center gap-1.5 self-start sm:self-auto">
+            <span>✏️</span> <span>Interactive Editable Mode</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto max-w-full">
+          <table className="w-full text-right text-[11px] font-mono border-collapse select-text">
+            <thead>
+              <tr className="bg-[#0b1329] text-white font-sans text-xs border-b-2 border-slate-700">
+                <th className="p-3 text-left font-bold min-w-[280px] sticky left-0 bg-[#0b1329] z-10 border-r border-slate-800">
+                  รายการกระแสเงินสด / เดือน
+                </th>
+                {forecastMatrix.map(m => (
+                  <th key={m.key} className="p-3 font-bold min-w-[150px] border-r border-slate-800/60 text-center">
+                    {m.label}
+                  </th>
+                ))}
+                <th className="p-3 font-black min-w-[150px] bg-[#111c38] text-amber-300 text-center border-l-2 border-slate-700">
+                  ยอดรวมทั้งช่วง
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-800/40">
+              
+              {/* 1. CASH INFLOW SECTION */}
+              <tr className="bg-emerald-950/30 text-emerald-300 font-extrabold text-xs">
+                <td colSpan={forecastMatrix.length + 2} className="p-2.5 text-left bg-emerald-950/40">
+                  📥 กระแสเงินสดรับเข้า (Project Cash Inflows)
+                </td>
+              </tr>
+
+              <tr className="bg-slate-900/40 text-slate-300">
+                <td className="p-2 text-left font-sans sticky left-0 bg-slate-900/90 border-r border-slate-800 pl-4">
+                  ยอดเบิกจ่ายเงินจากโครงการ รพ. (Stage 8 อัตโนมัติ - หัก ณ ที่จ่าย 1%)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2 border-r border-slate-800/40 text-emerald-400 font-bold">
+                    {m.projectInflowTotal > 0 ? `+${formatCurrency(m.projectInflowTotal)}` : '0 ฿'}
+                  </td>
+                ))}
+                <td className="p-2 font-bold text-emerald-300 border-l-2 border-slate-700">
+                  +{formatCurrency(forecastMatrix.reduce((s, m) => s + m.projectInflowTotal, 0))}
+                </td>
+              </tr>
+
+              {/* ⭐ USER EDITABLE ROW: เก็บเงินจากโรงพยาบาล */}
+              <tr className="bg-emerald-950/20 text-emerald-200 border-y border-emerald-500/20">
+                <td className="p-2.5 text-left font-sans font-bold sticky left-0 bg-[#062c1d] border-r border-slate-800 pl-4 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-emerald-300">
+                    <span>✏️</span> <span>เก็บเงินจากโรงพยาบาล (กำหนดเอง)</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-normal bg-emerald-900/50 px-1.5 py-0.5 rounded">กรอกได้</span>
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={customHospitalCollections[m.key] !== undefined && customHospitalCollections[m.key] !== 0 ? customHospitalCollections[m.key] : ''}
+                      onChange={(e) => handleCollectionChange(m.key, e.target.value)}
+                      className="w-full bg-slate-950/90 border border-emerald-500/40 hover:border-emerald-400 focus:border-emerald-300 text-emerald-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-emerald-400"
+                    />
+                  </td>
+                ))}
+                <td className="p-2.5 font-black text-emerald-300 border-l-2 border-slate-700 bg-emerald-950/40">
+                  +{formatCurrency(forecastMatrix.reduce((s, m) => s + (Number(customHospitalCollections[m.key]) || 0), 0))}
+                </td>
+              </tr>
+
+              <tr className="bg-[#022c22] text-emerald-100 font-black border-y border-emerald-500/40">
+                <td className="p-2.5 text-left font-sans text-xs sticky left-0 bg-[#022c22] border-r border-slate-800">
+                  รวมเงินสดรับเข้าทั้งหมด (Total Inflow)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2.5 border-r border-slate-800/40 text-emerald-300">
+                    +{formatCurrency(m.totalInflow)}
+                  </td>
+                ))}
+                <td className="p-2.5 font-black text-amber-300 border-l-2 border-slate-700">
+                  +{formatCurrency(horizonSummary.totalIn)}
+                </td>
+              </tr>
+
+              {/* 2. CASH OUTFLOW SECTION */}
+              <tr className="bg-rose-950/30 text-rose-300 font-extrabold text-xs">
+                <td colSpan={forecastMatrix.length + 2} className="p-2.5 text-left bg-rose-950/40">
+                  📤 กระแสเงินสดจ่ายออก (Project & Operational Outflows)
+                </td>
+              </tr>
+
+              <tr className="bg-slate-900/40 text-slate-300">
+                <td className="p-2 text-left font-sans sticky left-0 bg-slate-900/90 border-r border-slate-800 pl-4">
+                  ภาระจ่ายชำระค่าสินค้า Vendor (Purchase Orders)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2 border-r border-slate-800/40 text-rose-400">
+                    {m.poOutflowTotal > 0 ? `-${formatCurrency(m.poOutflowTotal)}` : '0 ฿'}
+                  </td>
+                ))}
+                <td className="p-2 font-bold text-rose-300 border-l-2 border-slate-700">
+                  -{formatCurrency(forecastMatrix.reduce((s, m) => s + m.poOutflowTotal, 0))}
+                </td>
+              </tr>
+
+              <tr className="bg-slate-900/40 text-slate-300">
+                <td className="p-2 text-left font-sans sticky left-0 bg-slate-900/90 border-r border-slate-800 pl-4">
+                  ภาษีนำเข้า & พิธีการศุลกากร (Estimated Import Duties)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2 border-r border-slate-800/40 text-rose-300/80">
+                    {m.estimatedDuties > 0 ? `-${formatCurrency(m.estimatedDuties)}` : '0 ฿'}
+                  </td>
+                ))}
+                <td className="p-2 font-bold text-rose-300/80 border-l-2 border-slate-700">
+                  -{formatCurrency(forecastMatrix.reduce((s, m) => s + m.estimatedDuties, 0))}
+                </td>
+              </tr>
+
+              <tr className="bg-slate-900/40 text-slate-300">
+                <td className="p-2 text-left font-sans sticky left-0 bg-slate-900/90 border-r border-slate-800 pl-4">
+                  ค่าใช้จ่ายดำเนินงานประจำ (เฉลี่ย 12 เดือนย้อนหลัง TTM: {t12RangeLabel || '12M'} หาร 12)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2 border-r border-slate-800/40 text-rose-300/80">
+                    -{formatCurrency(m.opexOutflow)}
+                  </td>
+                ))}
+                <td className="p-2 font-bold text-rose-300/80 border-l-2 border-slate-700">
+                  -{formatCurrency(forecastMatrix.reduce((s, m) => s + m.opexOutflow, 0))}
+                </td>
+              </tr>
+
+              {/* ⭐ USER EDITABLE ROW: ค่าใช้จ่ายที่คาดการณ์ */}
+              <tr className="bg-rose-950/20 text-rose-200 border-y border-rose-500/20">
+                <td className="p-2.5 text-left font-sans font-bold sticky left-0 bg-[#350713] border-r border-slate-800 pl-4 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-rose-300">
+                    <span>✏️</span> <span>ค่าใช้จ่ายที่คาดการณ์ (กำหนดเอง)</span>
+                  </span>
+                  <span className="text-[10px] text-rose-400 font-normal bg-rose-900/50 px-1.5 py-0.5 rounded">กรอกได้</span>
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={customProjectedExpenses[m.key] !== undefined && customProjectedExpenses[m.key] !== 0 ? customProjectedExpenses[m.key] : ''}
+                      onChange={(e) => handleExpenseChange(m.key, e.target.value)}
+                      className="w-full bg-slate-950/90 border border-rose-500/40 hover:border-rose-400 focus:border-rose-300 text-rose-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-rose-400"
+                    />
+                  </td>
+                ))}
+                <td className="p-2.5 font-black text-rose-300 border-l-2 border-slate-700 bg-rose-950/40">
+                  -{formatCurrency(forecastMatrix.reduce((s, m) => s + (Number(customProjectedExpenses[m.key]) || 0), 0))}
+                </td>
+              </tr>
+
+              <tr className="bg-[#4c0519] text-rose-200 font-black border-y border-rose-600/50">
+                <td className="p-2.5 text-left font-sans text-xs sticky left-0 bg-[#4c0519] border-r border-slate-800">
+                  รวมเงินสดจ่ายออกทั้งหมด (Total Outflow)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className="p-2.5 border-r border-slate-800/40 text-rose-300">
+                    -{formatCurrency(m.totalOutflow)}
+                  </td>
+                ))}
+                <td className="p-2.5 font-black text-rose-300 border-l-2 border-slate-700">
+                  -{formatCurrency(horizonSummary.totalOut)}
+                </td>
+              </tr>
+
+              {/* 3. NET CASH FLOW & ENDING RUNWAY */}
+              <tr className="bg-slate-950 font-bold border-t-2 border-slate-700">
+                <td className="p-2.5 text-left font-sans text-xs sticky left-0 bg-slate-950 border-r border-slate-800">
+                  กระแสเงินสดสุทธิประจำเดือน (Net Monthly Cash Flow)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className={`p-2.5 border-r border-slate-800/40 font-black ${
+                    m.netMonthlyCashFlow >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {m.netMonthlyCashFlow >= 0 ? '+' : ''}{formatCurrency(m.netMonthlyCashFlow)}
+                  </td>
+                ))}
+                <td className={`p-2.5 font-black border-l-2 border-slate-700 ${
+                  (horizonSummary.totalIn - horizonSummary.totalOut) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}>
+                  {(horizonSummary.totalIn - horizonSummary.totalOut) >= 0 ? '+' : ''}
+                  {formatCurrency(horizonSummary.totalIn - horizonSummary.totalOut)}
+                </td>
+              </tr>
+
+              <tr className="bg-[#1e1b4b] text-indigo-100 font-black text-xs border-y-2 border-indigo-500">
+                <td className="p-3 text-left font-sans sticky left-0 bg-[#1e1b4b] border-r border-slate-800">
+                  🏛️ เงินสดคงเหลือสุทธิยกไปสิ้นเดือน (Ending Cash Balance)
+                </td>
+                {forecastMatrix.map(m => (
+                  <td key={m.key} className={`p-3 border-r border-slate-800/40 font-mono text-sm font-black ${
+                    m.isDeficit ? 'text-rose-400' : 'text-amber-300'
+                  }`}>
+                    {formatCurrency(m.endingCash)}
+                  </td>
+                ))}
+                <td className="p-3 font-black text-amber-300 border-l-2 border-slate-700 text-sm">
+                  {formatCurrency(horizonSummary.endCash)}
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+window.CashForecastView = CashForecastView;
+
+
 // --- Module File: js/modules/mod07_finance/CostCalculationView.js ---
 // MODULE: mod07_finance/CostCalculationView.js
 
@@ -13070,7 +14853,21 @@ function MemberManagementModal({ members = [], setMembers, onClose }) {
 // --- Module File: js/modules/mod09_accounting/AccountingModule.js ---
 // MODULE: mod09_accounting/AccountingModule.js
 
-function AccountingModule({ transactions = [], initialFrozenMonths = [], initialRecurringTemplates = [], currentUser, onSaveTxn, onDeleteTxn, accountingSubTab = 'daily_entries', onSubTabChange }) {
+function AccountingModule({ 
+  transactions = [], 
+  purchaseOrders = [],
+  projects = [],
+  products = [],
+  initialFrozenMonths = [], 
+  initialRecurringTemplates = [], 
+  currentUser, 
+  onSaveTxn, 
+  onDeleteTxn, 
+  onOpenPOModal,
+  onDeletePO,
+  accountingSubTab = 'daily_entries', 
+  onSubTabChange 
+}) {
   const [localSubTab, setLocalSubTab] = useState(accountingSubTab || 'daily_entries');
   const subTab = accountingSubTab || localSubTab;
   const setSubTab = (newTab) => {
@@ -13300,6 +15097,15 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
             </button>
 
             <button
+              onClick={() => setSubTab('purchase_orders')}
+              className={`px-3.5 py-2 rounded-xl font-bold transition-all ${
+                subTab === 'purchase_orders' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📦 ใบสั่งซื้อ PO (Vendor)
+            </button>
+
+            <button
               onClick={() => setSubTab('pending_transfers')}
               className={`px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
                 subTab === 'pending_transfers' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-amber-300 hover:text-white'
@@ -13353,6 +15159,18 @@ function AccountingModule({ transactions = [], initialFrozenMonths = [], initial
           onEditTxn={handleEditTxn}
           onDeleteTxn={handleDeleteTxn}
           onImportTxns={handleImportTxns}
+        />
+      )}
+
+      {/* SUB TAB: Purchase Orders */}
+      {subTab === 'purchase_orders' && (
+        <PurchaseOrderView
+          purchaseOrders={purchaseOrders}
+          projects={projects}
+          products={products}
+          onOpenNewModal={onOpenPOModal}
+          onEditPO={(po) => onOpenPOModal ? onOpenPOModal(po) : null}
+          onDeletePO={onDeletePO}
         />
       )}
 
@@ -18394,16 +20212,84 @@ try {
 }
 
 function App() {
-  // Projects State
-  const [projects, setProjects] = useState(() => {
-    try {
-      const saved = localStorage.getItem('gov_hospital_projects');
-      return saved ? JSON.parse(saved) : window.INITIAL_PROJECTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for gov_hospital_projects:', e);
-      return window.INITIAL_PROJECTS || [];
-    }
-  });
+  // Navigation & View Sub-states
+  const [activeView, setActiveView] = useState('manager');
+  const [toastNotification, setToastNotification] = useState(null);
+  const [isGlobalCategoryManagerOpen, setIsGlobalCategoryManagerOpen] = useState(false);
+    
+  // 1. Logistics Domain Hook (Products, Shipments, Sold Assets, Repairs, FDA)
+  const logistics = useAeronLogistics({ setActiveView });
+  const {
+    productCategories, setProductCategories,
+    handleUpdateCategories,
+    products, setProducts,
+    soldProducts, setSoldProducts,
+    shipments, setShipments,
+    repairTickets, setRepairTickets,
+    fdaRegistrations, setFdaRegistrations,
+    isProductModalOpen, setIsProductModalOpen,
+    editingProduct, setEditingProduct,
+    isSoldModalOpen, setIsSoldModalOpen,
+    editingSoldAsset, setEditingSoldAsset,
+    isShipmentModalOpen, setIsShipmentModalOpen,
+    editingShipment, setEditingShipment,
+    isRepairModalOpen, setIsRepairModalOpen,
+    editingRepairTicket, setEditingRepairTicket,
+    isFDAModalOpen, setIsFDAModalOpen,
+    editingFDA, setEditingFDA,
+    handleSaveProduct,
+    handleSaveSoldAsset,
+    handleDeleteSoldAsset,
+    handleSaveShipment,
+    handleDeleteShipment,
+    handleSaveRepairTicket,
+    handleDeleteRepairTicket,
+    handleOpenRepairFromCatalog,
+    handleSaveFDA,
+    handleDeleteFDA
+  } = logistics;
+
+  // 2. Accounting Domain Hook (Transactions, Bank Accounts, Purchase Orders)
+  const accounting = useAeronAccounting({ setShipments });
+  const {
+    transactions, setTransactions,
+    purchaseOrders, setPurchaseOrders,
+    isPOModalOpen, setIsPOModalOpen,
+    editingPO, setEditingPO,
+    handleSaveTransaction,
+    handleDeleteTransaction,
+    handleSavePO,
+    handleDeletePO
+  } = accounting;
+
+  // 3. Projects Domain Hook (Kanban Projects, Cost Sheets, Demo Bookings)
+  const projectsHook = useAeronProjects({ soldProducts, setSoldProducts, setToastNotification });
+  const {
+    projects, setProjects,
+    costCalculations, setCostCalculations,
+    demoBookings, setDemoBookings,
+    isModalOpen, setIsModalOpen,
+    editingProject, setEditingProject,
+    isLogModalOpen, setIsLogModalOpen,
+    logTargetProject, setLogTargetProject,
+    isCostModalOpen, setIsCostModalOpen,
+    editingCostCalc, setEditingCostCalc,
+    isHistoryModalOpen, setIsHistoryModalOpen,
+    historyTargetProject, setHistoryTargetProject,
+    isChecklistModalOpen, setIsChecklistModalOpen,
+    checklistTargetBooking, setChecklistTargetBooking,
+    isDemoBookingModalOpen, setIsDemoBookingModalOpen,
+    editingDemoBooking, setEditingDemoBooking,
+    handleMoveProject,
+    handleSaveProject,
+    handleDeleteProject,
+    handleAddWeeklyLog,
+    handleSaveDemoBooking,
+    handleUpdateBookingStatus,
+    handleSaveCostCalc,
+    handleDeleteCostCalc,
+    handleOpenHistoryModal
+  } = projectsHook;
 
   // Team Members State
   const [members, setMembers] = useState(() => {
@@ -18416,102 +20302,25 @@ function App() {
     }
   });
 
-  // Central Product Catalog State
-  const [products, setProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_products');
-      return saved ? JSON.parse(saved) : window.CENTRAL_PRODUCT_CATALOG || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_products:', e);
-      return window.CENTRAL_PRODUCT_CATALOG || [];
-    }
-  });
-
-  // Demo Bookings State
-  const [demoBookings, setDemoBookings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_demo_bookings');
-      return saved ? JSON.parse(saved) : window.INITIAL_DEMO_BOOKINGS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_demo_bookings:', e);
-      return window.INITIAL_DEMO_BOOKINGS || [];
-    }
-  });
-
-  // Vendor Purchase Orders State
-  const [purchaseOrders, setPurchaseOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_purchase_orders');
-      return saved ? JSON.parse(saved) : window.INITIAL_PURCHASE_ORDERS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_purchase_orders:', e);
-      return window.INITIAL_PURCHASE_ORDERS || [];
-    }
-  });
-
-  // Repair Tickets State
-  const [repairTickets, setRepairTickets] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_repair_tickets');
-      return saved ? JSON.parse(saved) : window.INITIAL_REPAIR_TICKETS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_repair_tickets:', e);
-      return window.INITIAL_REPAIR_TICKETS || [];
-    }
-  });
-
-  // Delivered / Sold Products State
-  const [soldProducts, setSoldProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_sold_products');
-      return saved ? JSON.parse(saved) : window.INITIAL_SOLD_PRODUCTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_sold_products:', e);
-      return window.INITIAL_SOLD_PRODUCTS || [];
-    }
-  });
-
-  // Import Logistics / Shipments State
-  const [shipments, setShipments] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_shipments');
-      return saved ? JSON.parse(saved) : window.INITIAL_SHIPMENTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_shipments:', e);
-      return window.INITIAL_SHIPMENTS || [];
-    }
-  });
-
-  // MOD-09 Accounting Transactions State
-  const [transactions, setTransactions] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_accounting_txns');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
-          return parsed;
-        }
-      }
-      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
-    } catch(e) { return window.INITIAL_ACCOUNTING_TRANSACTIONS || []; }
-  });
-  // Thai FDA Registrations State
-  const [fdaRegistrations, setFdaRegistrations] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_fda_registrations');
-      return saved ? JSON.parse(saved) : window.INITIAL_FDA_REGISTRATIONS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_fda_registrations:', e);
-      return window.INITIAL_FDA_REGISTRATIONS || [];
-    }
-  });
-
-
   const [activeSidebarTab, setActiveSidebarTab] = useState('dashboard');
   // --- Auth & RBAC State: Mandatory Login Protection Every Time ---
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
+
+  // 4. HR Domain Hook (Leave Requests, Attendance Logs)
+  const hr = useAeronHR({ currentUser });
+  const {
+    leaveRequests, setLeaveRequests,
+    attendanceLogs, setAttendanceLogs,
+    isLeaveModalOpen, setIsLeaveModalOpen,
+    isAttendanceModalOpen, setIsAttendanceModalOpen,
+    handleApproveLeave,
+    handleDeleteLeave,
+    handleSaveLeave,
+    handleDeleteAttendance,
+    handleSaveAttendance
+  } = hr;
 
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
@@ -18538,8 +20347,9 @@ function App() {
   useEffect(() => {
     async function syncRemoteUsers() {
       try {
-        if (typeof loadFromDB === 'function') {
-          const remoteUsers = await loadFromDB('users', null);
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (fetcher) {
+          const remoteUsers = await fetcher('users', null);
           if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
             const rawStr = JSON.stringify(remoteUsers);
             if (!rawStr.includes('à¸') && !rawStr.includes('à¹') && !rawStr.includes('ðŸ')) {
@@ -18559,115 +20369,36 @@ function App() {
   const [financeSubView, setFinanceSubView] = useState('cost_calculation');
   const [hrSubView, setHRSubView] = useState('leave_attendance');
   const [accountingSubTab, setAccountingSubTab] = useState('daily_entries');
-  const [activeView, setActiveView] = useState('manager');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClientType, setFilterClientType] = useState('all'); // all, รัฐบาล, เอกชน
   const [filterBudgetType, setFilterBudgetType] = useState('all'); // all, งบลงทุน, งบเงินบำรุง, งบบริจาค...
 
   // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState(null);
-
-  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [logTargetProject, setLogTargetProject] = useState(null);
 
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [demoPrefill, setDemoPrefill] = useState(null);
 
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-
-  const [isPOModalOpen, setIsPOModalOpen] = useState(false);
-  const [editingPO, setEditingPO] = useState(null);
-  const [toastNotification, setToastNotification] = useState(null);
-
-  const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
-  const [editingRepairTicket, setEditingRepairTicket] = useState(null);
-
-  const [isSoldModalOpen, setIsSoldModalOpen] = useState(false);
-  const [editingSoldAsset, setEditingSoldAsset] = useState(null);
-
-  const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-  const [editingShipment, setEditingShipment] = useState(null);
-
-  const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
-  const [editingFDA, setEditingFDA] = useState(null);
-
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [historyTargetProject, setHistoryTargetProject] = useState(null);
-  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
-  const [checklistTargetBooking, setChecklistTargetBooking] = useState(null);
-
-  const [costCalculations, setCostCalculations] = useState(() => {
-    const saved = localStorage.getItem('aeron_cost_calculations');
-    return saved ? JSON.parse(saved) : (window.INITIAL_COST_CALCULATIONS || []);
-  });
-  // Activity / Audit Log State
+    // Activity / Audit Log State
   const [activityLogs, setActivityLogs] = useState(window.INITIAL_ACTIVITY_LOGS || []);
 
   // Leave & Attendance States
-  const [leaveRequests, setLeaveRequests] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_leave_requests');
-      return saved ? JSON.parse(saved) : (window.INITIAL_LEAVE_REQUESTS || []);
-    } catch(e) { return window.INITIAL_LEAVE_REQUESTS || []; }
-  });
-  const [attendanceLogs, setAttendanceLogs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aeron_attendance_logs');
-      return saved ? JSON.parse(saved) : (window.INITIAL_ATTENDANCE_LOGS || []);
-    } catch(e) { return window.INITIAL_ATTENDANCE_LOGS || []; }
-  });
-  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
-  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  const [isCostModalOpen, setIsCostModalOpen] = useState(false);
-  const [editingCostCalc, setEditingCostCalc] = useState(null);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Universal Report Hub & Modal States
   const [isUniversalReportModalOpen, setIsUniversalReportModalOpen] = useState(false);
   const [activeReportId, setActiveReportId] = useState(null);
 
-  const handleOpenReport = (reportId) => {
+  const handleOpenReport = useCallback((reportId) => {
     setActiveReportId(reportId);
     setIsUniversalReportModalOpen(true);
-  };
-
-  const handleOpenHistoryModal = (proj) => {
-    setHistoryTargetProject(proj);
-    setIsHistoryModalOpen(true);
-  };
+  }, []);
 
   const handleOpenVoiceModal = (p) => {
     setToastNotification({ title: '🎙️ Voice AI', message: `พร้อมรับคำสั่งเสียงสำหรับโครงการ ${p ? p.hospitalName : ''}` });
   };
 
-  const handleUpdateBookingStatus = (bookingId, newStatus) => {
-    setDemoBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
-  };
-
-  const handleSaveCostCalc = (calcData) => {
-    setCostCalculations(prev => {
-      const idx = prev.findIndex(c => c.id === calcData.id || c.projectId === calcData.projectId);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...calcData, id: copy[idx].id };
-        return copy;
-      } else {
-        return [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
-      }
-    });
-    setIsCostModalOpen(false);
-    setEditingCostCalc(null);
-  };
-
-  const handleDeleteCostCalc = (calcId) => {
-    if (window.confirm('ยืนยันลบสเปรดชีตคำนวณต้นทุนนี้?')) {
-      setCostCalculations(prev => prev.filter(c => c.id !== calcId));
-    }
-  };
 
   // Scoped Projects based on User Role Scope
   const scopedProjects = useMemo(() => getScopedProjects(currentUser, projects), [projects, currentUser]);
@@ -18916,7 +20647,6 @@ function App() {
     syncToDB('cost_calculations', costCalculations);
   }, [costCalculations]);
 
-
   const filteredProjects = useMemo(() => {
     return scopedProjects.filter(p => {
       // Member view filter
@@ -18953,357 +20683,6 @@ function App() {
     });
   }, [projects, activeView, members, filterClientType, filterBudgetType, searchTerm]);
 
-  // Handle move project stage in Kanban
-  const handleMoveProject = (projectId, targetStageId) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
-        if (isWon && p.status !== targetStageId) {
-          setToastNotification({
-            show: true,
-            title: `🎉 เซลส์ ${p.assignee} เปลี่ยนสถานะโครงการเป็นชนะงาน/ได้สัญญา!`,
-            message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกย้ายเข้าสู่หน้ารอสั่งซื้อ PO จาก Vendor`,
-            projectId: p.id
-          });
-        }
-
-        const isDelivered = targetStageId === 'stage_delivery' || targetStageId === 'stage_completed';
-        if (isDelivered && p.status !== targetStageId) {
-          const exists = soldProducts.some(sp => sp.projectId === p.id);
-          if (!exists) {
-            const delivDate = p.procurementDate || new Date().toISOString().split('T')[0];
-            const delivYr = new Date(delivDate).getFullYear();
-            const newAsset = {
-              id: 'sold-' + Date.now(),
-              assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-              contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
-              projectId: p.id,
-              hospitalName: p.hospitalName,
-              department: 'แผนกห้องผ่าตัด / CCU',
-              productName: p.productName || 'เครื่องมือแพทย์ AERON',
-              brand: p.productBrand || 'AERON MEDICAL',
-              productCategory: p.productCategory || 'อุปกรณ์ทางการแพทย์',
-              serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
-              freebies: 'กระดาษบันทึกมาตรฐาน 10 ม้วน, สายสัญญาณสำรอง, รถเข็นสแตนเลส, คู่มือการใช้งานภาษาไทย',
-              salesPerson: p.assignee,
-              contactPerson: p.decisionMakers || 'อาจารย์แพทย์ / หัวหน้าพยาบาล',
-              deliveryDate: delivDate,
-              projectValue: p.budget || 0,
-              dfAmount: p.dfAmount || '100,000 บาท',
-              bidGuaranteeAmount: Math.round((p.budget || 0) * 0.05),
-              bidGuaranteeRefundDate: `${delivYr}-12-15`,
-              warrantyYears: 1,
-              warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
-              nextPmDate: `${delivYr}-12-15`,
-              pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
-              pmStatus: '⏳ ถึงกำหนดทำ PM',
-              status: 'รับมอบเรียบร้อย'
-            };
-            setSoldProducts(prevSold => [newAsset, ...prevSold]);
-
-            setToastNotification({
-              show: true,
-              title: `🚚 ส่งมอบสินค้าสำเร็จ! บันทึกเข้าตาราง "สินค้าที่ขายแล้ว" อัตโนมัติ`,
-              message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกบันทึกเข้าสู่หน้ารายการสินค้าที่ขายแล้ว พร้อมตั้งวันหมดประกันและนัด PM อัตโนมัติ`,
-              projectId: p.id
-            });
-          }
-        }
-
-        return { ...p, status: targetStageId };
-      }
-      return p;
-    }));
-  };
-
-  // Add Project
-  const handleSaveProject = (projectData) => {
-    if (projectData.id) {
-      setProjects(prev => prev.map(p => p.id === projectData.id ? projectData : p));
-    } else {
-      const newProj = {
-        ...projectData,
-        id: 'proj-' + Date.now(),
-        createdDate: new Date().toISOString().split('T')[0],
-        weeklyLogs: []
-      };
-      setProjects(prev => [newProj, ...prev]);
-    }
-    setIsModalOpen(false);
-    setEditingProject(null);
-  };
-
-  // Delete Project
-  const handleDeleteProject = (projectId) => {
-    if (window.confirm('คุณต้องการลบโครงการนี้ออกจากระบบใช่หรือไม่?')) {
-      setProjects(prev => prev.filter(p => p.id !== projectId));
-    }
-  };
-
-  // Add Weekly Log Note
-  const handleAddWeeklyLog = (projectId, note, author) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const newLog = {
-          date: new Date().toISOString().split('T')[0],
-          author: author || p.assignee,
-          note
-        };
-        const updatedLogs = [newLog, ...(p.weeklyLogs || [])];
-        const updatedProj = {
-          ...p,
-          weeklyLogs: updatedLogs
-        };
-
-        if (historyTargetProject && historyTargetProject.id === projectId) {
-          setHistoryTargetProject(updatedProj);
-        }
-
-        return updatedProj;
-      }
-      return p;
-    }));
-    setIsLogModalOpen(false);
-    setLogTargetProject(null);
-  };
-
-  // Save Demo Booking
-  const handleSaveDemoBooking = (bookingData) => {
-    if (bookingData.id) {
-      setDemoBookings(prev => prev.map(b => b.id === bookingData.id ? bookingData : b));
-    } else {
-      const newBooking = {
-        ...bookingData,
-        id: 'booking-' + Date.now()
-      };
-      setDemoBookings(prev => [newBooking, ...prev]);
-
-      if (bookingData.projectId) {
-        setProjects(prev => prev.map(p => {
-          if (p.id === bookingData.projectId) {
-            return {
-              ...p,
-              demoStatus: 'นัดหมายแล้ว',
-              demoStartDate: bookingData.startDate,
-              demoEndDate: bookingData.endDate
-            };
-          }
-          return p;
-        }));
-      }
-    }
-
-    setIsDemoModalOpen(false);
-    setDemoPrefill(null);
-  };
-
-  // Save Central Product
-  const handleSaveProduct = (productData) => {
-    if (productData.id) {
-      setProducts(prev => prev.map(p => p.id === productData.id ? productData : p));
-    } else {
-      const newProd = {
-        ...productData,
-        id: 'prod-' + Date.now()
-      };
-      setProducts(prev => [newProd, ...prev]);
-    }
-    setIsProductModalOpen(false);
-    setEditingProduct(null);
-  };
-
-  // Save Purchase Order (PO) with Auto-Linking to Shipment Tracking
-  const handleSavePO = (poData) => {
-    let savedPO = poData;
-    if (poData.id) {
-      setPurchaseOrders(prev => prev.map(po => po.id === poData.id ? poData : po));
-    } else {
-      savedPO = {
-        ...poData,
-        id: 'po-' + Date.now()
-      };
-      setPurchaseOrders(prev => [savedPO, ...prev]);
-    }
-
-    // Auto Link: Create Shipment Tracking Entry if not existing
-    if (savedPO.poNumber) {
-      setShipments(prevShipments => {
-        const exists = prevShipments.some(s => s.poNumber === savedPO.poNumber || s.poId === savedPO.id);
-        if (!exists) {
-          const delivYr = new Date().getFullYear();
-          const newShipment = {
-            id: 'shp-' + Date.now(),
-            shipmentNumber: `SHP-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-            poNumber: savedPO.poNumber,
-            poId: savedPO.id,
-            productName: savedPO.productName || 'เครื่องมือแพทย์ AERON',
-            productCategory: savedPO.productCategory || 'อุปกรณ์แพทย์',
-            quantity: savedPO.quantity || 1,
-            vendorName: savedPO.vendorName || 'Vendor Manufacturer',
-            vendorCountry: savedPO.vendorCountry || 'ต่างประเทศ',
-            hospitalDestination: savedPO.hospitalName || 'โรงพยาบาลเป้าหมาย',
-            shippingCompany: 'DHL Global Forwarding',
-            trackingNumber: `AWB-${Math.floor(Math.random() * 89999999) + 10000000}`,
-            cbm: 2.5,
-            grossWeight: 150.0,
-            transportType: '✈️ ทางอากาศ (Air Freight)',
-            shippingCost: 35000,
-            dutyTaxes: 12000,
-            customsBroker: 'V-Cargo Logistics (Thailand)',
-            etd: savedPO.poDate || new Date().toISOString().split('T')[0],
-            eta: savedPO.expectedDelivery || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-            status: 'รอจ่ายเงิน',
-            notes: `ออก PO ส่งให้ Vendor ${savedPO.vendorName} เรียบร้อยแล้ว`
-          };
-          return [newShipment, ...prevShipments];
-        }
-        return prevShipments;
-      });
-    }
-
-    setIsPOModalOpen(false);
-    setEditingPO(null);
-  };
-
-  // Delete Purchase Order
-  const handleDeletePO = (poId) => {
-    if (window.confirm('คุณต้องการลบใบสั่งซื้อ PO นี้ออกจากระบบใช่หรือไม่?')) {
-      setPurchaseOrders(prev => prev.filter(po => po.id !== poId));
-    }
-  };
-
-  // Save Repair Ticket (Bi-directional Link with Demo Catalog)
-  const handleSaveRepairTicket = (ticketData) => {
-    if (ticketData.id) {
-      setRepairTickets(prev => prev.map(t => t.id === ticketData.id ? ticketData : t));
-    } else {
-      const newTicket = {
-        ...ticketData,
-        id: 'rep-' + Date.now()
-      };
-      setRepairTickets(prev => [newTicket, ...prev]);
-    }
-
-    // Auto Link back to Central Demo Catalog if category is "สินค้า Demo"
-    if (ticketData.category === 'สินค้า Demo' && ticketData.sn) {
-      const isFixed = ticketData.status === 'ซ่อมเสร็จแล้ว' || ticketData.status === 'ส่งคืนลูกค้า';
-      const newUnitStatus = isFixed ? 'พร้อมใช้งาน' : 'ส่งซ่อม';
-
-      setProducts(prevProducts => prevProducts.map(p => {
-        const hasMatchingUnit = (p.demoUnits || []).some(u => u.sn === ticketData.sn);
-        if (hasMatchingUnit) {
-          const updatedUnits = p.demoUnits.map(u => {
-            if (u.sn === ticketData.sn) {
-              return {
-                ...u,
-                status: newUnitStatus,
-                location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
-              };
-            }
-            return u;
-          });
-          return { ...p, demoUnits: updatedUnits };
-        }
-        return p;
-      }));
-    }
-
-    setIsRepairModalOpen(false);
-    setEditingRepairTicket(null);
-  };
-
-  // Delete Repair Ticket
-  const handleDeleteRepairTicket = (ticketId) => {
-    if (window.confirm('คุณต้องการลบรายการส่งซ่อมนี้ใช่หรือไม่?')) {
-      setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
-    }
-  };
-
-  // Open Repair Modal from Demo Catalog
-  const handleOpenRepairFromCatalog = (product, unit) => {
-    setEditingRepairTicket({
-      category: 'สินค้า Demo',
-      productName: product.name,
-      productCategory: product.category,
-      sn: unit ? unit.sn : '',
-      repairedItems: unit ? (unit.accessories || 'ตัวเครื่องหลัก และ อุปกรณ์ประกอบ') : 'ตัวเครื่องหลัก',
-      lastHospital: unit ? (unit.location || 'สำนักงาน AERON (กรุงเทพฯ)') : 'สำนักงาน AERON',
-      location: 'ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)',
-      status: 'ส่งซ่อมอยู่',
-      repairVendor: 'AERON Service Center (กรุงเทพฯ)',
-      sentDate: new Date().toISOString().split('T')[0]
-    });
-    setActiveView('repair_service');
-    setIsRepairModalOpen(true);
-  };
-
-  useEffect(() => {
-    localStorage.setItem('aeron_leave_requests', JSON.stringify(leaveRequests));
-    syncToDB('leave_requests', leaveRequests);
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
-    syncToDB('attendance_logs', attendanceLogs);
-  }, [attendanceLogs]);
-  useEffect(() => {
-    localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-    syncToDB('accounting', transactions);
-  }, [transactions]);
-  // MOD-09 Accounting Handlers
-  const handleSaveTransaction = (txnData) => {
-    setTransactions(prev => {
-      const idx = prev.findIndex(t => t.id === txnData.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...txnData };
-        return copy;
-      } else {
-        return [{ ...txnData }, ...prev];
-      }
-    });
-  };
-
-  const handleDeleteTransaction = (txnId) => {
-    if (window.confirm('ยืนยันลบรายการบัญชีนี้?')) {
-      setTransactions(prev => prev.filter(t => t.id !== txnId));
-    }
-  };
-  // Leave & Attendance Handlers
-  const handleApproveLeave = (leaveId, newStatus = '✅ อนุมัติแล้ว') => {
-    setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'หัวหน้างาน' } : l));
-  };
-
-  const handleDeleteLeave = (leaveId) => {
-    if (window.confirm('ยืนยันลบคำขอลานี้?')) {
-      setLeaveRequests(prev => prev.filter(l => l.id !== leaveId));
-    }
-  };
-
-  const handleSaveLeave = (leaveData) => {
-    if (leaveData.id) {
-      setLeaveRequests(prev => prev.map(l => l.id === leaveData.id ? leaveData : l));
-    } else {
-      setLeaveRequests(prev => [{ ...leaveData, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev]);
-    }
-    setIsLeaveModalOpen(false);
-  };
-
-  const handleDeleteAttendance = (attId) => {
-    if (window.confirm('ยืนยันลบรายการนี้?')) {
-      setAttendanceLogs(prev => prev.filter(a => a.id !== attId));
-    }
-  };
-
-  const handleSaveAttendance = (attData) => {
-    if (attData.id) {
-      setAttendanceLogs(prev => prev.map(a => a.id === attData.id ? attData : a));
-    } else {
-      setAttendanceLogs(prev => [{ ...attData, id: 'att-' + Date.now() }, ...prev]);
-    }
-    setIsAttendanceModalOpen(false);
-  };
-
   // Export Data to CSV
   const exportToCSV = () => {
     const headers = ["ชื่องาน/โครงการ", "โรงพยาบาล", "ประเภทลูกค้า", "ผู้รับผิดชอบ", "ชนิดสินค้า/รุ่น", "แบรนด์", "งบประมาณ(บาท)", "ประเภทงบประมาณ", "ทิศทางงบ", "สถานะขั้นตอน", "กำหนดจัดซื้อ", "สถานะเดโม่", "วันนัดเดโม่", "อาจารย์ผู้ตัดสินใจ", "ค่า DF", "คู่แข่ง", "โอกาสได้งาน(%)"];
@@ -19339,72 +20718,6 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  // Save Delivered / Sold Asset
-  const handleSaveSoldAsset = (assetData) => {
-    if (assetData.id) {
-      setSoldProducts(prev => prev.map(a => a.id === assetData.id ? assetData : a));
-    } else {
-      const newAsset = {
-        ...assetData,
-        id: 'sold-' + Date.now()
-      };
-      setSoldProducts(prev => [newAsset, ...prev]);
-    }
-    setIsSoldModalOpen(false);
-    setEditingSoldAsset(null);
-  };
-
-  // Delete Delivered / Sold Asset
-  const handleDeleteSoldAsset = (assetId) => {
-    if (window.confirm('คุณต้องการลบรายการสินค้าที่ขายแล้วนี้ใช่หรือไม่?')) {
-      setSoldProducts(prev => prev.filter(a => a.id !== assetId));
-    }
-  };
-
-  // Save Shipment Tracking Record
-  const handleSaveShipment = (shipmentData) => {
-    if (shipmentData.id) {
-      setShipments(prev => prev.map(s => s.id === shipmentData.id ? shipmentData : s));
-    } else {
-      const newShipment = {
-        ...shipmentData,
-        id: 'shp-' + Date.now()
-      };
-      setShipments(prev => [newShipment, ...prev]);
-    }
-    setIsShipmentModalOpen(false);
-    setEditingShipment(null);
-  };
-
-  // Delete Shipment Record
-  const handleDeleteShipment = (shipmentId) => {
-    if (window.confirm('คุณต้องการลบรายการนำเข้าลูกค้านี้ใช่หรือไม่?')) {
-      setShipments(prev => prev.filter(s => s.id !== shipmentId));
-    }
-  };
-
-  // Save FDA Registration Record
-  const handleSaveFDA = (fdaData) => {
-    if (fdaData.id) {
-      setFdaRegistrations(prev => prev.map(f => f.id === fdaData.id ? fdaData : f));
-    } else {
-      const newFDA = {
-        ...fdaData,
-        id: 'fda-' + Date.now()
-      };
-      setFdaRegistrations(prev => [newFDA, ...prev]);
-    }
-    setIsFDAModalOpen(false);
-    setEditingFDA(null);
-  };
-
-  // Delete FDA Registration Record
-  const handleDeleteFDA = (fdaId) => {
-    if (window.confirm('คุณต้องการลบรายการยื่นขอ อย. นี้ใช่หรือไม่?')) {
-      setFdaRegistrations(prev => prev.filter(f => f.id !== fdaId));
-    }
   };
 
   // Reset Demo Data
@@ -19589,7 +20902,6 @@ function App() {
           {/* TAB 4: Logistic */}
           {activeSidebarTab === 'logistic' && checkTabAccess(currentUser?.role, 'logistic') && (
             <div className="space-y-6">
-              
 
               {logisticSubView === 'product_catalog' && (
                 <ProductCatalogView 
@@ -19657,7 +20969,6 @@ function App() {
           {/* TAB 6: Report */}
           {activeSidebarTab === 'report' && checkTabAccess(currentUser?.role, 'report') && (
             <div className="space-y-6">
-              
 
               {(reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports') && (
                 <CentralReportsHubView 
@@ -19734,7 +21045,6 @@ function App() {
           {/* TAB 7: Finance */}
           {activeSidebarTab === 'finance' && checkTabAccess(currentUser?.role, 'finance') && (
             <div className="space-y-6">
-              
 
               {financeSubView === 'cost_calculation' && (
                 <CostCalculationView 
@@ -19745,6 +21055,16 @@ function App() {
                   onEditCalc={(calc) => { setEditingCostCalc(calc); setIsCostModalOpen(true); }}
                   onDeleteCalc={handleDeleteCostCalc}
                   onOpenReport={handleOpenReport}
+                />
+              )}
+
+              {financeSubView === 'cash_forecast' && (
+                <CashForecastView
+                  projects={projects}
+                  purchaseOrders={purchaseOrders}
+                  transactions={transactions}
+                  costCalculations={costCalculations}
+                  currentUser={currentUser}
                 />
               )}
 
@@ -19761,10 +21081,13 @@ function App() {
             </div>
           )}
 
-                              {/* TAB 9: ACCOUNTING */}
+          {/* TAB 9: ACCOUNTING */}
           {activeSidebarTab === 'accounting' && checkTabAccess(currentUser?.role, 'accounting') && (
             <AccountingModule
               transactions={transactions}
+              purchaseOrders={purchaseOrders}
+              projects={projects}
+              products={products}
               initialFrozenMonths={window.INITIAL_ACCOUNTING_FROZEN_MONTHS}
               initialRecurringTemplates={window.INITIAL_ACCOUNTING_RECURRING}
               currentUser={currentUser}
@@ -19772,6 +21095,8 @@ function App() {
               onSubTabChange={setAccountingSubTab}
               onSaveTxn={handleSaveTransaction}
               onDeleteTxn={handleDeleteTransaction}
+              onOpenPOModal={(po) => { setEditingPO(po || null); setIsPOModalOpen(true); }}
+              onDeletePO={handleDeletePO}
             />
           )}
 
@@ -19787,7 +21112,6 @@ function App() {
           {activeSidebarTab === 'hr' && checkTabAccess(currentUser?.role, 'hr') && (
             <div className="space-y-6">
               {/* Sub-view Toggle Tabs */}
-              
 
               {hrSubView === 'leave_attendance' && (
                 <LeaveAttendanceView
@@ -19891,6 +21215,8 @@ function App() {
       {isProductModalOpen && (
         <ProductModal
           product={editingProduct}
+          categories={productCategories}
+          onUpdateCategories={handleUpdateCategories}
           onSave={handleSaveProduct}
           onClose={() => { setIsProductModalOpen(false); setEditingProduct(null); }}
         />
@@ -20113,6 +21439,14 @@ function App() {
         />
       )}
 
+      {/* Global Category Master Data Manager Modal */}
+      <CategoryManagerModal
+        isOpen={isGlobalCategoryManagerOpen}
+        onClose={() => setIsGlobalCategoryManagerOpen(false)}
+        categories={productCategories || window.PRODUCT_CATEGORIES || []}
+        onUpdateCategories={handleUpdateCategories}
+      />
+
       {/* Login & Role Switcher Modal */}
       {(isLoginModalOpen || !currentUser) && (
         <LoginModal
@@ -20124,6 +21458,8 @@ function App() {
     </div>
   );
 }
+
+window.App = App;
 
 // Mount App to DOM
 const rootElement = document.getElementById('root');
