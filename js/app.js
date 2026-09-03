@@ -3048,17 +3048,17 @@ window.useAeronHR = useAeronHR;
 // ====================================================
 
 function useAeronLogistics({ setActiveView }) {
+  const isHydrated = useRef(false);
+
   // 0. Product Categories Master State
   const [productCategories, setProductCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_product_categories');
       return saved ? JSON.parse(saved) : (window.PRODUCT_CATEGORIES || [
-        'เครื่องตรวจคลื่นหัวใจ (ECG/EKG)',
-        'ระบบเครื่องอัลตราซาวด์ (Ultrasound)',
-        'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
+        'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
         'เครื่องช่วยหายใจ (Ventilator)',
-        'ระบบเฝ้าระวังผู้ป่วยวิกฤต (Central Monitor)',
-        'เครื่องมือแพทย์อื่นๆ'
+        'เครื่องมือแพทย์อื่นๆ',
+        'Power drill (ปืน,สว่าน เจาะกระดูก)'
       ]);
     } catch(e) {
       return window.PRODUCT_CATEGORIES || [];
@@ -3067,8 +3067,11 @@ function useAeronLogistics({ setActiveView }) {
 
   useEffect(() => {
     localStorage.setItem('aeron_product_categories', JSON.stringify(productCategories));
-    syncToDB('product_categories', productCategories);
     window.PRODUCT_CATEGORIES = productCategories;
+    // Only push to remote cloud if initial hydration has already finished!
+    if (isHydrated.current) {
+      syncToDB('product_categories', productCategories);
+    }
   }, [productCategories]);
 
   const handleUpdateCategories = useCallback((updatedList) => {
@@ -7081,11 +7084,12 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const activeCats = (categories && categories.length > 0) ? categories : (window.PRODUCT_CATEGORIES || []);
   const [formData, setFormData] = useState(() => {
     if (product) {
       return {
         id: product.id,
-        category: product.category || window.PRODUCT_CATEGORIES[0],
+        category: product.category || activeCats[0] || '',
         name: product.name || '',
         brand: product.brand || 'AERON MEDICAL',
         price: product.price || '',
@@ -7093,13 +7097,25 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
       };
     }
     return {
-      category: window.PRODUCT_CATEGORIES[0],
+      category: activeCats[0] || '',
       name: '',
       brand: 'AERON MEDICAL',
       price: '',
       description: ''
     };
   });
+
+  // Dynamic category sync when categories prop loads from cloud
+  useEffect(() => {
+    if (!product && categories && categories.length > 0) {
+      setFormData(prev => {
+        if (!categories.includes(prev.category)) {
+          return { ...prev, category: categories[0] };
+        }
+        return prev;
+      });
+    }
+  }, [categories, product]);
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
   

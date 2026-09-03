@@ -4,11 +4,12 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const activeCats = (categories && categories.length > 0) ? categories : (window.PRODUCT_CATEGORIES || []);
   const [formData, setFormData] = useState(() => {
     if (product) {
       return {
         id: product.id,
-        category: product.category || window.PRODUCT_CATEGORIES[0],
+        category: product.category || activeCats[0] || '',
         name: product.name || '',
         brand: product.brand || 'AERON MEDICAL',
         price: product.price || '',
@@ -16,13 +17,25 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
       };
     }
     return {
-      category: window.PRODUCT_CATEGORIES[0],
+      category: activeCats[0] || '',
       name: '',
       brand: 'AERON MEDICAL',
       price: '',
       description: ''
     };
   });
+
+  // Dynamic category sync when categories prop loads from cloud
+  useEffect(() => {
+    if (!product && categories && categories.length > 0) {
+      setFormData(prev => {
+        if (!categories.includes(prev.category)) {
+          return { ...prev, category: categories[0] };
+        }
+        return prev;
+      });
+    }
+  }, [categories, product]);
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
   

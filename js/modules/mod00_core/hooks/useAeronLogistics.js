@@ -4,17 +4,17 @@
 // ====================================================
 
 function useAeronLogistics({ setActiveView }) {
+  const isHydrated = useRef(false);
+
   // 0. Product Categories Master State
   const [productCategories, setProductCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_product_categories');
       return saved ? JSON.parse(saved) : (window.PRODUCT_CATEGORIES || [
-        'เครื่องตรวจคลื่นหัวใจ (ECG/EKG)',
-        'ระบบเครื่องอัลตราซาวด์ (Ultrasound)',
-        'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
+        'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
         'เครื่องช่วยหายใจ (Ventilator)',
-        'ระบบเฝ้าระวังผู้ป่วยวิกฤต (Central Monitor)',
-        'เครื่องมือแพทย์อื่นๆ'
+        'เครื่องมือแพทย์อื่นๆ',
+        'Power drill (ปืน,สว่าน เจาะกระดูก)'
       ]);
     } catch(e) {
       return window.PRODUCT_CATEGORIES || [];
@@ -23,8 +23,11 @@ function useAeronLogistics({ setActiveView }) {
 
   useEffect(() => {
     localStorage.setItem('aeron_product_categories', JSON.stringify(productCategories));
-    syncToDB('product_categories', productCategories);
     window.PRODUCT_CATEGORIES = productCategories;
+    // Only push to remote cloud if initial hydration has already finished!
+    if (isHydrated.current) {
+      syncToDB('product_categories', productCategories);
+    }
   }, [productCategories]);
 
   const handleUpdateCategories = useCallback((updatedList) => {

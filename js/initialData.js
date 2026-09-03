@@ -31,12 +31,10 @@ window.BUDGET_TYPES = [
 ];
 
 window.PRODUCT_CATEGORIES = [
-  'เครื่องตรวจคลื่นหัวใจ (ECG/EKG)',
-  'ระบบเครื่องอัลตราซาวด์ (Ultrasound)',
-  'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
+  'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
   'เครื่องช่วยหายใจ (Ventilator)',
-  'ระบบเฝ้าระวังผู้ป่วยวิกฤต (Central Monitor)',
-  'เครื่องมือแพทย์อื่นๆ'
+  'เครื่องมือแพทย์อื่นๆ',
+  'Power drill (ปืน,สว่าน เจาะกระดูก)'
 ];
 
 // Product Catalog - Seeded with Active Products
