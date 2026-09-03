@@ -111,7 +111,6 @@ function Header({
   useEffect(() => {
     const handleOnline = () => {
       setCloudStatus(prev => ({ ...prev, isOnline: true }));
-      triggerCloudSync();
     };
     const handleOffline = () => {
       setCloudStatus(prev => ({ ...prev, isOnline: false }));
@@ -120,8 +119,8 @@ function Header({
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial check on mount
-    triggerCloudSync();
+    // Set online status on mount without blindly pushing stale localStorage
+    setCloudStatus(prev => ({ ...prev, isOnline: navigator.onLine }));
 
     return () => {
       window.removeEventListener('online', handleOnline);
