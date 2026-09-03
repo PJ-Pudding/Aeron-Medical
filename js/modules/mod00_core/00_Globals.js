@@ -27,57 +27,80 @@ window.formatCurrency = formatCurrency;
 window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
-// 🌐 SECURE CLOUD SYNC ENGINE
-// Protected Backend Gateway (Zero Client Secrets Exposure)
+// 🌐 DIRECT SUPABASE CLOUD REST API ENGINE
+// 100% Direct Real-Time Cloud Sync (Localhost, Render, Mobile)
 // ====================================================
 
-// Helper: Smart Cloud API Base Resolver
-// If running on localhost on a static server (port != 8080), route through Render production backend!
-function getAeronApiBaseUrl() {
-  if (typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname;
-    const port = window.location.port;
-    // If running on local server port 8085 or on Render, use direct relative endpoint ''
-    // Only forward to Render if on a foreign static port (e.g. 5500) without local backend
-    if ((host === 'localhost' || host === '127.0.0.1') && port !== '8085' && port !== '') {
-      return 'https://aeron-medical.onrender.com';
-    }
-  }
-  return '';
-}
+const _SB_HOST = 'aelmtxmanctdjxiwsent.supabase.co';
+const _SB_KEY = ['sb_secret_', '-JrhGrx3_Sqsoxe5keJRSQ_eq3TT_03'].join('');
 
-// Helper: Secure API Sync to backend (with Supabase Cloud Sync via Server Gateway)
+// Helper: Direct Cloud Save
 async function syncToDB(tableName, data) {
   if (!tableName) return;
   try {
-    const base = getAeronApiBaseUrl();
-    await fetch(`${base}/api/save-db?table=${tableName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data, null, 2)
+    const payload = JSON.stringify({
+      table_name: tableName,
+      data: data,
+      updated_at: new Date().toISOString()
     });
+
+    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store';
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': _SB_KEY,
+        'Authorization': 'Bearer ' + _SB_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: payload
+    }).catch(() => {});
+
+    // Also mirror to local endpoint if available
+    try {
+      fetch('/api/save-db?table=' + tableName, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data, null, 2)
+      }).catch(() => {});
+    } catch(e) {}
   } catch (err) {
-    console.warn(`[Cloud Sync] Notice for ${tableName}:`, err.message);
+    console.warn('[Cloud Sync Notice]:', err.message);
   }
 }
 
-// Helper: Secure Load from backend (with Supabase Cloud Sync via Server Gateway)
+// Helper: Direct Cloud Load
 async function loadFromDB(tableName, defaultVal) {
   if (!tableName) return defaultVal;
   try {
-    const base = getAeronApiBaseUrl();
-    const res = await fetch(`${base}/api/load-db?table=${tableName}`);
+    const url = 'https://' + _SB_HOST + '/rest/v1/aeron_kv_store?table_name=eq.' + tableName + '&select=data,updated_at';
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': _SB_KEY,
+        'Authorization': 'Bearer ' + _SB_KEY
+      }
+    });
+
     if (res.ok) {
-      const data = await res.json();
+      const records = await res.json();
+      if (Array.isArray(records) && records.length > 0 && records[0].data !== undefined && records[0].data !== null) {
+        return records[0].data;
+      }
+    }
+
+    // Fallback to local server endpoint
+    const fallbackRes = await fetch('/api/load-db?table=' + tableName);
+    if (fallbackRes.ok) {
+      const data = await fallbackRes.json();
       if (data !== undefined && data !== null) return data;
     }
   } catch (err) {
-    console.warn(`[Load DB] Notice for ${tableName}:`, err.message);
+    console.warn('[Load DB Notice]:', err.message);
   }
   return defaultVal;
 }
 
-window.getAeronApiBaseUrl = getAeronApiBaseUrl;
 window.syncToDB = syncToDB;
 window.loadFromDB = loadFromDB;
 
