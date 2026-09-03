@@ -6,7 +6,7 @@
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // Helper: Format Thai currency
-const formatCurrency = (amount) => {
+var formatCurrency = (amount) => {
   if (!amount || isNaN(amount)) return '0 บาท';
   return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
 };

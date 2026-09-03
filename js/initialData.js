@@ -1,3 +1,23 @@
+// ====================================================
+// Global Currency & Number Formatters (Indestructible Failsafe)
+// ====================================================
+var formatCurrency = function(amount) {
+  if (!amount || isNaN(amount)) return '0 บาท';
+  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
+};
+var formatShortCurrency = function(amount) {
+  if (amount === undefined || amount === null || isNaN(amount)) return '0 ฿';
+  if (Math.abs(amount) >= 1000000) {
+    return ((Number(amount) || 0) / 1000000).toFixed(1) + ' ล้านบาท';
+  }
+  if (Math.abs(amount) >= 100000) {
+    return ((Number(amount) || 0) / 1000).toFixed(0) + ' แสนบาท';
+  }
+  return Number(amount).toLocaleString('th-TH') + ' ฿';
+};
+window.formatCurrency = formatCurrency;
+window.formatShortCurrency = formatShortCurrency;
+
 // Initial Data & Constants for Hospital & Government Sales Tracking System
 // Company: AERON MEDICAL Co., Ltd.
 // Production Data with 100% Standardized Expense Categories Matching Filters
