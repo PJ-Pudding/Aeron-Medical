@@ -124,6 +124,53 @@ function useAeronLogistics({ setActiveView }) {
     syncToDB('fda_registrations', fdaRegistrations);
   }, [fdaRegistrations]);
 
+  // ⚡ Startup Cloud Hydration: Fetch latest live records from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateLogisticsFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Products
+        const remoteProducts = await fetcher('products', null);
+        if (isMounted && Array.isArray(remoteProducts) && remoteProducts.length > 0) {
+          setProducts(remoteProducts);
+          localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
+        } else if (isMounted && products && products.length > 0) {
+          // If local has products and cloud is empty, upload local products to Cloud DB!
+          syncToDB('products', products);
+        }
+
+        // 2. Categories
+        const remoteCategories = await fetcher('product_categories', null);
+        if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
+          setProductCategories(remoteCategories);
+          localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
+          window.PRODUCT_CATEGORIES = remoteCategories;
+        }
+
+        // 3. Sold Products
+        const remoteSold = await fetcher('sold_products', null);
+        if (isMounted && Array.isArray(remoteSold) && remoteSold.length > 0) {
+          setSoldProducts(remoteSold);
+          localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
+        }
+
+        // 4. Shipments
+        const remoteShipments = await fetcher('shipments', null);
+        if (isMounted && Array.isArray(remoteShipments) && remoteShipments.length > 0) {
+          setShipments(remoteShipments);
+          localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
+        }
+      } catch (e) {
+        console.warn('[Logistics Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateLogisticsFromCloud();
+    return () => { isMounted = false; };
+  }, []);
+
   // Handlers
   const handleSaveProduct = useCallback((productData) => {
     if (productData.id) {

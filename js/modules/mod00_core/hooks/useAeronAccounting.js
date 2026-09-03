@@ -47,6 +47,35 @@ function useAeronAccounting({ setShipments }) {
     syncToDB('purchase_orders', purchaseOrders);
   }, [purchaseOrders]);
 
+  // ⚡ Startup Cloud Hydration: Fetch latest transactions & purchase orders from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateAccountingFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Transactions
+        const remoteTxns = await fetcher('accounting', null);
+        if (isMounted && Array.isArray(remoteTxns) && remoteTxns.length > 0) {
+          setTransactions(remoteTxns);
+          localStorage.setItem('aeron_accounting_txns', JSON.stringify(remoteTxns));
+        }
+
+        // 2. Purchase Orders
+        const remotePOs = await fetcher('purchase_orders', null);
+        if (isMounted && Array.isArray(remotePOs) && remotePOs.length > 0) {
+          setPurchaseOrders(remotePOs);
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
+        }
+      } catch (e) {
+        console.warn('[Accounting Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateAccountingFromCloud();
+    return () => { isMounted = false; };
+  }, []);
+
   // Handlers
   const handleSaveTransaction = useCallback((txnData) => {
     setTransactions(prev => {

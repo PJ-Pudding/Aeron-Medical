@@ -23,10 +23,24 @@ function formatShortCurrency(amount) {
   return Number(amount).toLocaleString('th-TH') + ' ฿';
 };
 
+// Helper: Smart Cloud API Base Resolver
+// If running on localhost on a static server (like port 8085), route through Render production backend!
+function getAeronApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    if ((host === 'localhost' || host === '127.0.0.1') && port !== '8080') {
+      return 'https://aeron-medical.onrender.com';
+    }
+  }
+  return '';
+}
+
 // Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
 async function syncToDB(tableName, data) {
   try {
-    await fetch(`/api/save-db?table=${tableName}`, {
+    const base = getAeronApiBaseUrl();
+    await fetch(`${base}/api/save-db?table=${tableName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data, null, 2)
@@ -39,16 +53,21 @@ async function syncToDB(tableName, data) {
 // Helper: Load latest data from Cloud DB / Local API
 async function loadFromDB(tableName, defaultVal) {
   try {
-    const res = await fetch(`/api/load-db?table=${tableName}`);
+    const base = getAeronApiBaseUrl();
+    const res = await fetch(`${base}/api/load-db?table=${tableName}`);
     if (res.ok) {
       const data = await res.json();
-      if (data) return data;
+      if (data !== undefined && data !== null) return data;
     }
   } catch (err) {
     console.warn(`[Load DB] Notice for ${tableName}:`, err.message);
   }
   return defaultVal;
 }
+
+window.getAeronApiBaseUrl = getAeronApiBaseUrl;
+window.syncToDB = syncToDB;
+window.loadFromDB = loadFromDB;
 
 
 // --- Company Bank & Petty Cash Accounts System ---

@@ -67,6 +67,42 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     syncToDB('demo_bookings', demoBookings);
   }, [demoBookings]);
 
+  // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateProjectsFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Projects
+        const remoteProjects = await fetcher('projects', null);
+        if (isMounted && Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+          setProjects(remoteProjects);
+          localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+        }
+
+        // 2. Cost Calculations
+        const remoteCost = await fetcher('cost_calculations', null);
+        if (isMounted && Array.isArray(remoteCost) && remoteCost.length > 0) {
+          setCostCalculations(remoteCost);
+          localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
+        }
+
+        // 3. Demo Bookings
+        const remoteDemo = await fetcher('demo_bookings', null);
+        if (isMounted && Array.isArray(remoteDemo) && remoteDemo.length > 0) {
+          setDemoBookings(remoteDemo);
+          localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
+        }
+      } catch (e) {
+        console.warn('[Projects Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateProjectsFromCloud();
+    return () => { isMounted = false; };
+  }, []);
+
   // Handlers
   const handleOpenHistoryModal = useCallback((proj) => {
     setHistoryTargetProject(proj);

@@ -41,6 +41,35 @@ function useAeronHR({ currentUser }) {
     syncToDB('attendance_logs', attendanceLogs);
   }, [attendanceLogs]);
 
+  // ⚡ Startup Cloud Hydration: Fetch latest leave requests & attendance logs from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateHRFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Leave Requests
+        const remoteLeaves = await fetcher('leave_requests', null);
+        if (isMounted && Array.isArray(remoteLeaves) && remoteLeaves.length > 0) {
+          setLeaveRequests(remoteLeaves);
+          localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+        }
+
+        // 2. Attendance Logs
+        const remoteAttendance = await fetcher('attendance_logs', null);
+        if (isMounted && Array.isArray(remoteAttendance) && remoteAttendance.length > 0) {
+          setAttendanceLogs(remoteAttendance);
+          localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+        }
+      } catch (e) {
+        console.warn('[HR Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateHRFromCloud();
+    return () => { isMounted = false; };
+  }, []);
+
   // Handlers
   const handleApproveLeave = useCallback((leaveId, newStatus = '✅ อนุมัติแล้ว') => {
     setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ' } : l));

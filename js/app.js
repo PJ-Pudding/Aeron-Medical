@@ -29,10 +29,24 @@ function formatShortCurrency(amount) {
   return Number(amount).toLocaleString('th-TH') + ' ฿';
 };
 
+// Helper: Smart Cloud API Base Resolver
+// If running on localhost on a static server (like port 8085), route through Render production backend!
+function getAeronApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    if ((host === 'localhost' || host === '127.0.0.1') && port !== '8080') {
+      return 'https://aeron-medical.onrender.com';
+    }
+  }
+  return '';
+}
+
 // Helper: API Sync to backend endpoint /api/save-db (with Supabase Cloud Sync)
 async function syncToDB(tableName, data) {
   try {
-    await fetch(`/api/save-db?table=${tableName}`, {
+    const base = getAeronApiBaseUrl();
+    await fetch(`${base}/api/save-db?table=${tableName}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data, null, 2)
@@ -45,16 +59,21 @@ async function syncToDB(tableName, data) {
 // Helper: Load latest data from Cloud DB / Local API
 async function loadFromDB(tableName, defaultVal) {
   try {
-    const res = await fetch(`/api/load-db?table=${tableName}`);
+    const base = getAeronApiBaseUrl();
+    const res = await fetch(`${base}/api/load-db?table=${tableName}`);
     if (res.ok) {
       const data = await res.json();
-      if (data) return data;
+      if (data !== undefined && data !== null) return data;
     }
   } catch (err) {
     console.warn(`[Load DB] Notice for ${tableName}:`, err.message);
   }
   return defaultVal;
 }
+
+window.getAeronApiBaseUrl = getAeronApiBaseUrl;
+window.syncToDB = syncToDB;
+window.loadFromDB = loadFromDB;
 
 
 // --- Company Bank & Petty Cash Accounts System ---
@@ -2732,6 +2751,35 @@ function useAeronAccounting({ setShipments }) {
     syncToDB('purchase_orders', purchaseOrders);
   }, [purchaseOrders]);
 
+  // ⚡ Startup Cloud Hydration: Fetch latest transactions & purchase orders from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateAccountingFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Transactions
+        const remoteTxns = await fetcher('accounting', null);
+        if (isMounted && Array.isArray(remoteTxns) && remoteTxns.length > 0) {
+          setTransactions(remoteTxns);
+          localStorage.setItem('aeron_accounting_txns', JSON.stringify(remoteTxns));
+        }
+
+        // 2. Purchase Orders
+        const remotePOs = await fetcher('purchase_orders', null);
+        if (isMounted && Array.isArray(remotePOs) && remotePOs.length > 0) {
+          setPurchaseOrders(remotePOs);
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
+        }
+      } catch (e) {
+        console.warn('[Accounting Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateAccountingFromCloud();
+    return () => { isMounted = false; };
+  }, []);
+
   // Handlers
   const handleSaveTransaction = useCallback((txnData) => {
     setTransactions(prev => {
@@ -2869,6 +2917,35 @@ function useAeronHR({ currentUser }) {
     localStorage.setItem('aeron_attendance_logs', JSON.stringify(attendanceLogs));
     syncToDB('attendance_logs', attendanceLogs);
   }, [attendanceLogs]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest leave requests & attendance logs from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateHRFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Leave Requests
+        const remoteLeaves = await fetcher('leave_requests', null);
+        if (isMounted && Array.isArray(remoteLeaves) && remoteLeaves.length > 0) {
+          setLeaveRequests(remoteLeaves);
+          localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+        }
+
+        // 2. Attendance Logs
+        const remoteAttendance = await fetcher('attendance_logs', null);
+        if (isMounted && Array.isArray(remoteAttendance) && remoteAttendance.length > 0) {
+          setAttendanceLogs(remoteAttendance);
+          localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+        }
+      } catch (e) {
+        console.warn('[HR Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateHRFromCloud();
+    return () => { isMounted = false; };
+  }, []);
 
   // Handlers
   const handleApproveLeave = useCallback((leaveId, newStatus = '✅ อนุมัติแล้ว') => {
@@ -3047,6 +3124,53 @@ function useAeronLogistics({ setActiveView }) {
     localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
     syncToDB('fda_registrations', fdaRegistrations);
   }, [fdaRegistrations]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest live records from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateLogisticsFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Products
+        const remoteProducts = await fetcher('products', null);
+        if (isMounted && Array.isArray(remoteProducts) && remoteProducts.length > 0) {
+          setProducts(remoteProducts);
+          localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
+        } else if (isMounted && products && products.length > 0) {
+          // If local has products and cloud is empty, upload local products to Cloud DB!
+          syncToDB('products', products);
+        }
+
+        // 2. Categories
+        const remoteCategories = await fetcher('product_categories', null);
+        if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
+          setProductCategories(remoteCategories);
+          localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
+          window.PRODUCT_CATEGORIES = remoteCategories;
+        }
+
+        // 3. Sold Products
+        const remoteSold = await fetcher('sold_products', null);
+        if (isMounted && Array.isArray(remoteSold) && remoteSold.length > 0) {
+          setSoldProducts(remoteSold);
+          localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
+        }
+
+        // 4. Shipments
+        const remoteShipments = await fetcher('shipments', null);
+        if (isMounted && Array.isArray(remoteShipments) && remoteShipments.length > 0) {
+          setShipments(remoteShipments);
+          localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
+        }
+      } catch (e) {
+        console.warn('[Logistics Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateLogisticsFromCloud();
+    return () => { isMounted = false; };
+  }, []);
 
   // Handlers
   const handleSaveProduct = useCallback((productData) => {
@@ -3288,6 +3412,42 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
     syncToDB('demo_bookings', demoBookings);
   }, [demoBookings]);
+
+  // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function hydrateProjectsFromCloud() {
+      try {
+        const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+        if (!fetcher) return;
+
+        // 1. Projects
+        const remoteProjects = await fetcher('projects', null);
+        if (isMounted && Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+          setProjects(remoteProjects);
+          localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+        }
+
+        // 2. Cost Calculations
+        const remoteCost = await fetcher('cost_calculations', null);
+        if (isMounted && Array.isArray(remoteCost) && remoteCost.length > 0) {
+          setCostCalculations(remoteCost);
+          localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
+        }
+
+        // 3. Demo Bookings
+        const remoteDemo = await fetcher('demo_bookings', null);
+        if (isMounted && Array.isArray(remoteDemo) && remoteDemo.length > 0) {
+          setDemoBookings(remoteDemo);
+          localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
+        }
+      } catch (e) {
+        console.warn('[Projects Cloud Hydration Notice]:', e.message);
+      }
+    }
+    hydrateProjectsFromCloud();
+    return () => { isMounted = false; };
+  }, []);
 
   // Handlers
   const handleOpenHistoryModal = useCallback((proj) => {
