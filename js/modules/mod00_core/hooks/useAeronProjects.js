@@ -51,20 +51,28 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [isDemoBookingModalOpen, setIsDemoBookingModalOpen] = useState(false);
   const [editingDemoBooking, setEditingDemoBooking] = useState(null);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    syncToDB('projects', projects);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('projects', projects);
+    }
   }, [projects]);
 
   useEffect(() => {
     localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    syncToDB('cost_calculations', costCalculations);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('cost_calculations', costCalculations);
+    }
   }, [costCalculations]);
 
   useEffect(() => {
     localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    syncToDB('demo_bookings', demoBookings);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('demo_bookings', demoBookings);
+    }
   }, [demoBookings]);
 
   // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
@@ -99,8 +107,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         console.warn('[Projects Cloud Hydration Notice]:', e.message);
       }
     }
-    hydrateProjectsFromCloud();
-    return () => { isMounted = false; };
+    hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
+    window.addEventListener('focus', hydrateProjectsFromCloud);
+    const poller = setInterval(hydrateProjectsFromCloud, 10000);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateProjectsFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers

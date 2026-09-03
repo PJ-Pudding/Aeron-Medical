@@ -38,32 +38,7 @@ window.PRODUCT_CATEGORIES = [
 ];
 
 // Product Catalog - Seeded with Active Products
-window.CENTRAL_PRODUCT_CATALOG = [
-  {
-    id: 'prod-traction-frame-pax',
-    name: 'Traction Frame ตัวต่อเสริม เตียงในการผ่าตัดกระดูก ( Fracture Table )',
-    category: 'เตียงผ่าตัด & โคมไฟผ่าตัด (Surgical System)',
-    brand: 'PAX',
-    model: '11',
-    price: 20000000,
-    description: 'ไม่มีรายละเอียดสินค้า',
-    demoUnitsAvailable: 1,
-    demoSerialNumbers: ['SN-PAX-TF-01'],
-    demoUnits: [
-      {
-        sn: 'SN-PAX-TF-01',
-        status: 'พร้อมใช้งาน',
-        location: 'สำนักงาน AERON (กรุงเทพฯ)',
-        accessories: 'ตัวเครื่องหลัก และ อุปกรณ์ต่อเสริม Fracture Table'
-      }
-    ],
-    masterChecklistItems: [
-      { id: 'comp_1', name: 'โครงชุด Traction Frame Main Body', itemNo: 'TF-MAIN', serialNo: 'SN-PAX-TF-01', qty: 1, unit: 'ชุด', note: 'พร้อมใช้งาน' },
-      { id: 'comp_2', name: 'ชุดต่อเสริมเตียงผ่าตัดกระดูก Fracture Adapter', itemNo: 'FA-01', serialNo: '', qty: 1, unit: 'ชุด', note: '' },
-      { id: 'comp_3', name: 'คู่มือการติดตั้งและการใช้งานภาษาไทย/อังกฤษ', itemNo: 'MAN-TF', serialNo: '', qty: 1, unit: 'เล่ม', note: '' }
-    ]
-  }
-];
+window.CENTRAL_PRODUCT_CATALOG = [];
 
 // Sales Pipeline Stages
 window.STAGES = [

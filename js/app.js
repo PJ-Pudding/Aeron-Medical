@@ -3206,18 +3206,17 @@ function useAeronLogistics({ setActiveView }) {
     setProductCategories(updatedList);
   }, []);
 
-  // 1. Central Product Catalog State
+  // 1. Central Product Catalog State (No hardcoded resurrection)
   const [products, setProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_products');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
-      return (window.CENTRAL_PRODUCT_CATALOG && window.CENTRAL_PRODUCT_CATALOG.length > 0) ? window.CENTRAL_PRODUCT_CATALOG : [];
+      return (window.CENTRAL_PRODUCT_CATALOG && Array.isArray(window.CENTRAL_PRODUCT_CATALOG)) ? window.CENTRAL_PRODUCT_CATALOG : [];
     } catch (e) {
-      console.warn('localStorage parse fallback for aeron_products:', e);
-      return window.CENTRAL_PRODUCT_CATALOG || [];
+      return [];
     }
   });
 
@@ -3277,33 +3276,44 @@ function useAeronLogistics({ setActiveView }) {
   const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
   const [editingFDA, setEditingFDA] = useState(null);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
+
   useEffect(() => {
     localStorage.setItem('aeron_products', JSON.stringify(products));
-    syncToDB('products', products);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('products', products);
+    }
   }, [products]);
 
   useEffect(() => {
     localStorage.setItem('aeron_sold_products', JSON.stringify(soldProducts));
-    syncToDB('sold_products', soldProducts);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('sold_products', soldProducts);
+    }
   }, [soldProducts]);
 
   useEffect(() => {
     localStorage.setItem('aeron_shipments', JSON.stringify(shipments));
-    syncToDB('shipments', shipments);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('shipments', shipments);
+    }
   }, [shipments]);
 
   useEffect(() => {
     localStorage.setItem('aeron_repair_tickets', JSON.stringify(repairTickets));
-    syncToDB('repair_tickets', repairTickets);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('repair_tickets', repairTickets);
+    }
   }, [repairTickets]);
 
   useEffect(() => {
     localStorage.setItem('aeron_fda_registrations', JSON.stringify(fdaRegistrations));
-    syncToDB('fda_registrations', fdaRegistrations);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('fda_registrations', fdaRegistrations);
+    }
   }, [fdaRegistrations]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest live records from Supabase Cloud on mount
+  // ⚡ Universal Hydration with Focus Listener & Heartbeat Poller
   useEffect(() => {
     let isMounted = true;
     async function hydrateLogisticsFromCloud() {
@@ -3311,7 +3321,7 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Authoritative Cloud State - Accepts empty array [] after deletion)
+        // 1. Products (Authoritative Cloud State)
         const remoteProducts = await fetcher('products', null);
         if (isMounted && Array.isArray(remoteProducts)) {
           setProducts(remoteProducts);
@@ -3328,23 +3338,48 @@ function useAeronLogistics({ setActiveView }) {
 
         // 3. Sold Products
         const remoteSold = await fetcher('sold_products', null);
-        if (isMounted && Array.isArray(remoteSold) && remoteSold.length > 0) {
+        if (isMounted && Array.isArray(remoteSold)) {
           setSoldProducts(remoteSold);
           localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
         }
 
         // 4. Shipments
         const remoteShipments = await fetcher('shipments', null);
-        if (isMounted && Array.isArray(remoteShipments) && remoteShipments.length > 0) {
+        if (isMounted && Array.isArray(remoteShipments)) {
           setShipments(remoteShipments);
           localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
         }
+
+        // 5. Repair Tickets
+        const remoteRepairs = await fetcher('repair_tickets', null);
+        if (isMounted && Array.isArray(remoteRepairs)) {
+          setRepairTickets(remoteRepairs);
+          localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs));
+        }
+
+        // 6. FDA Registrations
+        const remoteFDA = await fetcher('fda_registrations', null);
+        if (isMounted && Array.isArray(remoteFDA)) {
+          setFdaRegistrations(remoteFDA);
+          localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA));
+        }
       } catch (e) {
         console.warn('[Logistics Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
       }
     }
+
     hydrateLogisticsFromCloud();
-    return () => { isMounted = false; };
+
+    window.addEventListener('focus', hydrateLogisticsFromCloud);
+    const poller = setInterval(hydrateLogisticsFromCloud, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateLogisticsFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers
@@ -3572,20 +3607,28 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [isDemoBookingModalOpen, setIsDemoBookingModalOpen] = useState(false);
   const [editingDemoBooking, setEditingDemoBooking] = useState(null);
 
-  // Sync to localStorage & DB
+  // ⚡ Live Cloud Sync & Local Storage Persistence (Guarded against Mount Overwrite)
+  const isHydrated = useRef(false);
+
   useEffect(() => {
     localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
-    syncToDB('projects', projects);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('projects', projects);
+    }
   }, [projects]);
 
   useEffect(() => {
     localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
-    syncToDB('cost_calculations', costCalculations);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('cost_calculations', costCalculations);
+    }
   }, [costCalculations]);
 
   useEffect(() => {
     localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
-    syncToDB('demo_bookings', demoBookings);
+    if (isHydrated.current && typeof syncToDB === 'function') {
+      syncToDB('demo_bookings', demoBookings);
+    }
   }, [demoBookings]);
 
   // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
@@ -3620,8 +3663,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         console.warn('[Projects Cloud Hydration Notice]:', e.message);
       }
     }
-    hydrateProjectsFromCloud();
-    return () => { isMounted = false; };
+    hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
+    window.addEventListener('focus', hydrateProjectsFromCloud);
+    const poller = setInterval(hydrateProjectsFromCloud, 10000);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateProjectsFromCloud);
+      clearInterval(poller);
+    };
   }, []);
 
   // Handlers
