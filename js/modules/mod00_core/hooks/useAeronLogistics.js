@@ -121,17 +121,17 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Authoritative Cloud State)
+        // 1. Products (Smart Deep Compare - Zero Flicker)
         const remoteProducts = await fetcher('products', null);
         if (isMounted && Array.isArray(remoteProducts)) {
-          setProducts(remoteProducts);
+          setProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteProducts) ? prev : remoteProducts));
           localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
         }
 
         // 2. Categories
         const remoteCategories = await fetcher('product_categories', null);
         if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
-          setProductCategories(remoteCategories);
+          setProductCategories(prev => (JSON.stringify(prev) === JSON.stringify(remoteCategories) ? prev : remoteCategories));
           localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
           window.PRODUCT_CATEGORIES = remoteCategories;
         }
@@ -139,28 +139,28 @@ function useAeronLogistics({ setActiveView }) {
         // 3. Sold Products
         const remoteSold = await fetcher('sold_products', null);
         if (isMounted && Array.isArray(remoteSold)) {
-          setSoldProducts(remoteSold);
+          setSoldProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteSold) ? prev : remoteSold));
           localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
         }
 
         // 4. Shipments
         const remoteShipments = await fetcher('shipments', null);
         if (isMounted && Array.isArray(remoteShipments)) {
-          setShipments(remoteShipments);
+          setShipments(prev => (JSON.stringify(prev) === JSON.stringify(remoteShipments) ? prev : remoteShipments));
           localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
         }
 
         // 5. Repair Tickets
         const remoteRepairs = await fetcher('repair_tickets', null);
         if (isMounted && Array.isArray(remoteRepairs)) {
-          setRepairTickets(remoteRepairs);
+          setRepairTickets(prev => (JSON.stringify(prev) === JSON.stringify(remoteRepairs) ? prev : remoteRepairs));
           localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs));
         }
 
         // 6. FDA Registrations
         const remoteFDA = await fetcher('fda_registrations', null);
         if (isMounted && Array.isArray(remoteFDA)) {
-          setFdaRegistrations(remoteFDA);
+          setFdaRegistrations(prev => (JSON.stringify(prev) === JSON.stringify(remoteFDA) ? prev : remoteFDA));
           localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA));
         }
       } catch (e) {

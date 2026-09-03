@@ -28,7 +28,7 @@ window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
 // 🌐 AERON CENTRALIZED BACKEND GATEWAY SYNC ENGINE
-// 100% Reliable Two-Way Sync between Localhost, Render, and Supabase Cloud
+// With Mutation Grace Period (Zero-Flicker) & Smart Deep Comparison
 // ====================================================
 
 function getAeronGatewayUrl() {
@@ -65,10 +65,27 @@ const _TABLE_LS_MAP = {
   messenger_trips: 'aeron_messenger_trips'
 };
 
+// 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
+window._aeronLastMutationTime = {};
+
+window.markAeronMutation = function(tableName) {
+  if (!tableName) return;
+  window._aeronLastMutationTime[tableName] = Date.now();
+};
+
+window.isAeronMutating = function(tableName) {
+  if (!tableName) return false;
+  const lastTime = window._aeronLastMutationTime[tableName] || 0;
+  return (Date.now() - lastTime) < 5000; // 5-second protected grace window
+};
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
     const base = getAeronGatewayUrl();
+
+    // Mark mutation lock immediately
+    window.markAeronMutation(tableName);
 
     // 1. Mirror to local browser storage immediately
     try {
@@ -91,6 +108,19 @@ window.AeronCloudDB = {
 
   async load(tableName, fallbackVal) {
     if (!tableName) return fallbackVal;
+
+    // 🛡️ Grace Window Check: If user recently modified this table locally, use local state
+    if (window.isAeronMutating && window.isAeronMutating(tableName)) {
+      try {
+        const lsKey = _TABLE_LS_MAP[tableName];
+        if (lsKey) {
+          const cached = localStorage.getItem(lsKey);
+          if (cached !== null) return JSON.parse(cached);
+        }
+      } catch(e) {}
+      return fallbackVal;
+    }
+
     const base = getAeronGatewayUrl();
 
     try {

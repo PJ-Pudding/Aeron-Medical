@@ -34,7 +34,7 @@ window.formatShortCurrency = formatShortCurrency;
 
 // ====================================================
 // 🌐 AERON CENTRALIZED BACKEND GATEWAY SYNC ENGINE
-// 100% Reliable Two-Way Sync between Localhost, Render, and Supabase Cloud
+// With Mutation Grace Period (Zero-Flicker) & Smart Deep Comparison
 // ====================================================
 
 function getAeronGatewayUrl() {
@@ -71,10 +71,27 @@ const _TABLE_LS_MAP = {
   messenger_trips: 'aeron_messenger_trips'
 };
 
+// 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
+window._aeronLastMutationTime = {};
+
+window.markAeronMutation = function(tableName) {
+  if (!tableName) return;
+  window._aeronLastMutationTime[tableName] = Date.now();
+};
+
+window.isAeronMutating = function(tableName) {
+  if (!tableName) return false;
+  const lastTime = window._aeronLastMutationTime[tableName] || 0;
+  return (Date.now() - lastTime) < 5000; // 5-second protected grace window
+};
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
     const base = getAeronGatewayUrl();
+
+    // Mark mutation lock immediately
+    window.markAeronMutation(tableName);
 
     // 1. Mirror to local browser storage immediately
     try {
@@ -97,6 +114,19 @@ window.AeronCloudDB = {
 
   async load(tableName, fallbackVal) {
     if (!tableName) return fallbackVal;
+
+    // 🛡️ Grace Window Check: If user recently modified this table locally, use local state
+    if (window.isAeronMutating && window.isAeronMutating(tableName)) {
+      try {
+        const lsKey = _TABLE_LS_MAP[tableName];
+        if (lsKey) {
+          const cached = localStorage.getItem(lsKey);
+          if (cached !== null) return JSON.parse(cached);
+        }
+      } catch(e) {}
+      return fallbackVal;
+    }
+
     const base = getAeronGatewayUrl();
 
     try {
@@ -3218,17 +3248,17 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Authoritative Cloud State)
+        // 1. Products (Smart Deep Compare - Zero Flicker)
         const remoteProducts = await fetcher('products', null);
         if (isMounted && Array.isArray(remoteProducts)) {
-          setProducts(remoteProducts);
+          setProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteProducts) ? prev : remoteProducts));
           localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
         }
 
         // 2. Categories
         const remoteCategories = await fetcher('product_categories', null);
         if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
-          setProductCategories(remoteCategories);
+          setProductCategories(prev => (JSON.stringify(prev) === JSON.stringify(remoteCategories) ? prev : remoteCategories));
           localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
           window.PRODUCT_CATEGORIES = remoteCategories;
         }
@@ -3236,28 +3266,28 @@ function useAeronLogistics({ setActiveView }) {
         // 3. Sold Products
         const remoteSold = await fetcher('sold_products', null);
         if (isMounted && Array.isArray(remoteSold)) {
-          setSoldProducts(remoteSold);
+          setSoldProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteSold) ? prev : remoteSold));
           localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
         }
 
         // 4. Shipments
         const remoteShipments = await fetcher('shipments', null);
         if (isMounted && Array.isArray(remoteShipments)) {
-          setShipments(remoteShipments);
+          setShipments(prev => (JSON.stringify(prev) === JSON.stringify(remoteShipments) ? prev : remoteShipments));
           localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
         }
 
         // 5. Repair Tickets
         const remoteRepairs = await fetcher('repair_tickets', null);
         if (isMounted && Array.isArray(remoteRepairs)) {
-          setRepairTickets(remoteRepairs);
+          setRepairTickets(prev => (JSON.stringify(prev) === JSON.stringify(remoteRepairs) ? prev : remoteRepairs));
           localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs));
         }
 
         // 6. FDA Registrations
         const remoteFDA = await fetcher('fda_registrations', null);
         if (isMounted && Array.isArray(remoteFDA)) {
-          setFdaRegistrations(remoteFDA);
+          setFdaRegistrations(prev => (JSON.stringify(prev) === JSON.stringify(remoteFDA) ? prev : remoteFDA));
           localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA));
         }
       } catch (e) {
@@ -3521,24 +3551,24 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects
+        // 1. Projects (Smart Deep Compare)
         const remoteProjects = await fetcher('projects', null);
         if (isMounted && Array.isArray(remoteProjects)) {
-          setProjects(remoteProjects);
+          setProjects(prev => (JSON.stringify(prev) === JSON.stringify(remoteProjects) ? prev : remoteProjects));
           localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
         }
 
         // 2. Cost Calculations
         const remoteCost = await fetcher('cost_calculations', null);
         if (isMounted && Array.isArray(remoteCost)) {
-          setCostCalculations(remoteCost);
+          setCostCalculations(prev => (JSON.stringify(prev) === JSON.stringify(remoteCost) ? prev : remoteCost));
           localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
         }
 
         // 3. Demo Bookings
         const remoteDemo = await fetcher('demo_bookings', null);
         if (isMounted && Array.isArray(remoteDemo)) {
-          setDemoBookings(remoteDemo);
+          setDemoBookings(prev => (JSON.stringify(prev) === JSON.stringify(remoteDemo) ? prev : remoteDemo));
           localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
         }
       } catch (e) {

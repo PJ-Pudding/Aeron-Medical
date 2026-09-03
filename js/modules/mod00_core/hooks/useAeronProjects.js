@@ -61,24 +61,24 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects
+        // 1. Projects (Smart Deep Compare)
         const remoteProjects = await fetcher('projects', null);
         if (isMounted && Array.isArray(remoteProjects)) {
-          setProjects(remoteProjects);
+          setProjects(prev => (JSON.stringify(prev) === JSON.stringify(remoteProjects) ? prev : remoteProjects));
           localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
         }
 
         // 2. Cost Calculations
         const remoteCost = await fetcher('cost_calculations', null);
         if (isMounted && Array.isArray(remoteCost)) {
-          setCostCalculations(remoteCost);
+          setCostCalculations(prev => (JSON.stringify(prev) === JSON.stringify(remoteCost) ? prev : remoteCost));
           localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
         }
 
         // 3. Demo Bookings
         const remoteDemo = await fetcher('demo_bookings', null);
         if (isMounted && Array.isArray(remoteDemo)) {
-          setDemoBookings(remoteDemo);
+          setDemoBookings(prev => (JSON.stringify(prev) === JSON.stringify(remoteDemo) ? prev : remoteDemo));
           localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
         }
       } catch (e) {
