@@ -56,7 +56,7 @@ const _TABLE_LS_MAP = {
   accounting: 'aeron_accounting_txns',
   leave_requests: 'aeron_leave_requests',
   attendance_logs: 'aeron_attendance_logs',
-  users: 'aeron_system_users',
+  users: 'aeron_user_accounts',
   forecast_hospital_collections: 'aeron_forecast_hospital_collections',
   forecast_projected_expenses: 'aeron_forecast_projected_expenses',
   petty_cash_accounts: 'aeron_petty_cash_accounts',
@@ -437,53 +437,247 @@ const ROLES_PERMISSIONS = {
 // Pre-configured Demo User Accounts for 1-Click Testing & Authentication
 const DEMO_USERS = [
   {
-    id: 'usr_owner',
-    username: 'owner',
-    name: 'คุณตู้ (CEO / Owner)',
-    role: 'OWNER',
-    avatar: '👑',
-    memberId: 'm1'
+    "id": "usr_owner",
+    "name": "คุณตู้ (CEO / Owner)",
+    "role": "OWNER",
+    "avatar": "👑",
+    "memberId": "m1",
+    "password": "123456",
+    "username": "owner",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "finance",
+      "hr",
+      "accounting",
+      "messenger"
+    ],
+    "canApproveHR": true,
+    "canViewAuditLogs": true,
+    "canViewAllFinancials": true
   },
   {
-    id: 'usr_head_admin',
-    username: 'head_admin',
-    name: 'เกศรา (Head Admin)',
-    role: 'HEAD_ADMIN',
-    avatar: '👩‍💼',
-    memberId: 'm2'
+    "id": "usr_head_admin",
+    "name": "คุณจี๊ด (Head Admin)",
+    "role": "HEAD_ADMIN",
+    "avatar": "👩‍💼",
+    "memberId": "m2",
+    "password": "123456",
+    "username": "head_admin",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "finance",
+      "hr",
+      "accounting"
+    ],
+    "canApproveHR": true,
+    "canViewAuditLogs": true,
+    "canViewAllFinancials": true
   },
   {
-    id: 'usr_admin',
-    username: 'admin',
-    name: 'วิชัย (Admin Officer)',
-    role: 'ADMIN',
-    avatar: '🏢',
-    memberId: 'm3'
+    "id": "usr_admin",
+    "name": "คุณมุก (Admin Officer)",
+    "role": "ADMIN",
+    "avatar": "🏢",
+    "memberId": "m3",
+    "password": "123456",
+    "username": "admin",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "finance",
+      "hr",
+      "accounting"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
   },
   {
-    id: 'usr_sales_head',
-    username: 'sales_head',
-    name: 'อนันต์ ผู้โชคดี (Sales Head)',
-    role: 'SALES_HEAD',
-    avatar: '👨‍💼',
-    memberId: 'm3',
-    subordinates: ['m1', 'm2', 'm3', 'm4']
+    "id": "usr_sales_head",
+    "name": "คุณแจง (Sales-Esarn1)",
+    "role": "SALES_HEAD",
+    "avatar": "👨‍⚕️",
+    "memberId": "m3",
+    "password": "123456",
+    "username": "sales-esarn1",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "canApproveHR": true,
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
   },
   {
-    id: 'usr_sales_somchai',
-    username: 'sales_somchai',
-    name: 'สมชาย สายลุย (Sales Specialist)',
-    role: 'SALES',
-    avatar: '👨‍⚕️',
-    memberId: 'm1'
+    "id": "usr_sales_somchai",
+    "name": "คุณอุ๋มอิ๋ม (Sales Bkk2)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "memberId": "m1",
+    "password": "123456",
+    "username": "sales-bkk2",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ]
   },
   {
-    id: 'usr_messenger',
-    username: 'messenger',
-    name: 'สมปอง (Messenger Dispatch)',
-    role: 'MESSENGER',
-    avatar: '🛵',
-    memberId: 'm4'
+    "id": "usr_messenger",
+    "name": "คุณบอย (Messenger Dispatch)",
+    "role": "MESSENGER",
+    "avatar": "🛵",
+    "memberId": "m4",
+    "password": "123456",
+    "username": "messenger",
+    "allowedTabs": [
+      "messenger"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ]
+  },
+  {
+    "id": "usr_1788324203625",
+    "name": "คุณโหน่ง-Bkk1",
+    "role": "SALES_HEAD",
+    "avatar": "👨‍⚕️",
+    "memberId": "m_1788324203625",
+    "password": "123456",
+    "username": "sales-bkk1",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "canApproveHR": true,
+    "subordinates": [
+      "m1"
+    ],
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_1788324463770",
+    "username": "sales-esarn2",
+    "password": "123456",
+    "name": "คุณมิ้ว (Sales-Esarn2)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324463770"
+  },
+  {
+    "id": "usr_1788324525548",
+    "username": "sales-west1",
+    "password": "123456",
+    "name": "คุณปอ (Sales-west1)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324525548"
+  },
+  {
+    "id": "usr_1788324571089",
+    "username": "sales-bkk3",
+    "password": "123456",
+    "name": "คุณเปิ้ล (Sales-Bkk3)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324571089"
   }
 ];
 
@@ -524,11 +718,6 @@ function getUserAccounts() {
   try {
     const saved = localStorage.getItem('aeron_user_accounts');
     if (saved) {
-      if (saved.includes('à¸') || saved.includes('à¹') || saved.includes('ðŸ')) {
-        console.warn('Sanitizing corrupted user accounts cache in localStorage...');
-        localStorage.setItem('aeron_user_accounts', JSON.stringify(DEMO_USERS));
-        return DEMO_USERS;
-      }
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }

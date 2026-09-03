@@ -1,9 +1,9 @@
-﻿[
+[
   {
     "id": "usr_owner",
-    "name": "à¸„à¸¸à¸“à¸•à¸¹à¹‰ (CEO / Owner)",
+    "name": "คุณตู้ (CEO / Owner)",
     "role": "OWNER",
-    "avatar": "ðŸ‘‘",
+    "avatar": "👑",
     "memberId": "m1",
     "password": "123456",
     "username": "owner",
@@ -25,9 +25,9 @@
   },
   {
     "id": "usr_head_admin",
-    "name": "à¹€à¸à¸¨à¸£à¸² (Head Admin)",
+    "name": "คุณจี๊ด (Head Admin)",
     "role": "HEAD_ADMIN",
-    "avatar": "ðŸ‘©â€ðŸ’¼",
+    "avatar": "👩‍💼",
     "memberId": "m2",
     "password": "123456",
     "username": "head_admin",
@@ -48,9 +48,9 @@
   },
   {
     "id": "usr_admin",
-    "name": "à¸§à¸´à¸Šà¸±à¸¢ (Admin Officer)",
+    "name": "คุณมุก (Admin Officer)",
     "role": "ADMIN",
-    "avatar": "ðŸ¢",
+    "avatar": "🏢",
     "memberId": "m3",
     "password": "123456",
     "username": "admin",
@@ -70,12 +70,12 @@
   },
   {
     "id": "usr_sales_head",
-    "name": "à¸­à¸™à¸±à¸™à¸•à¹Œ à¸œà¸¹à¹‰à¹‚à¸Šà¸„à¸”à¸µ (Sales Head)",
+    "name": "คุณแจง (Sales-Esarn1)",
     "role": "SALES_HEAD",
-    "avatar": "ðŸ‘¨â€ðŸ’¼",
+    "avatar": "👨‍⚕️",
     "memberId": "m3",
     "password": "123456",
-    "username": "sales_head",
+    "username": "sales-esarn1",
     "allowedTabs": [
       "dashboard",
       "clients",
@@ -97,12 +97,12 @@
   },
   {
     "id": "usr_sales_somchai",
-    "name": "à¸ªà¸¡à¸Šà¸²à¸¢ à¸ªà¸²à¸¢à¸¥à¸¸à¸¢ (Sales Specialist)",
+    "name": "คุณอุ๋มอิ๋ม (Sales Bkk2)",
     "role": "SALES",
-    "avatar": "ðŸ‘¨â€âš•ï¸",
+    "avatar": "👨‍⚕️",
     "memberId": "m1",
     "password": "123456",
-    "username": "sales_somchai",
+    "username": "sales-bkk2",
     "allowedTabs": [
       "clients",
       "project",
@@ -113,13 +113,19 @@
     ],
     "canApproveHR": false,
     "canViewAuditLogs": false,
-    "canViewAllFinancials": false
+    "canViewAllFinancials": false,
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ]
   },
   {
     "id": "usr_messenger",
-    "name": "à¸ªà¸¡à¸›à¸­à¸‡ (Messenger Dispatch)",
+    "name": "คุณบอย (Messenger Dispatch)",
     "role": "MESSENGER",
-    "avatar": "ðŸ›µ",
+    "avatar": "🛵",
     "memberId": "m4",
     "password": "123456",
     "username": "messenger",
@@ -128,6 +134,112 @@
     ],
     "canApproveHR": false,
     "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ]
+  },
+  {
+    "id": "usr_1788324203625",
+    "name": "คุณโหน่ง-Bkk1",
+    "role": "SALES_HEAD",
+    "avatar": "👨‍⚕️",
+    "memberId": "m_1788324203625",
+    "password": "123456",
+    "username": "sales-bkk1",
+    "allowedTabs": [
+      "dashboard",
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "canApproveHR": true,
+    "subordinates": [
+      "m1"
+    ],
+    "canViewAuditLogs": false,
     "canViewAllFinancials": false
+  },
+  {
+    "id": "usr_1788324463770",
+    "username": "sales-esarn2",
+    "password": "123456",
+    "name": "คุณมิ้ว (Sales-Esarn2)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "report",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324463770"
+  },
+  {
+    "id": "usr_1788324525548",
+    "username": "sales-west1",
+    "password": "123456",
+    "name": "คุณปอ (Sales-west1)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324525548"
+  },
+  {
+    "id": "usr_1788324571089",
+    "username": "sales-bkk3",
+    "password": "123456",
+    "name": "คุณเปิ้ล (Sales-Bkk3)",
+    "role": "SALES",
+    "avatar": "👨‍⚕️",
+    "allowedTabs": [
+      "clients",
+      "project",
+      "logistic",
+      "calendar",
+      "hr"
+    ],
+    "subordinates": [
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "canApproveHR": false,
+    "canViewAuditLogs": false,
+    "canViewAllFinancials": false,
+    "memberId": "m_1788324571089"
   }
 ]
