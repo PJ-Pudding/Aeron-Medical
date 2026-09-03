@@ -1,19 +1,4 @@
-// One-time System Data Reset Check for Day 1 Clean Go-Live (with 100% Matched Categories)
-const DAY1_RESET_VERSION = 'v2.8.3_matched_filters';
-try {
-  if (typeof localStorage !== 'undefined' && localStorage.getItem('aeron_sys_data_version') !== DAY1_RESET_VERSION) {
-    const keptAuth = localStorage.getItem('aeron_auth_user');
-    const keptJwt = localStorage.getItem('aeron_jwt_token');
-    const keptMembers = localStorage.getItem('gov_hospital_members');
-    localStorage.clear();
-    if (keptAuth) localStorage.setItem('aeron_auth_user', keptAuth);
-    if (keptJwt) localStorage.setItem('aeron_jwt_token', keptJwt);
-    if (keptMembers) localStorage.setItem('gov_hospital_members', keptMembers);
-    localStorage.setItem('aeron_sys_data_version', DAY1_RESET_VERSION);
-  }
-} catch (e) {
-  console.warn('Storage reset sync notice:', e);
-}
+// System Data Integrity Protected (No automatic localStorage wipe)
 
 function App() {
   // Navigation & View Sub-states
@@ -96,6 +81,17 @@ function App() {
   } = projectsHook;
 
   // Team Members State
+  // ⚡ Auto-Sync Bridge: Update members state whenever user accounts are modified
+  useEffect(() => {
+    const handleMembersUpdate = (e) => {
+      if (Array.isArray(e.detail)) {
+        setMembers(e.detail);
+      }
+    };
+    window.addEventListener('aeron_members_updated', handleMembersUpdate);
+    return () => window.removeEventListener('aeron_members_updated', handleMembersUpdate);
+  }, []);
+
   const [members, setMembers] = useState(() => {
     try {
       const saved = localStorage.getItem('gov_hospital_members');

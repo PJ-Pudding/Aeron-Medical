@@ -3,7 +3,7 @@
 function LeaveModal({ members = [], currentUser, onSave, onClose }) {
   const [employeeName, setEmployeeName] = useState(() => {
     if (currentUser && currentUser.name) return currentUser.name;
-    return members.length > 0 ? members[0].name : 'สมชาย สายลุย';
+    return members.length > 0 ? members[0].name : '';
   });
   const [leaveType, setLeaveType] = useState('🤒 ลาป่วย (Sick Leave)');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);

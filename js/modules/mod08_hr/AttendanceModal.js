@@ -1,7 +1,7 @@
 // MODULE: mod08_hr/AttendanceModal.js
 
 function AttendanceModal({ members = [], onSave, onClose }) {
-  const [employeeName, setEmployeeName] = useState(() => members.length > 0 ? members[0].name : 'สมชาย สายลุย');
+  const [employeeName, setEmployeeName] = useState(() => members.length > 0 ? members[0].name : '');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [type, setType] = useState('⏰ มาสาย');
   const [lateMinutes, setLateMinutes] = useState(15);

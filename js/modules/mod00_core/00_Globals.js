@@ -79,6 +79,45 @@ window.isAeronMutating = function(tableName) {
   return (Date.now() - lastTime) < 5000; // 5-second protected grace window
 };
 
+// 🛡️ Universal Thai Text Sanitizer (Auto-reverses any Windows-1252 Mojibake)
+const _cp1252Map = {
+  0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
+  0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91,
+  0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98,
+  0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F
+};
+
+function decodeMojibakeString(str) {
+  if (!str || typeof str !== 'string') return str;
+  if (!str.includes('à')) return str;
+  const bytes = [];
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code in _cp1252Map) bytes.push(_cp1252Map[code]);
+    else if (code <= 0xFF) bytes.push(code);
+    else return str;
+  }
+  try {
+    const uint8 = new Uint8Array(bytes);
+    const decoded = new TextDecoder('utf-8').decode(uint8);
+    if (/[\u0E00-\u0E7F]/.test(decoded)) return decoded;
+  } catch(e) {}
+  return str;
+}
+
+function sanitizeThaiData(val) {
+  if (typeof val === 'string') return decodeMojibakeString(val);
+  if (Array.isArray(val)) return val.map(sanitizeThaiData);
+  if (val && typeof val === 'object') {
+    const out = {};
+    for (const k of Object.keys(val)) out[k] = sanitizeThaiData(val[k]);
+    return out;
+  }
+  return val;
+}
+
+window.sanitizeThaiData = sanitizeThaiData;
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
@@ -128,12 +167,13 @@ window.AeronCloudDB = {
       if (res.ok) {
         const data = await res.json();
         if (data !== undefined && data !== null) {
+          const cleanData = sanitizeThaiData(data);
           try {
             const lsKey = _TABLE_LS_MAP[tableName];
-            if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
+            if (lsKey) localStorage.setItem(lsKey, JSON.stringify(cleanData));
             localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
           } catch(e) {}
-          return data;
+          return cleanData;
         }
       }
     } catch (err) {
@@ -144,7 +184,7 @@ window.AeronCloudDB = {
       const lsKey = _TABLE_LS_MAP[tableName];
       if (lsKey) {
         const cached = localStorage.getItem(lsKey);
-        if (cached !== null) return JSON.parse(cached);
+        if (cached !== null) return sanitizeThaiData(JSON.parse(cached));
       }
     } catch(e) {}
 
@@ -731,8 +771,25 @@ function getUserAccounts() {
 function saveUserAccounts(accounts = []) {
   try {
     localStorage.setItem('aeron_user_accounts', JSON.stringify(accounts));
+
+    // ⚡ 100% Unified Auto-Bridge: Sync members list to match user accounts 1:1
+    const syncedMembers = accounts.map((u, idx) => ({
+      id: u.memberId || u.id || `m${idx+1}`,
+      name: u.name,
+      role: u.role,
+      avatar: u.avatar || '👨‍⚕️'
+    }));
+
+    localStorage.setItem('gov_hospital_members', JSON.stringify(syncedMembers));
+
     if (typeof syncToDB === 'function') {
       syncToDB('users', accounts);
+      syncToDB('members', syncedMembers);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.INITIAL_MEMBERS = syncedMembers;
+      window.dispatchEvent(new CustomEvent('aeron_members_updated', { detail: syncedMembers }));
     }
   } catch (e) {
     console.error('Error saving user accounts:', e);

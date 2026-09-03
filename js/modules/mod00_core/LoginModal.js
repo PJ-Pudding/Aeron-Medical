@@ -1,8 +1,8 @@
 // MODULE: mod00_core/LoginModal.js
 
 function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
-  const [username, setUsername] = useState('owner');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,17 +30,13 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
   }, []);
 
   const handleQuickLogin = (demoUser) => {
-    setLoading(true);
+    setUsername(demoUser.username || demoUser.id);
+    setPassword('');
     setErrorMsg('');
     setTimeout(() => {
-      const authPayload = {
-        ...demoUser,
-        token: `aeron_jwt_token_${(demoUser.role || 'SALES').toLowerCase()}_${Date.now()}`,
-        loginTime: new Date().toISOString()
-      };
-      setLoading(false);
-      onLoginSuccess(authPayload);
-    }, 120);
+      const pwdInput = document.getElementById('login-password-input');
+      if (pwdInput) pwdInput.focus();
+    }, 50);
   };
 
   const handleResetDefaultAccounts = () => {

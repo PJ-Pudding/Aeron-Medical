@@ -8,17 +8,14 @@ function useAeronAccounting({ setShipments }) {
   const [transactions, setTransactions] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_accounting_txns');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= (window.INITIAL_ACCOUNTING_TRANSACTIONS?.length || 0)) {
-          return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(parsed) : parsed;
         }
       }
-      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
-    } catch(e) {
-      console.warn('localStorage parse fallback for aeron_accounting_txns:', e);
-      return window.INITIAL_ACCOUNTING_TRANSACTIONS || [];
-    }
+    } catch(e) {}
+    return [];
   });
 
   // 2. Vendor Purchase Orders State
@@ -47,11 +44,12 @@ function useAeronAccounting({ setShipments }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Transactions
+        // 1. Transactions (Smart Deep Compare & Universal Thai Sanitizer)
         const remoteTxns = await fetcher('accounting', null);
         if (isMounted && Array.isArray(remoteTxns)) {
-          setTransactions(remoteTxns);
-          localStorage.setItem('aeron_accounting_txns', JSON.stringify(remoteTxns));
+          const cleanTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
+          setTransactions(prev => (JSON.stringify(prev) === JSON.stringify(cleanTxns) ? prev : cleanTxns));
+          localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
         }
 
         // 2. Purchase Orders
