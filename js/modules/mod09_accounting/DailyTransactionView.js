@@ -61,6 +61,14 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
       }
       return true;
     });
+
+    // ⚡ Sort from Newest to Oldest (Descending Date order)
+    return list.slice().sort((a, b) => {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateB !== dateA) return dateB.localeCompare(dateA);
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
   }, [activeTxns, filterType, filterExpenseType, filterAccount, filterHospital, startDate, endDate, searchTerm]);
 
   // Totals calculations
@@ -438,8 +446,8 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
 
                   return (
                     <tr key={t.id} className={`hover:bg-slate-900/50 transition-colors ${isFrozen ? 'opacity-85 bg-slate-950/40' : ''}`}>
-                      <td className="p-3 font-mono text-slate-400">
-                        {window.formatAeronDate(t.date)}
+                      <td className="p-3 font-mono text-slate-200 font-semibold whitespace-nowrap">
+                        {window.formatAeronDate ? window.formatAeronDate(t.date) : t.date}
                         {isFrozen && (
                           <span className="block text-[9px] text-rose-400 font-bold">🔒 ปิดงบแล้ว</span>
                         )}
