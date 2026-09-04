@@ -56,6 +56,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่อรุ่นสินค้า');
       return;
     }
+    if (window.saveAeronDictionaryItem && formData.hospitalName) {
+      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    }
     onSave({
       ...formData,
       projectValue: Number(formData.projectValue) || 0,
@@ -117,8 +120,8 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / ลูกค้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 required
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}

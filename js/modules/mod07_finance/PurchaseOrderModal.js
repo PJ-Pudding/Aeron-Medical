@@ -81,6 +81,10 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       alert('กรุณากรอกเลขที่ PO');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+    }
     onSave(formData);
   };
 
@@ -141,8 +145,8 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / ลูกค้า</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}
                 onChange={(e) => setFormData({ ...formData, hospitalName: e.target.value })}

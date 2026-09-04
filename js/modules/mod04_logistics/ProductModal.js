@@ -131,6 +131,10 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     const validComponents = componentsList.filter(c => c.name && c.name.trim());
     const autoAccessoriesSummary = validComponents.map(c => `${c.name} (${c.qty} ${c.unit})`).join(', ');
 
+    if (window.saveAeronDictionaryItem) {
+      if (formData.name) window.saveAeronDictionaryItem('product', formData.name);
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+    }
     onSave({
       ...formData,
       price: Number(formData.price) || 0,
@@ -246,8 +250,8 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">แบรนด์/ผู้ผลิต</label>
-                <input
-                  type="text"
+                <SmartSuggestInput
+                  category="brand"
                   placeholder="เช่น AERON MEDICAL"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
@@ -259,8 +263,8 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">ชื่อรุ่นสินค้า (Model Code) <span className="text-rose-400">*</span></label>
-                <input
-                  type="text"
+                <SmartSuggestInput
+                  category="product"
                   required
                   placeholder="เช่น AERON Cardio 12L-AI, BJ3500"
                   value={formData.name}

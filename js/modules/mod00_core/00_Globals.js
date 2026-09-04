@@ -927,26 +927,48 @@ window.formatDate = formatAeronDate;
 // 🧠 Dynamic Name Autocomplete Dictionary & Similarity Warning Engine
 // ====================================================
 
+function normalizeThaiPrefixes(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.trim()
+    .replace(/^(โรงพยาบาล|รพ\.|รพ\s*)/gi, '')
+    .replace(/^(นายแพทย์|แพทย์หญิง|นพ\.|พญ\.|ศ\.ดร\.นพ\.|ศ\.นพ\.|ดร\.|อาจารย์|อ\.)/gi, '')
+    .replace(/^(บริษัท\s*จำกัด|บริษัท|บจก\.|หจก\.|ห้างหุ้นส่วนจำกัด)/gi, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
 function stringSimilarity(s1, s2) {
   if (!s1 || !s2) return 0;
-  s1 = s1.trim().toLowerCase();
-  s2 = s2.trim().toLowerCase();
-  if (s1 === s2) return 1.0;
+  const raw1 = s1.trim().toLowerCase();
+  const raw2 = s2.trim().toLowerCase();
+  if (raw1 === raw2) return 1.0;
 
-  // Substring containment check
-  if (s2.includes(s1) || s1.includes(s2)) {
-    const minLen = Math.min(s1.length, s2.length);
-    const maxLen = Math.max(s1.length, s2.length);
-    if (minLen >= 3 && (minLen / maxLen) >= 0.5) return 0.85;
+  const norm1 = normalizeThaiPrefixes(s1);
+  const norm2 = normalizeThaiPrefixes(s2);
+
+  if (norm1 && norm2 && norm1 === norm2) return 0.98;
+
+  // Substring containment check on normalized or raw
+  const aStr = norm1 || raw1;
+  const bStr = norm2 || raw2;
+  if (aStr.length >= 2 && bStr.length >= 2) {
+    if (aStr.includes(bStr) || bStr.includes(aStr)) {
+      const minLen = Math.min(aStr.length, bStr.length);
+      const maxLen = Math.max(aStr.length, bStr.length);
+      if (minLen >= 2 && (minLen / maxLen) >= 0.4) return 0.88;
+      return 0.78;
+    }
   }
 
-  // Levenshtein distance
-  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
-  for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
-  for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
-  for (let j = 1; j <= s2.length; j += 1) {
-    for (let i = 1; i <= s1.length; i += 1) {
-      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+  // Levenshtein distance on normalized
+  const a = aStr;
+  const b = bStr;
+  const track = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+  for (let i = 0; i <= a.length; i += 1) track[0][i] = i;
+  for (let j = 0; j <= b.length; j += 1) track[j][0] = j;
+  for (let j = 1; j <= b.length; j += 1) {
+    for (let i = 1; i <= a.length; i += 1) {
+      const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
       track[j][i] = Math.min(
         track[j][i - 1] + 1,
         track[j - 1][i] + 1,
@@ -954,8 +976,8 @@ function stringSimilarity(s1, s2) {
       );
     }
   }
-  const distance = track[s2.length][s1.length];
-  const maxLen = Math.max(s1.length, s2.length);
+  const distance = track[b.length][a.length];
+  const maxLen = Math.max(a.length, b.length);
   return 1 - (distance / maxLen);
 }
 
@@ -1004,22 +1026,27 @@ function saveAeronDictionaryItem(category, value) {
 function findSimilarDictionaryName(input, category) {
   if (!input || typeof input !== 'string') return null;
   const inClean = input.trim();
-  if (inClean.length < 3) return null;
+  if (inClean.length < 2) return null;
 
   const list = getAeronDictionary(category);
-  const inNorm = inClean.toLowerCase();
+  // If user already typed an exact match of an existing item, no warning needed
+  const isExactExisting = list.some(item => item.trim().toLowerCase() === inClean.toLowerCase());
+  if (isExactExisting) return null;
+
+  let bestMatch = null;
+  let highestSim = 0;
 
   for (const item of list) {
-    const itemNorm = item.toLowerCase();
-    if (itemNorm === inNorm) continue;
-    const sim = stringSimilarity(inNorm, itemNorm);
-    if (sim >= 0.70) {
-      return { item, similarity: sim };
+    const sim = stringSimilarity(inClean, item);
+    if (sim >= 0.70 && sim > highestSim) {
+      highestSim = sim;
+      bestMatch = { item, similarity: sim };
     }
   }
-  return null;
+  return bestMatch;
 }
 
+window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;
 window.getAeronDictionary = getAeronDictionary;
 window.saveAeronDictionaryItem = saveAeronDictionaryItem;

@@ -45,6 +45,20 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่องานโครงการ');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.decisionMakers) {
+        formData.decisionMakers.split(',').forEach(d => {
+          if (d.trim()) window.saveAeronDictionaryItem('doctor', d.trim());
+        });
+      }
+      if (formData.competitors) {
+        formData.competitors.split(',').forEach(c => {
+          if (c.trim()) window.saveAeronDictionaryItem('competitor', c.trim());
+        });
+      }
+    }
     onSave({
       ...formData,
       budget: Number(formData.budget) || 0,
@@ -69,8 +83,8 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">ชื่อโรงพยาบาล / หน่วยงาน <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 required
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}
@@ -94,8 +108,8 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่องาน / รายละเอียดโครงการจัดซื้อ <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น จัดซื้อเครื่องตรวจคลื่นหัวใจไฟฟ้า 12 ลีด 5 เครื่อง"
               value={formData.title}

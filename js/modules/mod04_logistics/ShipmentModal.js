@@ -54,6 +54,11 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
       alert('กรุณากรอกชื่อสินค้าและชื่อบริษัทผู้ผลิต');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.shippingCompany) window.saveAeronDictionaryItem('forwarder', formData.shippingCompany);
+    }
     onSave({
       ...formData,
       cbm: Number(formData.cbm) || 0,
@@ -107,9 +112,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ชื่อรุ่นสินค้าที่นำเข้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
+                placeholder="เช่น AERON Cardio 12L-AI"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
@@ -118,9 +124,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทผู้ผลิต / Vendor <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
+                placeholder="เช่น Mindray Medical, Sonoscape"
                 value={formData.vendorName}
                 onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
@@ -131,8 +138,8 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทขนส่ง (Freight Carrier)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="forwarder"
                 placeholder="เช่น DHL, Kuehne+Nagel, FedEx"
                 value={formData.shippingCompany}
                 onChange={(e) => setFormData({ ...formData, shippingCompany: e.target.value })}

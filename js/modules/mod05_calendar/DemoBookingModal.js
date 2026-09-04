@@ -54,6 +54,9 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
       return;
     }
 
+    if (window.saveAeronDictionaryItem && formData.hospitalName) {
+      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    }
     const prod = products.find(p => p.id === formData.productId);
     onSave({
       ...formData,
@@ -85,8 +88,8 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
           
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อโรงพยาบาล / โครงการ <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="hospital"
               required
               placeholder="ระบุชื่อโรงพยาบาล..."
               value={formData.hospitalName}

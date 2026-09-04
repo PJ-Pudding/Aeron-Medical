@@ -1,8 +1,8 @@
 // MODULE: mod00_core/SmartSuggestInput.js
-// 🧠 Universal Smart Autocomplete Input with Fuzzy Similarity Warning
+// 🧠 Universal Smart Autocomplete Input with Interactive Dropdown & Fuzzy Similarity Warning
 
 function SmartSuggestInput({
-  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title'
+  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom'
   value = '',
   onChange,
   onBlur,
@@ -13,20 +13,22 @@ function SmartSuggestInput({
   id,
   name
 }) {
-  const [suggestions, setSuggestions] = useState(() => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const [dictionaryList, setDictionaryList] = useState(() => {
     return window.getAeronDictionary ? window.getAeronDictionary(category) : [];
   });
 
   const [similarMatch, setSimilarMatch] = useState(null);
-  const inputId = useMemo(() => id || `suggest-${category}-${Math.random().toString(36).substring(2, 7)}`, [id, category]);
-  const listId = useMemo(() => `list-${inputId}`, [inputId]);
 
   // Sync with live dictionary updates
   useEffect(() => {
     const handleUpdate = (e) => {
       if (!e.detail || !e.detail.category || e.detail.category === category) {
         if (window.getAeronDictionary) {
-          setSuggestions(window.getAeronDictionary(category));
+          setDictionaryList(window.getAeronDictionary(category));
         }
       }
     };
@@ -34,9 +36,29 @@ function SmartSuggestInput({
     return () => window.removeEventListener('aeron_dictionary_updated', handleUpdate);
   }, [category]);
 
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter suggestions in real-time based on substring match
+  const filteredSuggestions = useMemo(() => {
+    if (!value || typeof value !== 'string') return dictionaryList.slice(0, 40);
+    const q = value.trim().toLowerCase();
+    return dictionaryList
+      .filter(item => item.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [dictionaryList, value]);
+
   // Detect similar names as user types (Fuzzy Similarity >= 70%)
   useEffect(() => {
-    if (window.findSimilarDictionaryName && value && value.trim().length >= 3) {
+    if (window.findSimilarDictionaryName && value && value.trim().length >= 2) {
       const match = window.findSimilarDictionaryName(value, category);
       setSimilarMatch(match);
     } else {
@@ -45,8 +67,19 @@ function SmartSuggestInput({
   }, [value, category]);
 
   const handleInputChange = (e) => {
-    const newVal = e.target.value;
     if (onChange) onChange(e);
+    if (!isOpen) setIsOpen(true);
+  };
+
+  const handleSelectOption = (item) => {
+    if (onChange) {
+      onChange({ target: { name: name || id, value: item } });
+    }
+    setIsOpen(false);
+    setSimilarMatch(null);
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem(category, item);
+    }
   };
 
   const handleInputBlur = (e) => {
@@ -61,46 +94,86 @@ function SmartSuggestInput({
       onChange({ target: { name: name || id, value: suggestedName } });
     }
     setSimilarMatch(null);
+    setIsOpen(false);
   };
 
   return (
-    <div className="relative w-full">
-      <input
-        type="text"
-        id={inputId}
-        name={name}
-        list={listId}
-        value={value}
-        onChange={handleInputChange}
-        onBlur={handleInputBlur}
-        placeholder={placeholder}
-        required={required}
-        disabled={disabled}
-        autoComplete="off"
-        className={className || "w-full bg-slate-900/80 border border-slate-700/60 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"}
-      />
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          id={id}
+          name={name}
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
+          onBlur={handleInputBlur}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          autoComplete="off"
+          className={className ? `${className} pr-8` : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition"}
+        />
 
-      {/* Native High-Performance Datalist Suggestions */}
-      <datalist id={listId}>
-        {suggestions.slice(0, 50).map((item, idx) => (
-          <option key={idx} value={item} />
-        ))}
-      </datalist>
+        {/* Dropdown Toggle Button ⌄ */}
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled}
+          onClick={() => {
+            setIsOpen(!isOpen);
+            if (!isOpen && inputRef.current) inputRef.current.focus();
+          }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors"
+          title="ดูตัวเลือกที่มีในระบบ"
+        >
+          <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
 
       {/* Fuzzy Similarity Alert Banner */}
       {similarMatch && (
-        <div className="mt-1 flex items-center justify-between text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded px-2.5 py-1.5 animate-fadeIn">
+        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn">
           <div className="flex items-center gap-1.5 truncate">
-            <span>💡 พบชื่อใกล้เคียงในระบบ:</span>
-            <span className="font-semibold text-amber-200 truncate">"{similarMatch.item}"</span>
+            <span className="shrink-0 text-amber-400">💡</span>
+            <span className="truncate">พบชื่อใกล้เคียงในระบบ: <strong className="text-amber-200 font-bold">"{similarMatch.item}"</strong></span>
           </div>
           <button
             type="button"
             onClick={() => handleApplySimilar(similarMatch.item)}
-            className="ml-2 shrink-0 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded px-2 py-0.5 font-medium transition"
+            className="ml-2 shrink-0 bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 border border-amber-500/50 rounded px-2.5 py-0.5 font-bold transition text-[10.5px]"
           >
-            ใช้ชื่อนี้
+            คลิกเพื่อใช้ชื่อนี้
           </button>
+        </div>
+      )}
+
+      {/* Custom Interactive Suggestions Dropdown */}
+      {isOpen && filteredSuggestions.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
+          <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase bg-slate-950/60 flex items-center justify-between">
+            <span>ตัวเลือกที่มีในระบบ ({filteredSuggestions.length})</span>
+            <span className="text-[9px] text-amber-400 font-normal">คลิกเพื่อเลือกทันที</span>
+          </div>
+          {filteredSuggestions.map((item, idx) => {
+            const isExact = value && item.toLowerCase() === value.trim().toLowerCase();
+            return (
+              <div
+                key={idx}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent blur before select
+                  handleSelectOption(item);
+                }}
+                className={`px-3 py-2 text-xs text-slate-200 hover:bg-emerald-500/20 hover:text-emerald-300 cursor-pointer flex items-center justify-between transition-colors ${isExact ? 'bg-emerald-500/10 font-bold text-emerald-400' : ''}`}
+              >
+                <span className="truncate">{item}</span>
+                {isExact && <span className="text-[10px] text-emerald-400 shrink-0 ml-2">✓ ตรงกับที่พิมพ์</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

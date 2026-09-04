@@ -47,6 +47,11 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
       alert('กรุณากรอกชื่อรุ่นสินค้าและอาการเสีย');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.lastHospital) window.saveAeronDictionaryItem('hospital', formData.lastHospital);
+      if (formData.lastUser) window.saveAeronDictionaryItem('doctor', formData.lastUser);
+    }
     onSave({
       ...formData,
       repairCost: Number(formData.repairCost) || 0,
@@ -95,20 +100,14 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้าที่ส่งซ่อม <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
-                list="products-list"
                 placeholder="เลือกหรือพิมพ์ชื่อรุ่นสินค้า"
                 value={formData.productName}
                 onChange={(e) => handleProductSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
               />
-              <datalist id="products-list">
-                {(products || []).map(p => (
-                  <option key={p.id} value={p.name} />
-                ))}
-              </datalist>
             </div>
 
             <div className="space-y-1">
@@ -150,8 +149,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ใช้ครั้งสุดท้ายจาก รพ. ไหน</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.lastHospital}
                 onChange={(e) => setFormData({ ...formData, lastHospital: e.target.value })}
@@ -161,8 +160,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ระบุตัวคนใช้ / อาจารย์ผู้ใช้</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="doctor"
                 placeholder="เช่น พญ.สมศรี / พยาบาล ER"
                 value={formData.lastUser}
                 onChange={(e) => setFormData({ ...formData, lastUser: e.target.value })}

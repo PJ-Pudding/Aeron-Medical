@@ -55,6 +55,10 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
       alert('กรุณากรอกชื่อสินค้าและบริษัทผู้ผลิต');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+    }
     onSave({
       ...formData,
       costTHB: Number(formData.costTHB) || 0,
@@ -114,8 +118,9 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ยี่ห้อ (Brand)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="brand"
+                placeholder="เช่น Mindray, Sonoscape"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
@@ -124,9 +129,10 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทผู้ผลิต / Vendor ต่างประเทศ <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
+                placeholder="เช่น Mindray Medical Singapore"
                 value={formData.vendorName}
                 onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold"

@@ -28,6 +28,10 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
       is_active: true
     };
 
+    if (window.saveAeronDictionaryItem) {
+      if (newTitle) window.saveAeronDictionaryItem('title', newTitle);
+      if (newPayee) window.saveAeronDictionaryItem('payee', newPayee);
+    }
     onSaveTemplate(tData);
     setNewTitle('');
     setNewAmount(0);
@@ -122,8 +126,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
           <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="text-[11px] text-slate-400">ชื่อรายการประจำ *</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="title"
                 required
                 placeholder="เช่น ค่าเช่าออฟฟิศ, ค่าทำบัญชี..."
                 value={newTitle}
@@ -162,8 +166,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
 
             <div>
               <label className="text-[11px] text-slate-400">ผู้รับเงิน (Payee)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 placeholder="เช่น อาคารออฟฟิศ..."
                 value={newPayee}
                 onChange={(e) => setNewPayee(e.target.value)}

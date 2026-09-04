@@ -64,8 +64,9 @@ function CreatePendingTransferModal({ onSave, onClose }) {
     }
 
     if (window.saveAeronDictionaryItem) {
-      window.saveAeronDictionaryItem('payee', formData.payee);
-      window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.payee) window.saveAeronDictionaryItem('payee', formData.payee);
+      if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);
     }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
@@ -132,8 +133,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อรายการค้างโอน / คำอธิบาย <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น ค่าเช่าออฟฟิศประจำเดือน 8/69, ค่าทำบัญชี, ค่าเคสสครับ..."
               value={formData.title}
@@ -346,8 +347,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ผู้รับเงิน / ผู้จ่ายเงิน (Payee) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
                 placeholder="เช่น อาคารออฟฟิศ, สำนักงานบัญชี, แพทย์ DF..."
                 value={formData.payee}
@@ -358,8 +359,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / โครงการที่เกี่ยวข้อง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น คณะแพทย์ศาสตร์ มหิดล, รพ.ศิริราช..."
                 value={formData.hospital_name}
                 onChange={(e) => handleChange('hospital_name', e.target.value)}

@@ -134,8 +134,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อรายการ / คำอธิบาย <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น เงินเดือนปจด. 6/69 พงศธร, ค่าคอมมิชชั่นเซลล์, ค่าเคสสครับ, ค่า DF..."
               value={formData.title}
@@ -352,8 +352,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ผู้รับเงิน / ผู้จ่ายเงิน (Payee) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
                 placeholder="เช่น พงศธร, อาจารย์รัตนา..."
                 value={formData.payee}
@@ -364,8 +364,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / โครงการที่เกี่ยวข้อง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น คณะแพทย์ศาสตร์ มหิดล, รพ.รามาธิบดี..."
                 value={formData.hospital_name}
                 onChange={(e) => handleChange('hospital_name', e.target.value)}

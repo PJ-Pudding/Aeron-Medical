@@ -933,26 +933,48 @@ window.formatDate = formatAeronDate;
 // 🧠 Dynamic Name Autocomplete Dictionary & Similarity Warning Engine
 // ====================================================
 
+function normalizeThaiPrefixes(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.trim()
+    .replace(/^(โรงพยาบาล|รพ\.|รพ\s*)/gi, '')
+    .replace(/^(นายแพทย์|แพทย์หญิง|นพ\.|พญ\.|ศ\.ดร\.นพ\.|ศ\.นพ\.|ดร\.|อาจารย์|อ\.)/gi, '')
+    .replace(/^(บริษัท\s*จำกัด|บริษัท|บจก\.|หจก\.|ห้างหุ้นส่วนจำกัด)/gi, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
 function stringSimilarity(s1, s2) {
   if (!s1 || !s2) return 0;
-  s1 = s1.trim().toLowerCase();
-  s2 = s2.trim().toLowerCase();
-  if (s1 === s2) return 1.0;
+  const raw1 = s1.trim().toLowerCase();
+  const raw2 = s2.trim().toLowerCase();
+  if (raw1 === raw2) return 1.0;
 
-  // Substring containment check
-  if (s2.includes(s1) || s1.includes(s2)) {
-    const minLen = Math.min(s1.length, s2.length);
-    const maxLen = Math.max(s1.length, s2.length);
-    if (minLen >= 3 && (minLen / maxLen) >= 0.5) return 0.85;
+  const norm1 = normalizeThaiPrefixes(s1);
+  const norm2 = normalizeThaiPrefixes(s2);
+
+  if (norm1 && norm2 && norm1 === norm2) return 0.98;
+
+  // Substring containment check on normalized or raw
+  const aStr = norm1 || raw1;
+  const bStr = norm2 || raw2;
+  if (aStr.length >= 2 && bStr.length >= 2) {
+    if (aStr.includes(bStr) || bStr.includes(aStr)) {
+      const minLen = Math.min(aStr.length, bStr.length);
+      const maxLen = Math.max(aStr.length, bStr.length);
+      if (minLen >= 2 && (minLen / maxLen) >= 0.4) return 0.88;
+      return 0.78;
+    }
   }
 
-  // Levenshtein distance
-  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
-  for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
-  for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
-  for (let j = 1; j <= s2.length; j += 1) {
-    for (let i = 1; i <= s1.length; i += 1) {
-      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+  // Levenshtein distance on normalized
+  const a = aStr;
+  const b = bStr;
+  const track = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+  for (let i = 0; i <= a.length; i += 1) track[0][i] = i;
+  for (let j = 0; j <= b.length; j += 1) track[j][0] = j;
+  for (let j = 1; j <= b.length; j += 1) {
+    for (let i = 1; i <= a.length; i += 1) {
+      const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
       track[j][i] = Math.min(
         track[j][i - 1] + 1,
         track[j - 1][i] + 1,
@@ -960,8 +982,8 @@ function stringSimilarity(s1, s2) {
       );
     }
   }
-  const distance = track[s2.length][s1.length];
-  const maxLen = Math.max(s1.length, s2.length);
+  const distance = track[b.length][a.length];
+  const maxLen = Math.max(a.length, b.length);
   return 1 - (distance / maxLen);
 }
 
@@ -1010,22 +1032,27 @@ function saveAeronDictionaryItem(category, value) {
 function findSimilarDictionaryName(input, category) {
   if (!input || typeof input !== 'string') return null;
   const inClean = input.trim();
-  if (inClean.length < 3) return null;
+  if (inClean.length < 2) return null;
 
   const list = getAeronDictionary(category);
-  const inNorm = inClean.toLowerCase();
+  // If user already typed an exact match of an existing item, no warning needed
+  const isExactExisting = list.some(item => item.trim().toLowerCase() === inClean.toLowerCase());
+  if (isExactExisting) return null;
+
+  let bestMatch = null;
+  let highestSim = 0;
 
   for (const item of list) {
-    const itemNorm = item.toLowerCase();
-    if (itemNorm === inNorm) continue;
-    const sim = stringSimilarity(inNorm, itemNorm);
-    if (sim >= 0.70) {
-      return { item, similarity: sim };
+    const sim = stringSimilarity(inClean, item);
+    if (sim >= 0.70 && sim > highestSim) {
+      highestSim = sim;
+      bestMatch = { item, similarity: sim };
     }
   }
-  return null;
+  return bestMatch;
 }
 
+window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;
 window.getAeronDictionary = getAeronDictionary;
 window.saveAeronDictionaryItem = saveAeronDictionaryItem;
@@ -2667,10 +2694,10 @@ function SidebarNavDrawer({ isOpen, onClose, activeTab, setActiveTab, currentUse
 
 // --- Module File: js/modules/mod00_core/SmartSuggestInput.js ---
 // MODULE: mod00_core/SmartSuggestInput.js
-// 🧠 Universal Smart Autocomplete Input with Fuzzy Similarity Warning
+// 🧠 Universal Smart Autocomplete Input with Interactive Dropdown & Fuzzy Similarity Warning
 
 function SmartSuggestInput({
-  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title'
+  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom'
   value = '',
   onChange,
   onBlur,
@@ -2681,20 +2708,22 @@ function SmartSuggestInput({
   id,
   name
 }) {
-  const [suggestions, setSuggestions] = useState(() => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const [dictionaryList, setDictionaryList] = useState(() => {
     return window.getAeronDictionary ? window.getAeronDictionary(category) : [];
   });
 
   const [similarMatch, setSimilarMatch] = useState(null);
-  const inputId = useMemo(() => id || `suggest-${category}-${Math.random().toString(36).substring(2, 7)}`, [id, category]);
-  const listId = useMemo(() => `list-${inputId}`, [inputId]);
 
   // Sync with live dictionary updates
   useEffect(() => {
     const handleUpdate = (e) => {
       if (!e.detail || !e.detail.category || e.detail.category === category) {
         if (window.getAeronDictionary) {
-          setSuggestions(window.getAeronDictionary(category));
+          setDictionaryList(window.getAeronDictionary(category));
         }
       }
     };
@@ -2702,9 +2731,29 @@ function SmartSuggestInput({
     return () => window.removeEventListener('aeron_dictionary_updated', handleUpdate);
   }, [category]);
 
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter suggestions in real-time based on substring match
+  const filteredSuggestions = useMemo(() => {
+    if (!value || typeof value !== 'string') return dictionaryList.slice(0, 40);
+    const q = value.trim().toLowerCase();
+    return dictionaryList
+      .filter(item => item.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [dictionaryList, value]);
+
   // Detect similar names as user types (Fuzzy Similarity >= 70%)
   useEffect(() => {
-    if (window.findSimilarDictionaryName && value && value.trim().length >= 3) {
+    if (window.findSimilarDictionaryName && value && value.trim().length >= 2) {
       const match = window.findSimilarDictionaryName(value, category);
       setSimilarMatch(match);
     } else {
@@ -2713,8 +2762,19 @@ function SmartSuggestInput({
   }, [value, category]);
 
   const handleInputChange = (e) => {
-    const newVal = e.target.value;
     if (onChange) onChange(e);
+    if (!isOpen) setIsOpen(true);
+  };
+
+  const handleSelectOption = (item) => {
+    if (onChange) {
+      onChange({ target: { name: name || id, value: item } });
+    }
+    setIsOpen(false);
+    setSimilarMatch(null);
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem(category, item);
+    }
   };
 
   const handleInputBlur = (e) => {
@@ -2729,46 +2789,86 @@ function SmartSuggestInput({
       onChange({ target: { name: name || id, value: suggestedName } });
     }
     setSimilarMatch(null);
+    setIsOpen(false);
   };
 
   return (
-    <div className="relative w-full">
-      <input
-        type="text"
-        id={inputId}
-        name={name}
-        list={listId}
-        value={value}
-        onChange={handleInputChange}
-        onBlur={handleInputBlur}
-        placeholder={placeholder}
-        required={required}
-        disabled={disabled}
-        autoComplete="off"
-        className={className || "w-full bg-slate-900/80 border border-slate-700/60 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"}
-      />
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          id={id}
+          name={name}
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
+          onBlur={handleInputBlur}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          autoComplete="off"
+          className={className ? `${className} pr-8` : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition"}
+        />
 
-      {/* Native High-Performance Datalist Suggestions */}
-      <datalist id={listId}>
-        {suggestions.slice(0, 50).map((item, idx) => (
-          <option key={idx} value={item} />
-        ))}
-      </datalist>
+        {/* Dropdown Toggle Button ⌄ */}
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled}
+          onClick={() => {
+            setIsOpen(!isOpen);
+            if (!isOpen && inputRef.current) inputRef.current.focus();
+          }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors"
+          title="ดูตัวเลือกที่มีในระบบ"
+        >
+          <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
 
       {/* Fuzzy Similarity Alert Banner */}
       {similarMatch && (
-        <div className="mt-1 flex items-center justify-between text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded px-2.5 py-1.5 animate-fadeIn">
+        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn">
           <div className="flex items-center gap-1.5 truncate">
-            <span>💡 พบชื่อใกล้เคียงในระบบ:</span>
-            <span className="font-semibold text-amber-200 truncate">"{similarMatch.item}"</span>
+            <span className="shrink-0 text-amber-400">💡</span>
+            <span className="truncate">พบชื่อใกล้เคียงในระบบ: <strong className="text-amber-200 font-bold">"{similarMatch.item}"</strong></span>
           </div>
           <button
             type="button"
             onClick={() => handleApplySimilar(similarMatch.item)}
-            className="ml-2 shrink-0 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded px-2 py-0.5 font-medium transition"
+            className="ml-2 shrink-0 bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 border border-amber-500/50 rounded px-2.5 py-0.5 font-bold transition text-[10.5px]"
           >
-            ใช้ชื่อนี้
+            คลิกเพื่อใช้ชื่อนี้
           </button>
+        </div>
+      )}
+
+      {/* Custom Interactive Suggestions Dropdown */}
+      {isOpen && filteredSuggestions.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
+          <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase bg-slate-950/60 flex items-center justify-between">
+            <span>ตัวเลือกที่มีในระบบ ({filteredSuggestions.length})</span>
+            <span className="text-[9px] text-amber-400 font-normal">คลิกเพื่อเลือกทันที</span>
+          </div>
+          {filteredSuggestions.map((item, idx) => {
+            const isExact = value && item.toLowerCase() === value.trim().toLowerCase();
+            return (
+              <div
+                key={idx}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent blur before select
+                  handleSelectOption(item);
+                }}
+                className={`px-3 py-2 text-xs text-slate-200 hover:bg-emerald-500/20 hover:text-emerald-300 cursor-pointer flex items-center justify-between transition-colors ${isExact ? 'bg-emerald-500/10 font-bold text-emerald-400' : ''}`}
+              >
+                <span className="truncate">{item}</span>
+                {isExact && <span className="text-[10px] text-emerald-400 shrink-0 ml-2">✓ ตรงกับที่พิมพ์</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -6414,6 +6514,20 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่องานโครงการ');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.decisionMakers) {
+        formData.decisionMakers.split(',').forEach(d => {
+          if (d.trim()) window.saveAeronDictionaryItem('doctor', d.trim());
+        });
+      }
+      if (formData.competitors) {
+        formData.competitors.split(',').forEach(c => {
+          if (c.trim()) window.saveAeronDictionaryItem('competitor', c.trim());
+        });
+      }
+    }
     onSave({
       ...formData,
       budget: Number(formData.budget) || 0,
@@ -6438,8 +6552,8 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">ชื่อโรงพยาบาล / หน่วยงาน <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 required
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}
@@ -6463,8 +6577,8 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่องาน / รายละเอียดโครงการจัดซื้อ <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น จัดซื้อเครื่องตรวจคลื่นหัวใจไฟฟ้า 12 ลีด 5 เครื่อง"
               value={formData.title}
@@ -7817,6 +7931,10 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     const validComponents = componentsList.filter(c => c.name && c.name.trim());
     const autoAccessoriesSummary = validComponents.map(c => `${c.name} (${c.qty} ${c.unit})`).join(', ');
 
+    if (window.saveAeronDictionaryItem) {
+      if (formData.name) window.saveAeronDictionaryItem('product', formData.name);
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+    }
     onSave({
       ...formData,
       price: Number(formData.price) || 0,
@@ -7932,8 +8050,8 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">แบรนด์/ผู้ผลิต</label>
-                <input
-                  type="text"
+                <SmartSuggestInput
+                  category="brand"
                   placeholder="เช่น AERON MEDICAL"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
@@ -7945,8 +8063,8 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">ชื่อรุ่นสินค้า (Model Code) <span className="text-rose-400">*</span></label>
-                <input
-                  type="text"
+                <SmartSuggestInput
+                  category="product"
                   required
                   placeholder="เช่น AERON Cardio 12L-AI, BJ3500"
                   value={formData.name}
@@ -8598,6 +8716,11 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
       alert('กรุณากรอกชื่อรุ่นสินค้าและอาการเสีย');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.lastHospital) window.saveAeronDictionaryItem('hospital', formData.lastHospital);
+      if (formData.lastUser) window.saveAeronDictionaryItem('doctor', formData.lastUser);
+    }
     onSave({
       ...formData,
       repairCost: Number(formData.repairCost) || 0,
@@ -8646,20 +8769,14 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้าที่ส่งซ่อม <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
-                list="products-list"
                 placeholder="เลือกหรือพิมพ์ชื่อรุ่นสินค้า"
                 value={formData.productName}
                 onChange={(e) => handleProductSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
               />
-              <datalist id="products-list">
-                {(products || []).map(p => (
-                  <option key={p.id} value={p.name} />
-                ))}
-              </datalist>
             </div>
 
             <div className="space-y-1">
@@ -8701,8 +8818,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ใช้ครั้งสุดท้ายจาก รพ. ไหน</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.lastHospital}
                 onChange={(e) => setFormData({ ...formData, lastHospital: e.target.value })}
@@ -8712,8 +8829,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ระบุตัวคนใช้ / อาจารย์ผู้ใช้</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="doctor"
                 placeholder="เช่น พญ.สมศรี / พยาบาล ER"
                 value={formData.lastUser}
                 onChange={(e) => setFormData({ ...formData, lastUser: e.target.value })}
@@ -8887,6 +9004,11 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
       alert('กรุณากรอกชื่อสินค้าและชื่อบริษัทผู้ผลิต');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.shippingCompany) window.saveAeronDictionaryItem('forwarder', formData.shippingCompany);
+    }
     onSave({
       ...formData,
       cbm: Number(formData.cbm) || 0,
@@ -8940,9 +9062,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ชื่อรุ่นสินค้าที่นำเข้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
+                placeholder="เช่น AERON Cardio 12L-AI"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
@@ -8951,9 +9074,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทผู้ผลิต / Vendor <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
+                placeholder="เช่น Mindray Medical, Sonoscape"
                 value={formData.vendorName}
                 onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
@@ -8964,8 +9088,8 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทขนส่ง (Freight Carrier)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="forwarder"
                 placeholder="เช่น DHL, Kuehne+Nagel, FedEx"
                 value={formData.shippingCompany}
                 onChange={(e) => setFormData({ ...formData, shippingCompany: e.target.value })}
@@ -9612,6 +9736,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่อรุ่นสินค้า');
       return;
     }
+    if (window.saveAeronDictionaryItem && formData.hospitalName) {
+      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    }
     onSave({
       ...formData,
       projectValue: Number(formData.projectValue) || 0,
@@ -9673,8 +9800,8 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / ลูกค้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 required
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}
@@ -10293,6 +10420,9 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
       return;
     }
 
+    if (window.saveAeronDictionaryItem && formData.hospitalName) {
+      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    }
     const prod = products.find(p => p.id === formData.productId);
     onSave({
       ...formData,
@@ -10324,8 +10454,8 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
           
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อโรงพยาบาล / โครงการ <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="hospital"
               required
               placeholder="ระบุชื่อโรงพยาบาล..."
               value={formData.hospitalName}
@@ -11562,6 +11692,10 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
       alert('กรุณากรอกชื่อสินค้าและบริษัทผู้ผลิต');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+    }
     onSave({
       ...formData,
       costTHB: Number(formData.costTHB) || 0,
@@ -11621,8 +11755,9 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ยี่ห้อ (Brand)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="brand"
+                placeholder="เช่น Mindray, Sonoscape"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
@@ -11631,9 +11766,10 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">บริษัทผู้ผลิต / Vendor ต่างประเทศ <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
+                placeholder="เช่น Mindray Medical Singapore"
                 value={formData.vendorName}
                 onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold"
@@ -14099,6 +14235,10 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       alert('กรุณากรอกเลขที่ PO');
       return;
     }
+    if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+    }
     onSave(formData);
   };
 
@@ -14159,8 +14299,8 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / ลูกค้า</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น โรงพยาบาลศิริราช"
                 value={formData.hospitalName}
                 onChange={(e) => setFormData({ ...formData, hospitalName: e.target.value })}
@@ -16382,8 +16522,9 @@ function CreatePendingTransferModal({ onSave, onClose }) {
     }
 
     if (window.saveAeronDictionaryItem) {
-      window.saveAeronDictionaryItem('payee', formData.payee);
-      window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.payee) window.saveAeronDictionaryItem('payee', formData.payee);
+      if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
+      if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);
     }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
@@ -16450,8 +16591,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อรายการค้างโอน / คำอธิบาย <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น ค่าเช่าออฟฟิศประจำเดือน 8/69, ค่าทำบัญชี, ค่าเคสสครับ..."
               value={formData.title}
@@ -16664,8 +16805,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ผู้รับเงิน / ผู้จ่ายเงิน (Payee) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
                 placeholder="เช่น อาคารออฟฟิศ, สำนักงานบัญชี, แพทย์ DF..."
                 value={formData.payee}
@@ -16676,8 +16817,8 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / โครงการที่เกี่ยวข้อง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น คณะแพทย์ศาสตร์ มหิดล, รพ.ศิริราช..."
                 value={formData.hospital_name}
                 onChange={(e) => handleChange('hospital_name', e.target.value)}
@@ -19203,6 +19344,10 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
       is_active: true
     };
 
+    if (window.saveAeronDictionaryItem) {
+      if (newTitle) window.saveAeronDictionaryItem('title', newTitle);
+      if (newPayee) window.saveAeronDictionaryItem('payee', newPayee);
+    }
     onSaveTemplate(tData);
     setNewTitle('');
     setNewAmount(0);
@@ -19297,8 +19442,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
           <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="text-[11px] text-slate-400">ชื่อรายการประจำ *</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="title"
                 required
                 placeholder="เช่น ค่าเช่าออฟฟิศ, ค่าทำบัญชี..."
                 value={newTitle}
@@ -19337,8 +19482,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
 
             <div>
               <label className="text-[11px] text-slate-400">ผู้รับเงิน (Payee)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 placeholder="เช่น อาคารออฟฟิศ..."
                 value={newPayee}
                 onChange={(e) => setNewPayee(e.target.value)}
@@ -19512,8 +19657,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชื่อรายการ / คำอธิบาย <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="title"
               required
               placeholder="เช่น เงินเดือนปจด. 6/69 พงศธร, ค่าคอมมิชชั่นเซลล์, ค่าเคสสครับ, ค่า DF..."
               value={formData.title}
@@ -19730,8 +19875,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ผู้รับเงิน / ผู้จ่ายเงิน (Payee) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="payee"
                 required
                 placeholder="เช่น พงศธร, อาจารย์รัตนา..."
                 value={formData.payee}
@@ -19742,8 +19887,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">โรงพยาบาล / โครงการที่เกี่ยวข้อง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="hospital"
                 placeholder="เช่น คณะแพทย์ศาสตร์ มหิดล, รพ.รามาธิบดี..."
                 value={formData.hospital_name}
                 onChange={(e) => handleChange('hospital_name', e.target.value)}
