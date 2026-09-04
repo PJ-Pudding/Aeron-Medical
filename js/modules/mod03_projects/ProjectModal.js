@@ -1,8 +1,22 @@
 // MODULE: mod03_projects/ProjectModal.js
 
 function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], currentUser, onSave, onClose }) {
-  const defaultMember = (currentUser && members.find(m => m.name === currentUser.name || m.id === currentUser.memberId)) 
-    || members[0] || null;
+  // Ensure currentUser is always included in the available assignee options
+  const effectiveMembers = useMemo(() => {
+    const list = [...(members || [])];
+    if (currentUser && !list.some(m => m.name === currentUser.name || m.id === currentUser.memberId)) {
+      list.push({
+        id: currentUser.memberId || currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role,
+        avatar: currentUser.avatar || '👨‍⚕️'
+      });
+    }
+    return list;
+  }, [members, currentUser]);
+
+  const defaultMember = (currentUser && effectiveMembers.find(m => m.name === currentUser.name || m.id === currentUser.memberId)) 
+    || effectiveMembers[0] || null;
 
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
@@ -47,13 +61,27 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.hospitalName.trim() || !formData.title.trim()) {
-      alert('กรุณากรอกชื่อโรงพยาบาลและชื่องานโครงการ');
+    const hosp = (formData.hospitalName || '').trim();
+    const ttl = (formData.title || '').trim();
+    const rawBudget = String(formData.budget || '').replace(/,/g, '').trim();
+    const numBudget = Number(rawBudget) || 0;
+
+    if (!hosp) {
+      alert('กรุณากรอกชื่อโรงพยาบาล / หน่วยงาน');
       return;
     }
+    if (!ttl) {
+      alert('กรุณากรอกชื่องาน / รายละเอียดโครงการจัดซื้อ');
+      return;
+    }
+    if (numBudget <= 0) {
+      alert('กรุณากรอกงบประมาณรวม (บาท) ให้ถูกต้อง');
+      return;
+    }
+
     if (window.saveAeronDictionaryItem) {
-      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
-      if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
+      if (hosp) window.saveAeronDictionaryItem('hospital', hosp);
+      if (ttl) window.saveAeronDictionaryItem('title', ttl);
       if (formData.decisionMakers) {
         formData.decisionMakers.split(',').forEach(d => {
           if (d.trim()) window.saveAeronDictionaryItem('doctor', d.trim());
@@ -66,15 +94,17 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       }
     }
 
-    const assignedMember = members.find(m => m.name === formData.assignee);
+    const assignedMember = effectiveMembers.find(m => m.name === formData.assignee);
     const finalMemberId = assignedMember ? assignedMember.id : (formData.memberId || (currentUser ? currentUser.memberId : ''));
 
     onSave({
       ...formData,
+      hospitalName: hosp,
+      title: ttl,
       memberId: finalMemberId,
       created_by: formData.created_by || currentUser?.name || currentUser?.username || 'User',
       created_by_role: formData.created_by_role || currentUser?.role || 'SALES',
-      budget: Number(formData.budget) || 0,
+      budget: numBudget,
       quantity: Number(formData.quantity) || 1,
       winProbability: Number(formData.winProbability) || 50
     });
@@ -170,11 +200,14 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">งบประมาณรวม (บาท) <span className="text-rose-400">*</span></label>
               <input
-                type="number"
+                type="text"
                 required
-                placeholder="เช่น 4500000"
+                placeholder="เช่น 2,500,000 หรือ 4500000"
                 value={formData.budget}
-                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/[^0-9,]/g, '');
+                  setFormData({ ...formData, budget: cleaned });
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-emerald-500"
               />
             </div>
@@ -198,7 +231,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 value={formData.assignee}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const m = (members || []).find(mem => mem.name === val);
+                  const m = effectiveMembers.find(mem => mem.name === val);
                   setFormData(prev => ({
                     ...prev,
                     assignee: val,
@@ -207,7 +240,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-medium outline-none focus:border-emerald-500"
               >
-                {(members || []).map(m => (
+                {effectiveMembers.map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
               </select>

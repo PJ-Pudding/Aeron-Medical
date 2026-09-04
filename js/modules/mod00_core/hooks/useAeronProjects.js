@@ -89,11 +89,21 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects (Smart Deep Compare)
+        // 1. Projects (Smart Deep Compare & Empty Protection)
         const remoteProjects = await fetcher('projects', null);
         if (isMounted && Array.isArray(remoteProjects)) {
-          setProjects(prev => (JSON.stringify(prev) === JSON.stringify(remoteProjects) ? prev : remoteProjects));
-          localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+          setProjects(prev => {
+            if (remoteProjects.length === 0 && prev && prev.length > 0) {
+              if (typeof window.syncToDB === 'function') window.syncToDB('projects', prev);
+              return prev;
+            }
+            if (JSON.stringify(prev) === JSON.stringify(remoteProjects)) return prev;
+            return remoteProjects;
+          });
+          const localSaved = JSON.parse(localStorage.getItem('gov_hospital_projects') || '[]');
+          if (remoteProjects.length > 0 || localSaved.length === 0) {
+            localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+          }
         }
 
         // 2. Cost Calculations

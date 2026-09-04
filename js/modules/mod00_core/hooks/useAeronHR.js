@@ -4,6 +4,8 @@
 // ====================================================
 
 function useAeronHR({ currentUser }) {
+  const isHydrated = useRef(false);
+
   // 1. Leave Requests State
   const [leaveRequests, setLeaveRequests] = useState(() => {
     try {

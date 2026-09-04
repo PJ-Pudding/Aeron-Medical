@@ -138,7 +138,7 @@ window.AeronCloudDB = {
     try {
       await fetch(base + '/api/save-db?table=' + tableName, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify(data, null, 2)
       });
     } catch (err) {
@@ -169,11 +169,20 @@ window.AeronCloudDB = {
         const data = await res.json();
         if (data !== undefined && data !== null) {
           const cleanData = sanitizeThaiData(data);
-          try {
-            const lsKey = _TABLE_LS_MAP[tableName];
-            if (lsKey) localStorage.setItem(lsKey, JSON.stringify(cleanData));
-            localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-          } catch(e) {}
+          const lsKey = _TABLE_LS_MAP[tableName];
+          if (lsKey) {
+            try {
+              const cached = localStorage.getItem(lsKey);
+              const parsedCached = cached ? JSON.parse(cached) : null;
+              if (Array.isArray(cleanData) && cleanData.length === 0 && Array.isArray(parsedCached) && parsedCached.length > 0) {
+                // Heal cloud with existing non-empty local data
+                window.AeronCloudDB.save(tableName, parsedCached);
+                return parsedCached;
+              }
+              localStorage.setItem(lsKey, JSON.stringify(cleanData));
+              localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
+            } catch(e) {}
+          }
           return cleanData;
         }
       }

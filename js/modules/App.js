@@ -108,6 +108,22 @@ function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isUserAccountModalOpen, setIsUserAccountModalOpen] = useState(false);
 
+  // ⚡ Ensure currentUser is present in members list if missing
+  useEffect(() => {
+    if (currentUser && Array.isArray(members)) {
+      const exists = members.some(m => m.name === currentUser.name || m.id === currentUser.memberId);
+      if (!exists) {
+        const newM = {
+          id: currentUser.memberId || currentUser.id,
+          name: currentUser.name,
+          role: currentUser.role,
+          avatar: currentUser.avatar || '👨‍⚕️'
+        };
+        setMembers(prev => [...prev, newM]);
+      }
+    }
+  }, [currentUser, members]);
+
   // 4. HR Domain Hook (Leave Requests, Attendance Logs)
   const hr = useAeronHR({ currentUser });
   const {
@@ -457,7 +473,7 @@ function App() {
 
       return true;
     });
-  }, [projects, activeView, members, filterClientType, filterBudgetType, searchTerm]);
+  }, [scopedProjects, projects, currentUser, activeView, members, filterClientType, filterBudgetType, searchTerm]);
 
   // Export Data to CSV
   const exportToCSV = () => {

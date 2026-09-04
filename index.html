@@ -92,14 +92,15 @@
     </div>
   </div>
 
-  <script src="./js/initialData.js?v=5.4.1"></script>
-  <script src="./js/app.compiled.js?v=5.4.1"></script>
+  <script src="./js/initialData.js?v=5.4.2"></script>
+  <script src="./js/app.compiled.js?v=5.4.2"></script>
   <script>
     (function initApp() {
       function mount() {
         if (window.App && typeof ReactDOM !== 'undefined') {
           const rootElement = document.getElementById('root');
           if (rootElement) {
+            rootElement.innerHTML = '';
             const root = ReactDOM.createRoot(rootElement);
             root.render(React.createElement(window.App));
           }
