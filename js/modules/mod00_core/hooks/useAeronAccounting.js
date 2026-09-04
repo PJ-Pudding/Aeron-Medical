@@ -11,7 +11,8 @@ function useAeronAccounting({ setShipments }) {
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(parsed) : parsed;
+          const rawList = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(parsed) : parsed;
+          return rawList.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
         }
       }
     } catch(e) {}
@@ -47,7 +48,8 @@ function useAeronAccounting({ setShipments }) {
         // 1. Transactions (Smart Deep Compare & Universal Thai Sanitizer)
         const remoteTxns = await fetcher('accounting', null);
         if (isMounted && Array.isArray(remoteTxns)) {
-          const cleanTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
+          const rawTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
+          const cleanTxns = rawTxns.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
           setTransactions(prev => (JSON.stringify(prev) === JSON.stringify(cleanTxns) ? prev : cleanTxns));
           localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
         }

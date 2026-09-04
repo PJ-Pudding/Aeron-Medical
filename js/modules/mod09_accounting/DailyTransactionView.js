@@ -39,7 +39,7 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
   }, [activeTxns]);
 
   const filteredTxns = useMemo(() => {
-    return activeTxns.filter(t => {
+    const list = activeTxns.filter(t => {
       if (filterType !== 'all' && t.transaction_type !== filterType) return false;
       if (filterExpenseType !== 'all' && t.expense_type !== filterExpenseType) return false;
       if (filterAccount !== 'all' && t.account_type !== filterAccount) return false;
