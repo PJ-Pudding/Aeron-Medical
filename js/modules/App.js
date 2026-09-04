@@ -958,6 +958,7 @@ function App() {
           members={members}
           stages={window.STAGES}
           products={products}
+          currentUser={currentUser}
           onSave={handleSaveProject}
           onClose={() => { setIsModalOpen(false); setEditingProject(null); }}
         />

@@ -1,12 +1,18 @@
 // MODULE: mod03_projects/ProjectModal.js
 
-function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], onSave, onClose }) {
+function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], currentUser, onSave, onClose }) {
+  const defaultMember = (currentUser && members.find(m => m.name === currentUser.name || m.id === currentUser.memberId)) 
+    || members[0] || null;
+
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
     clientType: 'รัฐบาล',
     title: '',
     details: '',
-    assignee: members[0] ? members[0].name : '',
+    assignee: defaultMember ? defaultMember.name : (currentUser ? currentUser.name : ''),
+    memberId: defaultMember ? defaultMember.id : (currentUser ? currentUser.memberId : ''),
+    created_by: currentUser ? currentUser.name : '',
+    created_by_role: currentUser ? currentUser.role : 'SALES',
     productId: products[0] ? products[0].id : '',
     productName: products[0] ? products[0].name : '',
     productCategory: products[0] ? products[0].category : '',
@@ -59,8 +65,15 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
         });
       }
     }
+
+    const assignedMember = members.find(m => m.name === formData.assignee);
+    const finalMemberId = assignedMember ? assignedMember.id : (formData.memberId || (currentUser ? currentUser.memberId : ''));
+
     onSave({
       ...formData,
+      memberId: finalMemberId,
+      created_by: formData.created_by || currentUser?.name || currentUser?.username || 'User',
+      created_by_role: formData.created_by_role || currentUser?.role || 'SALES',
       budget: Number(formData.budget) || 0,
       quantity: Number(formData.quantity) || 1,
       winProbability: Number(formData.winProbability) || 50
@@ -183,7 +196,15 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
               <label className="font-semibold text-slate-300">เซลส์ผู้รับผิดชอบ</label>
               <select
                 value={formData.assignee}
-                onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const m = (members || []).find(mem => mem.name === val);
+                  setFormData(prev => ({
+                    ...prev,
+                    assignee: val,
+                    memberId: m ? m.id : prev.memberId
+                  }));
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-medium outline-none focus:border-emerald-500"
               >
                 {(members || []).map(m => (

@@ -744,12 +744,38 @@ function getScopedProjects(user, projects = []) {
   const roleConfig = ROLES_PERMISSIONS[user.role];
   if (!roleConfig || roleConfig.dataScope === 'all') return projects;
 
+  const uName = (user.name || '').trim();
+  const uFirstName = uName ? uName.split(' ')[0] : '';
+  const uUsername = (user.username || '').trim().toLowerCase();
+
+  const isSelfProject = (p) => {
+    if (!p) return false;
+    if (p.memberId && user.memberId && p.memberId === user.memberId) return true;
+    if (p.assignee && uName && (p.assignee === uName || (uFirstName && p.assignee.includes(uFirstName)))) return true;
+    if (p.created_by && (p.created_by === uName || (uUsername && p.created_by.toLowerCase() === uUsername) || p.created_by === user.id)) return true;
+    return false;
+  };
+
   if (roleConfig.dataScope === 'own') {
-    return projects.filter(p => p.assignee === user.name || p.memberId === user.memberId);
+    return projects.filter(isSelfProject);
   }
 
-  if (roleConfig.dataScope === 'subordinates' && user.subordinates) {
-    return projects.filter(p => user.subordinates.includes(p.memberId) || p.assignee.includes(user.name.split(' ')[0]));
+  if (roleConfig.dataScope === 'subordinates') {
+    if (!Array.isArray(user.subordinates) || user.subordinates.length === 0) {
+      return projects.filter(isSelfProject);
+    }
+    let subMembers = [];
+    try {
+      const allMembers = window.INITIAL_MEMBERS || [];
+      subMembers = allMembers.filter(m => user.subordinates.includes(m.id)).map(m => m.name);
+    } catch (e) {}
+
+    return projects.filter(p => {
+      if (isSelfProject(p)) return true;
+      if (p.memberId && user.subordinates.includes(p.memberId)) return true;
+      if (p.assignee && (user.subordinates.includes(p.assignee) || subMembers.includes(p.assignee))) return true;
+      return false;
+    });
   }
 
   return projects;

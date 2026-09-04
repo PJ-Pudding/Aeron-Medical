@@ -4,6 +4,8 @@
 // ====================================================
 
 function useAeronAccounting({ setShipments }) {
+  const isHydrated = useRef(false);
+
   // 1. Transactions State
   const [transactions, setTransactions] = useState(() => {
     try {
@@ -82,34 +84,73 @@ function useAeronAccounting({ setShipments }) {
   // Handlers
   const handleSaveTransaction = useCallback((txnData) => {
     setTransactions(prev => {
+      let updated;
       const idx = prev.findIndex(t => t.id === txnData.id);
       if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...txnData };
-        return copy;
+        updated = [...prev];
+        updated[idx] = { ...txnData };
       } else {
-        return [{ ...txnData }, ...prev];
+        updated = [{ ...txnData }, ...prev];
       }
+      try {
+        localStorage.setItem('aeron_accounting_txns', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('accounting', updated);
+        }
+      } catch (e) {
+        console.error('Error saving transaction to storage/cloud:', e);
+      }
+      return updated;
     });
   }, []);
 
   const handleDeleteTransaction = useCallback((txnId) => {
     if (window.confirm('ต้องการลบรายการนี้?')) {
-      setTransactions(prev => prev.filter(t => t.id !== txnId));
+      setTransactions(prev => {
+        const updated = prev.filter(t => t.id !== txnId);
+        try {
+          localStorage.setItem('aeron_accounting_txns', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('accounting', updated);
+          }
+        } catch (e) {
+          console.error('Error deleting transaction from storage/cloud:', e);
+        }
+        return updated;
+      });
     }
   }, []);
 
   // Save Purchase Order with Auto-Linking to Shipment Tracking
   const handleSavePO = useCallback((poData) => {
     let savedPO = poData;
+    let nextPOs;
     if (poData.id) {
-      setPurchaseOrders(prev => prev.map(po => po.id === poData.id ? poData : po));
+      setPurchaseOrders(prev => {
+        nextPOs = prev.map(po => po.id === poData.id ? poData : po);
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     } else {
       savedPO = {
         ...poData,
         id: 'po-' + Date.now()
       };
-      setPurchaseOrders(prev => [savedPO, ...prev]);
+      setPurchaseOrders(prev => {
+        nextPOs = [savedPO, ...prev];
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     }
 
     // Auto Link: Create Shipment Tracking Entry if not existing
@@ -154,9 +195,39 @@ function useAeronAccounting({ setShipments }) {
 
   const handleDeletePO = useCallback((poId) => {
     if (window.confirm('คุณต้องการลบใบสั่งซื้อ PO นี้ออกจากระบบใช่หรือไม่?')) {
-      setPurchaseOrders(prev => prev.filter(po => po.id !== poId));
+      setPurchaseOrders(prev => {
+        const nextPOs = prev.filter(po => po.id !== poId);
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     }
   }, []);
+
+  // Continuous auto-sync when state changes after initial hydration
+  useEffect(() => {
+    if (!isHydrated.current) return;
+    try {
+      localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
+      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+        window.syncToDB('accounting', transactions);
+      }
+    } catch (e) {}
+  }, [transactions]);
+
+  useEffect(() => {
+    if (!isHydrated.current) return;
+    try {
+      localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
+      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+        window.syncToDB('purchase_orders', purchaseOrders);
+      }
+    } catch (e) {}
+  }, [purchaseOrders]);
 
   return {
     transactions, setTransactions,

@@ -750,12 +750,38 @@ function getScopedProjects(user, projects = []) {
   const roleConfig = ROLES_PERMISSIONS[user.role];
   if (!roleConfig || roleConfig.dataScope === 'all') return projects;
 
+  const uName = (user.name || '').trim();
+  const uFirstName = uName ? uName.split(' ')[0] : '';
+  const uUsername = (user.username || '').trim().toLowerCase();
+
+  const isSelfProject = (p) => {
+    if (!p) return false;
+    if (p.memberId && user.memberId && p.memberId === user.memberId) return true;
+    if (p.assignee && uName && (p.assignee === uName || (uFirstName && p.assignee.includes(uFirstName)))) return true;
+    if (p.created_by && (p.created_by === uName || (uUsername && p.created_by.toLowerCase() === uUsername) || p.created_by === user.id)) return true;
+    return false;
+  };
+
   if (roleConfig.dataScope === 'own') {
-    return projects.filter(p => p.assignee === user.name || p.memberId === user.memberId);
+    return projects.filter(isSelfProject);
   }
 
-  if (roleConfig.dataScope === 'subordinates' && user.subordinates) {
-    return projects.filter(p => user.subordinates.includes(p.memberId) || p.assignee.includes(user.name.split(' ')[0]));
+  if (roleConfig.dataScope === 'subordinates') {
+    if (!Array.isArray(user.subordinates) || user.subordinates.length === 0) {
+      return projects.filter(isSelfProject);
+    }
+    let subMembers = [];
+    try {
+      const allMembers = window.INITIAL_MEMBERS || [];
+      subMembers = allMembers.filter(m => user.subordinates.includes(m.id)).map(m => m.name);
+    } catch (e) {}
+
+    return projects.filter(p => {
+      if (isSelfProject(p)) return true;
+      if (p.memberId && user.subordinates.includes(p.memberId)) return true;
+      if (p.assignee && (user.subordinates.includes(p.assignee) || subMembers.includes(p.assignee))) return true;
+      return false;
+    });
   }
 
   return projects;
@@ -3444,6 +3470,8 @@ function UserAccountManagementModal({ isOpen, onClose, currentUser, onAccountsUp
 // ====================================================
 
 function useAeronAccounting({ setShipments }) {
+  const isHydrated = useRef(false);
+
   // 1. Transactions State
   const [transactions, setTransactions] = useState(() => {
     try {
@@ -3522,34 +3550,73 @@ function useAeronAccounting({ setShipments }) {
   // Handlers
   const handleSaveTransaction = useCallback((txnData) => {
     setTransactions(prev => {
+      let updated;
       const idx = prev.findIndex(t => t.id === txnData.id);
       if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...txnData };
-        return copy;
+        updated = [...prev];
+        updated[idx] = { ...txnData };
       } else {
-        return [{ ...txnData }, ...prev];
+        updated = [{ ...txnData }, ...prev];
       }
+      try {
+        localStorage.setItem('aeron_accounting_txns', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('accounting', updated);
+        }
+      } catch (e) {
+        console.error('Error saving transaction to storage/cloud:', e);
+      }
+      return updated;
     });
   }, []);
 
   const handleDeleteTransaction = useCallback((txnId) => {
     if (window.confirm('ต้องการลบรายการนี้?')) {
-      setTransactions(prev => prev.filter(t => t.id !== txnId));
+      setTransactions(prev => {
+        const updated = prev.filter(t => t.id !== txnId);
+        try {
+          localStorage.setItem('aeron_accounting_txns', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('accounting', updated);
+          }
+        } catch (e) {
+          console.error('Error deleting transaction from storage/cloud:', e);
+        }
+        return updated;
+      });
     }
   }, []);
 
   // Save Purchase Order with Auto-Linking to Shipment Tracking
   const handleSavePO = useCallback((poData) => {
     let savedPO = poData;
+    let nextPOs;
     if (poData.id) {
-      setPurchaseOrders(prev => prev.map(po => po.id === poData.id ? poData : po));
+      setPurchaseOrders(prev => {
+        nextPOs = prev.map(po => po.id === poData.id ? poData : po);
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     } else {
       savedPO = {
         ...poData,
         id: 'po-' + Date.now()
       };
-      setPurchaseOrders(prev => [savedPO, ...prev]);
+      setPurchaseOrders(prev => {
+        nextPOs = [savedPO, ...prev];
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     }
 
     // Auto Link: Create Shipment Tracking Entry if not existing
@@ -3594,9 +3661,39 @@ function useAeronAccounting({ setShipments }) {
 
   const handleDeletePO = useCallback((poId) => {
     if (window.confirm('คุณต้องการลบใบสั่งซื้อ PO นี้ออกจากระบบใช่หรือไม่?')) {
-      setPurchaseOrders(prev => prev.filter(po => po.id !== poId));
+      setPurchaseOrders(prev => {
+        const nextPOs = prev.filter(po => po.id !== poId);
+        try {
+          localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('purchase_orders', nextPOs);
+          }
+        } catch (e) {}
+        return nextPOs;
+      });
     }
   }, []);
+
+  // Continuous auto-sync when state changes after initial hydration
+  useEffect(() => {
+    if (!isHydrated.current) return;
+    try {
+      localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
+      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+        window.syncToDB('accounting', transactions);
+      }
+    } catch (e) {}
+  }, [transactions]);
+
+  useEffect(() => {
+    if (!isHydrated.current) return;
+    try {
+      localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
+      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+        window.syncToDB('purchase_orders', purchaseOrders);
+      }
+    } catch (e) {}
+  }, [purchaseOrders]);
 
   return {
     transactions, setTransactions,
@@ -4110,6 +4207,8 @@ window.useAeronLogistics = useAeronLogistics;
 // ====================================================
 
 function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification }) {
+  const isHydrated = useRef(false);
+
   // 1. Projects State
   const [projects, setProjects] = useState(() => {
     try {
@@ -4158,6 +4257,32 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [editingDemoBooking, setEditingDemoBooking] = useState(null);
 
   // ⚡ Action-Driven Direct Cloud Sync
+  useEffect(() => {
+    if (isHydrated.current) {
+      localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('projects', projects);
+      }
+    }
+  }, [projects]);
+
+  useEffect(() => {
+    if (isHydrated.current) {
+      localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('cost_calculations', costCalculations);
+      }
+    }
+  }, [costCalculations]);
+
+  useEffect(() => {
+    if (isHydrated.current) {
+      localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('demo_bookings', demoBookings);
+      }
+    }
+  }, [demoBookings]);
 
   // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
   useEffect(() => {
@@ -4208,19 +4333,32 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   }, []);
 
   const handleUpdateBookingStatus = useCallback((bookingId, newStatus) => {
-    setDemoBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+    setDemoBookings(prev => {
+      const updated = prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b);
+      localStorage.setItem('aeron_demo_bookings', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('demo_bookings', updated);
+      }
+      return updated;
+    });
   }, []);
 
   const handleSaveCostCalc = useCallback((calcData) => {
     setCostCalculations(prev => {
+      let updated;
       const idx = prev.findIndex(c => c.id === calcData.id || c.projectId === calcData.projectId);
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...calcData, id: copy[idx].id };
-        return copy;
+        updated = copy;
       } else {
-        return [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
+        updated = [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
       }
+      localStorage.setItem('aeron_cost_calculations', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('cost_calculations', updated);
+      }
+      return updated;
     });
     setIsCostModalOpen(false);
     setEditingCostCalc(null);
@@ -4228,82 +4366,104 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
 
   const handleDeleteCostCalc = useCallback((calcId) => {
     if (window.confirm('ยืนยันการลบการคำนวณต้นทุนนี้?')) {
-      setCostCalculations(prev => prev.filter(c => c.id !== calcId));
+      setCostCalculations(prev => {
+        const updated = prev.filter(c => c.id !== calcId);
+        localStorage.setItem('aeron_cost_calculations', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('cost_calculations', updated);
+        }
+        return updated;
+      });
     }
   }, []);
 
   // Handle move project stage in Kanban
   const handleMoveProject = useCallback((projectId, targetStageId) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
-        if (isWon && p.status !== targetStageId && setToastNotification) {
-          setToastNotification({
-            show: true,
-            title: `🎉 คุณ ${p.assignee} ได้รับการอนุมัติโครงการได้ชนะ/ได้สัญญา!`,
-            message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกเลื่อนสู่สถานะสั่งซื้อ PO กับ Vendor`,
-            projectId: p.id
-          });
-        }
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id === projectId) {
+          const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
+          if (isWon && p.status !== targetStageId && setToastNotification) {
+            setToastNotification({
+              show: true,
+              title: `🎉 คุณ ${p.assignee} ได้รับการอนุมัติโครงการได้ชนะ/ได้สัญญา!`,
+              message: `โครงการ "${p.hospitalName}" (${formatCurrency(p.budget)}) ได้ถูกเลื่อนสู่สถานะสั่งซื้อ PO กับ Vendor`,
+              projectId: p.id
+            });
+          }
 
-        const isDelivered = targetStageId === 'stage_delivery' || targetStageId === 'stage_completed';
-        if (isDelivered && p.status !== targetStageId && setSoldProducts) {
-          setSoldProducts(prevSold => {
-            const exists = (prevSold || []).some(sp => sp.projectId === p.id);
-            if (!exists) {
-              const delivDate = p.procurementDate || new Date().toISOString().split('T')[0];
-              const delivYr = new Date(delivDate).getFullYear();
-              const newAsset = {
-                id: 'sold-' + Date.now(),
-                assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-                contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
-                projectId: p.id,
-                hospitalName: p.hospitalName,
-                department: 'แผนกห้องผ่าตัด / CCU',
-                productName: p.productName || 'เครื่องมือแพทย์ AERON',
-                brand: p.productBrand || 'AERON MEDICAL',
-                productCategory: p.productCategory || 'อุปกรณ์ทางการแพทย์',
-                serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
-                freebies: 'สายไฟ AC, ตัวแปลงสัญญาณ 10 ชิ้น, คู่มือการใช้งานภาษาไทย/อังกฤษ',
-                salesPerson: p.assignee,
-                contactPerson: p.decisionMakers || 'ผอ.แพทย์ / หัวหน้าพัสดุ',
-                deliveryDate: delivDate,
-                projectValue: p.budget || 0,
-                dfAmount: p.dfAmount || '100,000 บาท',
-                bidGuaranteeAmount: Math.round((p.budget || 0) * 0.05),
-                bidGuaranteeRefundDate: `${delivYr}-12-15`,
-                warrantyYears: 1,
-                warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
-                nextPmDate: `${delivYr}-12-15`,
-                pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
-                pmStatus: '🟢 ตามกำหนดการ PM',
-                status: 'ติดตั้งเรียบร้อย'
-              };
-              return [newAsset, ...prevSold];
-            }
-            return prevSold;
-          });
-        }
+          const isDelivered = targetStageId === 'stage_delivery' || targetStageId === 'stage_completed';
+          if (isDelivered && p.status !== targetStageId && setSoldProducts) {
+            setSoldProducts(prevSold => {
+              const exists = (prevSold || []).some(sp => sp.projectId === p.id);
+              if (!exists) {
+                const delivDate = p.procurementDate || new Date().toISOString().split('T')[0];
+                const delivYr = new Date(delivDate).getFullYear();
+                const newAsset = {
+                  id: 'sold-' + Date.now(),
+                  assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
+                  contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
+                  projectId: p.id,
+                  hospitalName: p.hospitalName,
+                  department: 'แผนกห้องผ่าตัด / CCU',
+                  productName: p.productName || 'เครื่องมือแพทย์ AERON',
+                  brand: p.productBrand || 'AERON MEDICAL',
+                  productCategory: p.productCategory || 'อุปกรณ์ทางการแพทย์',
+                  serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
+                  freebies: 'สายไฟ AC, ตัวแปลงสัญญาณ 10 ชิ้น, คู่มือการใช้งานภาษาไทย/อังกฤษ',
+                  salesPerson: p.assignee,
+                  contactPerson: p.decisionMakers || 'ผอ.แพทย์ / หัวหน้าพัสดุ',
+                  deliveryDate: delivDate,
+                  projectValue: p.budget || 0,
+                  dfAmount: p.dfAmount || '100,000 บาท',
+                  bidGuaranteeAmount: Math.round((p.budget || 0) * 0.05),
+                  bidGuaranteeRefundDate: `${delivYr}-12-15`,
+                  warrantyYears: 1,
+                  warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
+                  nextPmDate: `${delivYr}-12-15`,
+                  pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
+                  pmStatus: '🟢 ตามกำหนดการ PM',
+                  status: 'ติดตั้งเรียบร้อย'
+                };
+                return [newAsset, ...prevSold];
+              }
+              return prevSold;
+            });
+          }
 
-        return { ...p, status: targetStageId };
+          return { ...p, status: targetStageId };
+        }
+        return p;
+      });
+      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('projects', updated);
       }
-      return p;
-    }));
+      return updated;
+    });
   }, [setSoldProducts, setToastNotification]);
 
   // Add / Save Project
   const handleSaveProject = useCallback((projectData) => {
-    if (projectData.id) {
-      setProjects(prev => prev.map(p => p.id === projectData.id ? projectData : p));
-    } else {
-      const newProj = {
-        ...projectData,
-        id: 'proj-' + Date.now(),
-        createdDate: new Date().toISOString().split('T')[0],
-        weeklyLogs: []
-      };
-      setProjects(prev => [newProj, ...prev]);
-    }
+    setProjects(prev => {
+      let updated;
+      if (projectData.id) {
+        updated = prev.map(p => p.id === projectData.id ? projectData : p);
+      } else {
+        const newProj = {
+          ...projectData,
+          id: 'proj-' + Date.now(),
+          createdDate: new Date().toISOString().split('T')[0],
+          weeklyLogs: []
+        };
+        updated = [newProj, ...prev];
+      }
+      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('projects', updated);
+      }
+      return updated;
+    });
     setIsModalOpen(false);
     setEditingProject(null);
   }, []);
@@ -4311,43 +4471,67 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   // Delete Project
   const handleDeleteProject = useCallback((projectId) => {
     if (window.confirm('คุณต้องการลบโครงการนี้ออกจากระบบใช่หรือไม่?')) {
-      setProjects(prev => prev.filter(p => p.id !== projectId));
+      setProjects(prev => {
+        const updated = prev.filter(p => p.id !== projectId);
+        localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('projects', updated);
+        }
+        return updated;
+      });
     }
   }, []);
 
   // Add Weekly Log Note
   const handleAddWeeklyLog = useCallback((projectId, note, author) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        const newLog = {
-          date: new Date().toISOString().split('T')[0],
-          author: author || p.assignee,
-          note
-        };
-        return {
-          ...p,
-          weeklyLogs: [newLog, ...(p.weeklyLogs || [])]
-        };
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id === projectId) {
+          const newLog = {
+            date: new Date().toISOString().split('T')[0],
+            author: author || p.assignee,
+            note
+          };
+          return {
+            ...p,
+            weeklyLogs: [newLog, ...(p.weeklyLogs || [])]
+          };
+        }
+        return p;
+      });
+      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('projects', updated);
       }
-      return p;
-    }));
+      return updated;
+    });
     setIsLogModalOpen(false);
     setLogTargetProject(null);
   }, []);
 
   // Save Demo Booking
   const handleSaveDemoBooking = useCallback((bookingData) => {
-    if (bookingData.id) {
-      setDemoBookings(prev => prev.map(b => b.id === bookingData.id ? bookingData : b));
-    } else {
-      const newBooking = {
-        ...bookingData,
-        id: 'booking-' + Date.now()
-      };
-      setDemoBookings(prev => [newBooking, ...prev]);
+    setDemoBookings(prev => {
+      let updated;
+      if (bookingData.id) {
+        updated = prev.map(b => b.id === bookingData.id ? bookingData : b);
+      } else {
+        const newBooking = {
+          ...bookingData,
+          id: 'booking-' + Date.now()
+        };
+        updated = [newBooking, ...prev];
+      }
+      localStorage.setItem('aeron_demo_bookings', JSON.stringify(updated));
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('demo_bookings', updated);
+      }
+      return updated;
+    });
 
-      if (bookingData.projectId) {
-        setProjects(prev => prev.map(p => {
+    if (bookingData.projectId) {
+      setProjects(prev => {
+        const updated = prev.map(p => {
           if (p.id === bookingData.projectId) {
             return {
               ...p,
@@ -4357,8 +4541,13 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
             };
           }
           return p;
-        }));
-      }
+        });
+        localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('projects', updated);
+        }
+        return updated;
+      });
     }
 
     setIsDemoBookingModalOpen(false);
@@ -6469,13 +6658,19 @@ function ProjectHistoryModal({ project, members = [], stages = window.STAGES || 
 // --- Module File: js/modules/mod03_projects/ProjectModal.js ---
 // MODULE: mod03_projects/ProjectModal.js
 
-function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], onSave, onClose }) {
+function ProjectModal({ project, members = [], stages = window.STAGES || [], products = [], currentUser, onSave, onClose }) {
+  const defaultMember = (currentUser && members.find(m => m.name === currentUser.name || m.id === currentUser.memberId)) 
+    || members[0] || null;
+
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
     clientType: 'รัฐบาล',
     title: '',
     details: '',
-    assignee: members[0] ? members[0].name : '',
+    assignee: defaultMember ? defaultMember.name : (currentUser ? currentUser.name : ''),
+    memberId: defaultMember ? defaultMember.id : (currentUser ? currentUser.memberId : ''),
+    created_by: currentUser ? currentUser.name : '',
+    created_by_role: currentUser ? currentUser.role : 'SALES',
     productId: products[0] ? products[0].id : '',
     productName: products[0] ? products[0].name : '',
     productCategory: products[0] ? products[0].category : '',
@@ -6528,8 +6723,15 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
         });
       }
     }
+
+    const assignedMember = members.find(m => m.name === formData.assignee);
+    const finalMemberId = assignedMember ? assignedMember.id : (formData.memberId || (currentUser ? currentUser.memberId : ''));
+
     onSave({
       ...formData,
+      memberId: finalMemberId,
+      created_by: formData.created_by || currentUser?.name || currentUser?.username || 'User',
+      created_by_role: formData.created_by_role || currentUser?.role || 'SALES',
       budget: Number(formData.budget) || 0,
       quantity: Number(formData.quantity) || 1,
       winProbability: Number(formData.winProbability) || 50
@@ -6652,7 +6854,15 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
               <label className="font-semibold text-slate-300">เซลส์ผู้รับผิดชอบ</label>
               <select
                 value={formData.assignee}
-                onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const m = (members || []).find(mem => mem.name === val);
+                  setFormData(prev => ({
+                    ...prev,
+                    assignee: val,
+                    memberId: m ? m.id : prev.memberId
+                  }));
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-medium outline-none focus:border-emerald-500"
               >
                 {(members || []).map(m => (
@@ -22228,6 +22438,7 @@ function App() {
           members={members}
           stages={window.STAGES}
           products={products}
+          currentUser={currentUser}
           onSave={handleSaveProject}
           onClose={() => { setIsModalOpen(false); setEditingProject(null); }}
         />
