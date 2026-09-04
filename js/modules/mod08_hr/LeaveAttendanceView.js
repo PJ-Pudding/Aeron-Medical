@@ -226,7 +226,7 @@ function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members 
                           {l.leaveType}
                         </span>
                       </td>
-                      <td className="p-3 font-mono text-slate-300">{l.startDate} ถึง {l.endDate}</td>
+                      <td className="p-3 font-mono text-slate-300">{window.formatAeronDate(l.startDate)} ถึง {window.formatAeronDate(l.endDate)}</td>
                       <td className="p-3 text-center font-mono font-bold text-amber-300">{l.totalDays || 1} วัน</td>
                       <td className="p-3 text-slate-400 max-w-[180px] truncate">{l.reason || '-'}</td>
                       <td className="p-3 text-center font-bold">
@@ -288,7 +288,7 @@ function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members 
                 ) : (
                   filteredAttendanceLogs.map(a => (
                     <tr key={a.id} className="hover:bg-slate-800/40">
-                      <td className="p-3 font-mono text-slate-400">{a.date}</td>
+                      <td className="p-3 font-mono text-slate-300">{window.formatAeronDate(a.date)}</td>
                       <td className="p-3 font-bold text-white">{a.employeeName}</td>
                       <td className="p-3 text-center">
                         <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">

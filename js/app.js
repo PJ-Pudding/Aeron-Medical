@@ -68,7 +68,8 @@ const _TABLE_LS_MAP = {
   petty_cash_accounts: 'aeron_petty_cash_accounts',
   accounting_frozen_months: 'aeron_accounting_frozen_months',
   accounting_recurring: 'aeron_accounting_recurring',
-  messenger_trips: 'aeron_messenger_trips'
+  messenger_trips: 'aeron_messenger_trips',
+  dictionary: 'aeron_autocomplete_dictionary'
 };
 
 // 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
@@ -869,6 +870,166 @@ window.canViewMemberKanban = canViewMemberKanban;
 window.getYTDDateRange = getYTDDateRange;
 window.syncToDB = syncToDB;
 window.loadFromDB = loadFromDB;
+
+
+// ====================================================
+// 📅 Universal Date Formatter: Standardized to '04-Sep-2026' (DD-MMM-YYYY)
+// ====================================================
+const _AERON_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatAeronDate(dateVal) {
+  if (!dateVal) return '-';
+  const str = String(dateVal).trim();
+  if (!str || str === 'null' || str === 'undefined' || str === '-') return '-';
+
+  // If already in DD-MMM-YYYY format (e.g. 04-Sep-2026 or 4-Sep-2026)
+  const existingMatch = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (existingMatch) {
+    const day = String(parseInt(existingMatch[1], 10)).padStart(2, '0');
+    const month = existingMatch[2].charAt(0).toUpperCase() + existingMatch[2].slice(1).toLowerCase();
+    return `${day}-${month}-${existingMatch[3]}`;
+  }
+
+  // Match YYYY-MM-DD or YYYY/MM/DD (with optional timestamp)
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const year = ymdMatch[1];
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
+    if (month >= 0 && month < 12) {
+      return `${day}-${_AERON_MONTHS_SHORT[month]}-${year}`;
+    }
+  }
+
+  // Match DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = dmyMatch[3];
+    if (month >= 0 && month < 12) {
+      return `${day}-${_AERON_MONTHS_SHORT[month]}-${year}`;
+    }
+  }
+
+  // Parse Date object or ISO timestamp
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = _AERON_MONTHS_SHORT[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+  } catch(e) {}
+
+  return str;
+}
+
+window.formatAeronDate = formatAeronDate;
+window.formatDate = formatAeronDate;
+
+// ====================================================
+// 🧠 Dynamic Name Autocomplete Dictionary & Similarity Warning Engine
+// ====================================================
+
+function stringSimilarity(s1, s2) {
+  if (!s1 || !s2) return 0;
+  s1 = s1.trim().toLowerCase();
+  s2 = s2.trim().toLowerCase();
+  if (s1 === s2) return 1.0;
+
+  // Substring containment check
+  if (s2.includes(s1) || s1.includes(s2)) {
+    const minLen = Math.min(s1.length, s2.length);
+    const maxLen = Math.max(s1.length, s2.length);
+    if (minLen >= 3 && (minLen / maxLen) >= 0.5) return 0.85;
+  }
+
+  // Levenshtein distance
+  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+  for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
+  for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
+  for (let j = 1; j <= s2.length; j += 1) {
+    for (let i = 1; i <= s1.length; i += 1) {
+      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1,
+        track[j - 1][i] + 1,
+        track[j - 1][i - 1] + indicator
+      );
+    }
+  }
+  const distance = track[s2.length][s1.length];
+  const maxLen = Math.max(s1.length, s2.length);
+  return 1 - (distance / maxLen);
+}
+
+function getAeronDictionary(category) {
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    if (category) {
+      return Array.isArray(dict[category]) ? dict[category] : [];
+    }
+    return dict;
+  } catch(e) {
+    return category ? [] : {};
+  }
+}
+
+function saveAeronDictionaryItem(category, value) {
+  if (!category || !value || typeof value !== 'string') return;
+  const valClean = value.trim();
+  if (valClean.length < 2) return;
+
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    if (!Array.isArray(dict[category])) dict[category] = [];
+
+    const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
+    if (!exists) {
+      dict[category].push(valClean);
+      dict[category].sort((a, b) => a.localeCompare(b, 'th'));
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
+
+      if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
+        window.AeronCloudDB.save('dictionary', dict);
+      }
+
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { category, dict } }));
+      }
+    }
+  } catch(e) {
+    console.warn('Error saving to dictionary:', e);
+  }
+}
+
+function findSimilarDictionaryName(input, category) {
+  if (!input || typeof input !== 'string') return null;
+  const inClean = input.trim();
+  if (inClean.length < 3) return null;
+
+  const list = getAeronDictionary(category);
+  const inNorm = inClean.toLowerCase();
+
+  for (const item of list) {
+    const itemNorm = item.toLowerCase();
+    if (itemNorm === inNorm) continue;
+    const sim = stringSimilarity(inNorm, itemNorm);
+    if (sim >= 0.70) {
+      return { item, similarity: sim };
+    }
+  }
+  return null;
+}
+
+window.stringSimilarity = stringSimilarity;
+window.getAeronDictionary = getAeronDictionary;
+window.saveAeronDictionaryItem = saveAeronDictionaryItem;
+window.findSimilarDictionaryName = findSimilarDictionaryName;
 
 
 // --- Module File: js/modules/mod00_core/Header.js ---
@@ -2502,6 +2663,119 @@ function SidebarNavDrawer({ isOpen, onClose, activeTab, setActiveTab, currentUse
     </div>
   );
 }
+
+
+// --- Module File: js/modules/mod00_core/SmartSuggestInput.js ---
+// MODULE: mod00_core/SmartSuggestInput.js
+// 🧠 Universal Smart Autocomplete Input with Fuzzy Similarity Warning
+
+function SmartSuggestInput({
+  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title'
+  value = '',
+  onChange,
+  onBlur,
+  placeholder = '',
+  className = '',
+  required = false,
+  disabled = false,
+  id,
+  name
+}) {
+  const [suggestions, setSuggestions] = useState(() => {
+    return window.getAeronDictionary ? window.getAeronDictionary(category) : [];
+  });
+
+  const [similarMatch, setSimilarMatch] = useState(null);
+  const inputId = useMemo(() => id || `suggest-${category}-${Math.random().toString(36).substring(2, 7)}`, [id, category]);
+  const listId = useMemo(() => `list-${inputId}`, [inputId]);
+
+  // Sync with live dictionary updates
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!e.detail || !e.detail.category || e.detail.category === category) {
+        if (window.getAeronDictionary) {
+          setSuggestions(window.getAeronDictionary(category));
+        }
+      }
+    };
+    window.addEventListener('aeron_dictionary_updated', handleUpdate);
+    return () => window.removeEventListener('aeron_dictionary_updated', handleUpdate);
+  }, [category]);
+
+  // Detect similar names as user types (Fuzzy Similarity >= 70%)
+  useEffect(() => {
+    if (window.findSimilarDictionaryName && value && value.trim().length >= 3) {
+      const match = window.findSimilarDictionaryName(value, category);
+      setSimilarMatch(match);
+    } else {
+      setSimilarMatch(null);
+    }
+  }, [value, category]);
+
+  const handleInputChange = (e) => {
+    const newVal = e.target.value;
+    if (onChange) onChange(e);
+  };
+
+  const handleInputBlur = (e) => {
+    if (value && value.trim().length >= 2 && window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem(category, value.trim());
+    }
+    if (onBlur) onBlur(e);
+  };
+
+  const handleApplySimilar = (suggestedName) => {
+    if (onChange) {
+      onChange({ target: { name: name || id, value: suggestedName } });
+    }
+    setSimilarMatch(null);
+  };
+
+  return (
+    <div className="relative w-full">
+      <input
+        type="text"
+        id={inputId}
+        name={name}
+        list={listId}
+        value={value}
+        onChange={handleInputChange}
+        onBlur={handleInputBlur}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+        autoComplete="off"
+        className={className || "w-full bg-slate-900/80 border border-slate-700/60 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"}
+      />
+
+      {/* Native High-Performance Datalist Suggestions */}
+      <datalist id={listId}>
+        {suggestions.slice(0, 50).map((item, idx) => (
+          <option key={idx} value={item} />
+        ))}
+      </datalist>
+
+      {/* Fuzzy Similarity Alert Banner */}
+      {similarMatch && (
+        <div className="mt-1 flex items-center justify-between text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded px-2.5 py-1.5 animate-fadeIn">
+          <div className="flex items-center gap-1.5 truncate">
+            <span>💡 พบชื่อใกล้เคียงในระบบ:</span>
+            <span className="font-semibold text-amber-200 truncate">"{similarMatch.item}"</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleApplySimilar(similarMatch.item)}
+            className="ml-2 shrink-0 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded px-2 py-0.5 font-medium transition"
+          >
+            ใช้ชื่อนี้
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.SmartSuggestInput = SmartSuggestInput;
 
 
 // --- Module File: js/modules/mod00_core/UserAccountManagementModal.js ---
@@ -5257,7 +5531,7 @@ function HospitalDetailModal({ hospital, demoBookings = [], soldProducts = [], s
                   <div key={b.id} className="p-3 bg-slate-900 rounded-xl border border-purple-800/40 text-xs flex justify-between items-center">
                     <div>
                       <div className="font-bold text-white">📦 สินค้า: {b.productName}</div>
-                      <div className="text-purple-200 font-mono mt-0.5">📅 {b.startDate} ถึง {b.endDate}</div>
+                      <div className="text-purple-200 font-mono mt-0.5">📅 {window.formatAeronDate(b.startDate)} ถึง {window.formatAeronDate(b.endDate)}</div>
                     </div>
                     <span className="px-2.5 py-1 rounded-lg bg-purple-900 text-purple-200 text-[11px] font-bold">
                       {b.status || 'นัดหมายแล้ว'}
@@ -5817,7 +6091,7 @@ function ProjectDetailModal({ project, currentUser, stages = window.STAGES || []
                   <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
                       <span className="font-bold text-emerald-400">👤 {log.author || project.assignee}</span>
-                      <span className="font-mono text-[10.5px]">📅 {log.date}</span>
+                      <span className="font-mono text-[10.5px]">📅 {window.formatAeronDate(log.date)}</span>
                     </div>
                     <p className="text-xs text-slate-200 leading-snug">{log.note}</p>
                   </div>
@@ -6024,7 +6298,7 @@ function ProjectHistoryModal({ project, members = [], stages = window.STAGES || 
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-emerald-300">👤 {log.author || project.assignee}</span>
                         <span className="text-[10.5px] px-2 py-0.5 rounded bg-slate-900 text-slate-400 font-mono">
-                          {log.date}
+                          {window.formatAeronDate(log.date)}
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">
@@ -7138,7 +7412,7 @@ function MessengerDispatchView({ currentUser, onLogout }) {
               </div>
 
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
-                <span className="text-slate-500 font-mono text-[11px]">อัปเดตล่าสุด: {job.updatedAt}</span>
+                <span className="text-slate-500 font-mono text-[11px]">อัปเดตล่าสุด: {window.formatAeronDate(job.updatedAt)}</span>
 
                 <div className="flex items-center gap-2">
                   {job.status !== '🚚 อยู่ระหว่างจัดส่ง' && job.status !== '📌 ส่งมอบสำเร็จ' && (
@@ -9107,7 +9381,7 @@ function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = 
                         {shp.paymentDate ? (
                           <div className="space-y-1">
                             <div className="font-mono text-emerald-300 font-bold text-xs flex items-center justify-center gap-1">
-                              <span>💳</span> <span>{shp.paymentDate}</span>
+                              <span>💳</span> <span>{window.formatAeronDate(shp.paymentDate)}</span>
                             </div>
                             <div>
                               {(() => {
@@ -9217,7 +9491,7 @@ function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
               <div>
                 <span className="text-slate-500 font-bold">💳 วันที่จ่ายเงิน:</span>
-                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate || 'ยังไม่ระบุ'}</div>
+                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate ? window.formatAeronDate(previewShipment.paymentDate) : 'ยังไม่ระบุ'}</div>
                 {previewShipment.paymentDate && (
                   <div className="text-amber-300 text-[10.5px] font-bold mt-0.5">
                     {(() => {
@@ -9776,7 +10050,7 @@ function SoldProductsView({ soldProducts = [], projects = [], members = [], onOp
                       <td className="p-3">
                         <div className="font-mono font-bold text-emerald-300">{asset.assetNumber}</div>
                         <div className="text-[10px] text-slate-400 font-mono">สัญญา: {asset.contractNumber || 'N/A'}</div>
-                        <div className="text-[9.5px] text-amber-300 font-mono mt-1">🚚 ส่งมอบ: {asset.deliveryDate}</div>
+                        <div className="text-[9.5px] text-amber-300 font-mono mt-1">🚚 ส่งมอบ: {window.formatAeronDate(asset.deliveryDate)}</div>
                       </td>
 
                       {/* Hospital & Sales */}
@@ -9910,7 +10184,7 @@ function SoldProductsView({ soldProducts = [], projects = [], members = [], onOp
               </div>
               <div>
                 <div className="text-slate-500 font-bold">ข้อมูลการส่งมอบ:</div>
-                <div className="text-amber-300 font-semibold mt-0.5">📅 วันส่งมอบ: {previewAsset.deliveryDate}</div>
+                <div className="text-amber-300 font-semibold mt-0.5">📅 วันส่งมอบ: {window.formatAeronDate(previewAsset.deliveryDate)}</div>
                 <div className="text-slate-300">💼 เซลส์: {previewAsset.salesPerson}</div>
                 <div className="text-slate-300 font-mono font-bold">💰 มูลค่างาน: {formatCurrency(previewAsset.projectValue)}</div>
               </div>
@@ -10335,7 +10609,7 @@ function DemoCalendarView({ demoBookings = [], products = [], projects = [], mem
                 <div className="bg-slate-900/80 rounded-xl p-2.5 space-y-1 text-xs border border-slate-800">
                   <div className="flex justify-between text-slate-400">
                     <span>📅 ช่วงวันที่สาธิต:</span>
-                    <span className="font-mono text-amber-300 font-semibold">{b.startDate} ถึง {b.endDate}</span>
+                    <span className="font-mono text-amber-300 font-semibold">{window.formatAeronDate(b.startDate)} ถึง {window.formatAeronDate(b.endDate)}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>👤 ผู้จอง / เซลส์:</span>
@@ -10719,8 +10993,8 @@ function DemoReportModal({ isOpen, onClose, demoBookings = [], products = [], pr
                           👤 {b.salesPerson}
                         </td>
                         <td className="p-2.5 px-3 border-r border-slate-800/80 font-mono text-[11px] text-slate-300 text-center">
-                          <div>{b.startDate}</div>
-                          <div className="text-[10px] text-slate-500">ถึง {b.endDate}</div>
+                          <div>{window.formatAeronDate(b.startDate)}</div>
+                          <div className="text-[10px] text-slate-500">ถึง {window.formatAeronDate(b.endDate)}</div>
                         </td>
                         <td className="p-2.5 px-2 border-r border-slate-800/80 text-center">
                           <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono font-bold text-xs">
@@ -11833,7 +12107,7 @@ function FDARegistrationView({ fdaRegistrations = [], products = [], members = [
 
                       {/* Expiration Date & Expiry Alert */}
                       <td className="p-3 text-center font-mono">
-                        <div className="font-bold text-slate-200 text-[11px]">{fda.expiryDate || 'ยังไม่มีวันหมดอายุ'}</div>
+                        <div className="font-bold text-slate-200 text-[11px]">{fda.expiryDate ? window.formatAeronDate(fda.expiryDate) : 'ยังไม่มีวันหมดอายุ'}</div>
                         {isNearExpiry && (
                           <div className="mt-1">
                             <span className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-orange-500/20 text-orange-300 border border-orange-500/40 animate-bounce">
@@ -11921,7 +12195,7 @@ function FDARegistrationView({ fdaRegistrations = [], products = [], members = [
               </div>
               <div>
                 <span className="text-slate-500 font-bold">วันหมดอายุใบ อย.:</span>
-                <div className="text-orange-400 font-bold text-sm mt-0.5">{previewFDA.expiryDate || 'N/A'}</div>
+                <div className="text-orange-400 font-bold text-sm mt-0.5">{previewFDA.expiryDate ? window.formatAeronDate(previewFDA.expiryDate) : 'N/A'}</div>
               </div>
             </div>
 
@@ -12071,7 +12345,7 @@ function ReportPreviewModal({ report = null, projects = [], messengerTrips = [],
                   {report.category === 'messenger' ? (
                     messengerTrips.slice(0, 15).map((t, idx) => (
                       <tr key={t.id || idx} className="hover:bg-slate-50">
-                        <td className="p-2 font-mono">{t.date}</td>
+                        <td className="p-2 font-mono">{window.formatAeronDate(t.date)}</td>
                         <td className="p-2 font-bold">{t.messengerName}</td>
                         <td className="p-2">{t.origin} ➔ {t.destination}</td>
                         <td className="p-2 text-center font-mono">{t.distanceKm} กม.</td>
@@ -13095,7 +13369,8 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
               {filteredItems.map(item => {
                 const c = item.computed;
-                const dateStr = item.calc.date || item.proj.procurementDate || item.proj.createdDate || '-';
+                const rawDate = item.calc.date || item.proj.procurementDate || item.proj.createdDate || '-';
+                const dateStr = window.formatAeronDate ? window.formatAeronDate(rawDate) : rawDate;
                 const productCode = item.proj.productId || 'BJ3500';
                 const hospital = item.proj.hospitalName || 'ไม่ระบุ รพ.';
                 const qtyStr = item.proj.quantity ? `${item.proj.quantity} เครื่อง` : '1 เครื่อง';
@@ -14547,7 +14822,7 @@ function PurchaseOrderView({ purchaseOrders = [], projects = [], products = [], 
                     <tr key={po.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-3">
                         <div className="font-mono font-bold text-amber-300">{po.poNumber}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">📅 {po.poDate || 'ไม่ระบุ'}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">📅 {po.poDate ? window.formatAeronDate(po.poDate) : 'ไม่ระบุ'}</div>
                         {po.expectedDelivery && (
                           <div className="text-[9.5px] text-indigo-300 font-mono">🚛 ครบกำหนด: {po.expectedDelivery}</div>
                         )}
@@ -15088,7 +15363,7 @@ function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members 
                           {l.leaveType}
                         </span>
                       </td>
-                      <td className="p-3 font-mono text-slate-300">{l.startDate} ถึง {l.endDate}</td>
+                      <td className="p-3 font-mono text-slate-300">{window.formatAeronDate(l.startDate)} ถึง {window.formatAeronDate(l.endDate)}</td>
                       <td className="p-3 text-center font-mono font-bold text-amber-300">{l.totalDays || 1} วัน</td>
                       <td className="p-3 text-slate-400 max-w-[180px] truncate">{l.reason || '-'}</td>
                       <td className="p-3 text-center font-bold">
@@ -15150,7 +15425,7 @@ function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members 
                 ) : (
                   filteredAttendanceLogs.map(a => (
                     <tr key={a.id} className="hover:bg-slate-800/40">
-                      <td className="p-3 font-mono text-slate-400">{a.date}</td>
+                      <td className="p-3 font-mono text-slate-300">{window.formatAeronDate(a.date)}</td>
                       <td className="p-3 font-bold text-white">{a.employeeName}</td>
                       <td className="p-3 text-center">
                         <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
@@ -16104,6 +16379,10 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       return;
     }
 
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem('payee', formData.payee);
+      window.saveAeronDictionaryItem('title', formData.title);
+    }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
 
@@ -16880,7 +17159,7 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
                   return (
                     <tr key={t.id} className={`hover:bg-slate-900/50 transition-colors ${isFrozen ? 'opacity-85 bg-slate-950/40' : ''}`}>
                       <td className="p-3 font-mono text-slate-400">
-                        {t.date}
+                        {window.formatAeronDate(t.date)}
                         {isFrozen && (
                           <span className="block text-[9px] text-rose-400 font-bold">🔒 ปิดงบแล้ว</span>
                         )}
@@ -18480,7 +18759,7 @@ function PendingTransfersView({ transactions = [], currentUser, onSaveTxn, onDel
                 pendingDrafts.map(t => (
                   <tr key={t.id} className="hover:bg-slate-900/50 transition-colors">
                     <td className="p-3 font-mono text-amber-300 font-bold whitespace-nowrap">
-                      {t.date}
+                      {window.formatAeronDate(t.date)}
                     </td>
                     <td className="p-3">
                       <div className="font-bold text-white leading-snug">{t.title}</div>
@@ -19159,6 +19438,11 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       return;
     }
 
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem('payee', formData.payee);
+      window.saveAeronDictionaryItem('hospital', formData.hospital_name);
+      window.saveAeronDictionaryItem('title', formData.title);
+    }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
 

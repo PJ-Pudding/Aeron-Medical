@@ -70,6 +70,11 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       return;
     }
 
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem('payee', formData.payee);
+      window.saveAeronDictionaryItem('hospital', formData.hospital_name);
+      window.saveAeronDictionaryItem('title', formData.title);
+    }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
 

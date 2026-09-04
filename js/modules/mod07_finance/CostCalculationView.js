@@ -268,7 +268,8 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
               {filteredItems.map(item => {
                 const c = item.computed;
-                const dateStr = item.calc.date || item.proj.procurementDate || item.proj.createdDate || '-';
+                const rawDate = item.calc.date || item.proj.procurementDate || item.proj.createdDate || '-';
+                const dateStr = window.formatAeronDate ? window.formatAeronDate(rawDate) : rawDate;
                 const productCode = item.proj.productId || 'BJ3500';
                 const hospital = item.proj.hospitalName || 'ไม่ระบุ รพ.';
                 const qtyStr = item.proj.quantity ? `${item.proj.quantity} เครื่อง` : '1 เครื่อง';

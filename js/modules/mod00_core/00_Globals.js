@@ -62,7 +62,8 @@ const _TABLE_LS_MAP = {
   petty_cash_accounts: 'aeron_petty_cash_accounts',
   accounting_frozen_months: 'aeron_accounting_frozen_months',
   accounting_recurring: 'aeron_accounting_recurring',
-  messenger_trips: 'aeron_messenger_trips'
+  messenger_trips: 'aeron_messenger_trips',
+  dictionary: 'aeron_autocomplete_dictionary'
 };
 
 // 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
@@ -863,3 +864,163 @@ window.canViewMemberKanban = canViewMemberKanban;
 window.getYTDDateRange = getYTDDateRange;
 window.syncToDB = syncToDB;
 window.loadFromDB = loadFromDB;
+
+
+// ====================================================
+// 📅 Universal Date Formatter: Standardized to '04-Sep-2026' (DD-MMM-YYYY)
+// ====================================================
+const _AERON_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatAeronDate(dateVal) {
+  if (!dateVal) return '-';
+  const str = String(dateVal).trim();
+  if (!str || str === 'null' || str === 'undefined' || str === '-') return '-';
+
+  // If already in DD-MMM-YYYY format (e.g. 04-Sep-2026 or 4-Sep-2026)
+  const existingMatch = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (existingMatch) {
+    const day = String(parseInt(existingMatch[1], 10)).padStart(2, '0');
+    const month = existingMatch[2].charAt(0).toUpperCase() + existingMatch[2].slice(1).toLowerCase();
+    return `${day}-${month}-${existingMatch[3]}`;
+  }
+
+  // Match YYYY-MM-DD or YYYY/MM/DD (with optional timestamp)
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const year = ymdMatch[1];
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
+    if (month >= 0 && month < 12) {
+      return `${day}-${_AERON_MONTHS_SHORT[month]}-${year}`;
+    }
+  }
+
+  // Match DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = dmyMatch[3];
+    if (month >= 0 && month < 12) {
+      return `${day}-${_AERON_MONTHS_SHORT[month]}-${year}`;
+    }
+  }
+
+  // Parse Date object or ISO timestamp
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = _AERON_MONTHS_SHORT[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+  } catch(e) {}
+
+  return str;
+}
+
+window.formatAeronDate = formatAeronDate;
+window.formatDate = formatAeronDate;
+
+// ====================================================
+// 🧠 Dynamic Name Autocomplete Dictionary & Similarity Warning Engine
+// ====================================================
+
+function stringSimilarity(s1, s2) {
+  if (!s1 || !s2) return 0;
+  s1 = s1.trim().toLowerCase();
+  s2 = s2.trim().toLowerCase();
+  if (s1 === s2) return 1.0;
+
+  // Substring containment check
+  if (s2.includes(s1) || s1.includes(s2)) {
+    const minLen = Math.min(s1.length, s2.length);
+    const maxLen = Math.max(s1.length, s2.length);
+    if (minLen >= 3 && (minLen / maxLen) >= 0.5) return 0.85;
+  }
+
+  // Levenshtein distance
+  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+  for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
+  for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
+  for (let j = 1; j <= s2.length; j += 1) {
+    for (let i = 1; i <= s1.length; i += 1) {
+      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1,
+        track[j - 1][i] + 1,
+        track[j - 1][i - 1] + indicator
+      );
+    }
+  }
+  const distance = track[s2.length][s1.length];
+  const maxLen = Math.max(s1.length, s2.length);
+  return 1 - (distance / maxLen);
+}
+
+function getAeronDictionary(category) {
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    if (category) {
+      return Array.isArray(dict[category]) ? dict[category] : [];
+    }
+    return dict;
+  } catch(e) {
+    return category ? [] : {};
+  }
+}
+
+function saveAeronDictionaryItem(category, value) {
+  if (!category || !value || typeof value !== 'string') return;
+  const valClean = value.trim();
+  if (valClean.length < 2) return;
+
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    if (!Array.isArray(dict[category])) dict[category] = [];
+
+    const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
+    if (!exists) {
+      dict[category].push(valClean);
+      dict[category].sort((a, b) => a.localeCompare(b, 'th'));
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
+
+      if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
+        window.AeronCloudDB.save('dictionary', dict);
+      }
+
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { category, dict } }));
+      }
+    }
+  } catch(e) {
+    console.warn('Error saving to dictionary:', e);
+  }
+}
+
+function findSimilarDictionaryName(input, category) {
+  if (!input || typeof input !== 'string') return null;
+  const inClean = input.trim();
+  if (inClean.length < 3) return null;
+
+  const list = getAeronDictionary(category);
+  const inNorm = inClean.toLowerCase();
+
+  for (const item of list) {
+    const itemNorm = item.toLowerCase();
+    if (itemNorm === inNorm) continue;
+    const sim = stringSimilarity(inNorm, itemNorm);
+    if (sim >= 0.70) {
+      return { item, similarity: sim };
+    }
+  }
+  return null;
+}
+
+window.stringSimilarity = stringSimilarity;
+window.getAeronDictionary = getAeronDictionary;
+window.saveAeronDictionaryItem = saveAeronDictionaryItem;
+window.findSimilarDictionaryName = findSimilarDictionaryName;

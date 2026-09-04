@@ -510,7 +510,7 @@ function PurchaseOrderView({ purchaseOrders = [], projects = [], products = [], 
                     <tr key={po.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-3">
                         <div className="font-mono font-bold text-amber-300">{po.poNumber}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">📅 {po.poDate || 'ไม่ระบุ'}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">📅 {po.poDate ? window.formatAeronDate(po.poDate) : 'ไม่ระบุ'}</div>
                         {po.expectedDelivery && (
                           <div className="text-[9.5px] text-indigo-300 font-mono">🚛 ครบกำหนด: {po.expectedDelivery}</div>
                         )}

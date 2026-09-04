@@ -138,7 +138,7 @@ function ProjectHistoryModal({ project, members = [], stages = window.STAGES || 
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-emerald-300">👤 {log.author || project.assignee}</span>
                         <span className="text-[10.5px] px-2 py-0.5 rounded bg-slate-900 text-slate-400 font-mono">
-                          {log.date}
+                          {window.formatAeronDate(log.date)}
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">

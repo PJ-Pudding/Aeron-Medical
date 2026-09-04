@@ -439,7 +439,7 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
                   return (
                     <tr key={t.id} className={`hover:bg-slate-900/50 transition-colors ${isFrozen ? 'opacity-85 bg-slate-950/40' : ''}`}>
                       <td className="p-3 font-mono text-slate-400">
-                        {t.date}
+                        {window.formatAeronDate(t.date)}
                         {isFrozen && (
                           <span className="block text-[9px] text-rose-400 font-bold">🔒 ปิดงบแล้ว</span>
                         )}

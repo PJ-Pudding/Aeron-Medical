@@ -134,7 +134,7 @@ function DemoCalendarView({ demoBookings = [], products = [], projects = [], mem
                 <div className="bg-slate-900/80 rounded-xl p-2.5 space-y-1 text-xs border border-slate-800">
                   <div className="flex justify-between text-slate-400">
                     <span>📅 ช่วงวันที่สาธิต:</span>
-                    <span className="font-mono text-amber-300 font-semibold">{b.startDate} ถึง {b.endDate}</span>
+                    <span className="font-mono text-amber-300 font-semibold">{window.formatAeronDate(b.startDate)} ถึง {window.formatAeronDate(b.endDate)}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>👤 ผู้จอง / เซลส์:</span>

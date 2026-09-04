@@ -63,6 +63,10 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       return;
     }
 
+    if (window.saveAeronDictionaryItem) {
+      window.saveAeronDictionaryItem('payee', formData.payee);
+      window.saveAeronDictionaryItem('title', formData.title);
+    }
     onSave({ ...formData, updated_at: new Date().toISOString() });
   };
 

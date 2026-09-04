@@ -111,7 +111,7 @@ function ReportPreviewModal({ report = null, projects = [], messengerTrips = [],
                   {report.category === 'messenger' ? (
                     messengerTrips.slice(0, 15).map((t, idx) => (
                       <tr key={t.id || idx} className="hover:bg-slate-50">
-                        <td className="p-2 font-mono">{t.date}</td>
+                        <td className="p-2 font-mono">{window.formatAeronDate(t.date)}</td>
                         <td className="p-2 font-bold">{t.messengerName}</td>
                         <td className="p-2">{t.origin} ➔ {t.destination}</td>
                         <td className="p-2 text-center font-mono">{t.distanceKm} กม.</td>

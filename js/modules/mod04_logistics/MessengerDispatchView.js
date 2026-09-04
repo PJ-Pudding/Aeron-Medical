@@ -177,7 +177,7 @@ function MessengerDispatchView({ currentUser, onLogout }) {
               </div>
 
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
-                <span className="text-slate-500 font-mono text-[11px]">อัปเดตล่าสุด: {job.updatedAt}</span>
+                <span className="text-slate-500 font-mono text-[11px]">อัปเดตล่าสุด: {window.formatAeronDate(job.updatedAt)}</span>
 
                 <div className="flex items-center gap-2">
                   {job.status !== '🚚 อยู่ระหว่างจัดส่ง' && job.status !== '📌 ส่งมอบสำเร็จ' && (

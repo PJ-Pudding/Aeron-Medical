@@ -320,7 +320,7 @@ function FDARegistrationView({ fdaRegistrations = [], products = [], members = [
 
                       {/* Expiration Date & Expiry Alert */}
                       <td className="p-3 text-center font-mono">
-                        <div className="font-bold text-slate-200 text-[11px]">{fda.expiryDate || 'ยังไม่มีวันหมดอายุ'}</div>
+                        <div className="font-bold text-slate-200 text-[11px]">{fda.expiryDate ? window.formatAeronDate(fda.expiryDate) : 'ยังไม่มีวันหมดอายุ'}</div>
                         {isNearExpiry && (
                           <div className="mt-1">
                             <span className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-orange-500/20 text-orange-300 border border-orange-500/40 animate-bounce">
@@ -408,7 +408,7 @@ function FDARegistrationView({ fdaRegistrations = [], products = [], members = [
               </div>
               <div>
                 <span className="text-slate-500 font-bold">วันหมดอายุใบ อย.:</span>
-                <div className="text-orange-400 font-bold text-sm mt-0.5">{previewFDA.expiryDate || 'N/A'}</div>
+                <div className="text-orange-400 font-bold text-sm mt-0.5">{previewFDA.expiryDate ? window.formatAeronDate(previewFDA.expiryDate) : 'N/A'}</div>
               </div>
             </div>
 

@@ -248,7 +248,7 @@ function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = 
                         {shp.paymentDate ? (
                           <div className="space-y-1">
                             <div className="font-mono text-emerald-300 font-bold text-xs flex items-center justify-center gap-1">
-                              <span>💳</span> <span>{shp.paymentDate}</span>
+                              <span>💳</span> <span>{window.formatAeronDate(shp.paymentDate)}</span>
                             </div>
                             <div>
                               {(() => {
@@ -358,7 +358,7 @@ function ShipmentTrackingView({ shipments = [], purchaseOrders = [], products = 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono">
               <div>
                 <span className="text-slate-500 font-bold">💳 วันที่จ่ายเงิน:</span>
-                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate || 'ยังไม่ระบุ'}</div>
+                <div className="text-emerald-300 font-bold text-sm">{previewShipment.paymentDate ? window.formatAeronDate(previewShipment.paymentDate) : 'ยังไม่ระบุ'}</div>
                 {previewShipment.paymentDate && (
                   <div className="text-amber-300 text-[10.5px] font-bold mt-0.5">
                     {(() => {

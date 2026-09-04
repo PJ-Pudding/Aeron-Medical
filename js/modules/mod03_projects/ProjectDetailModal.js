@@ -153,7 +153,7 @@ function ProjectDetailModal({ project, currentUser, stages = window.STAGES || []
                   <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
                       <span className="font-bold text-emerald-400">👤 {log.author || project.assignee}</span>
-                      <span className="font-mono text-[10.5px]">📅 {log.date}</span>
+                      <span className="font-mono text-[10.5px]">📅 {window.formatAeronDate(log.date)}</span>
                     </div>
                     <p className="text-xs text-slate-200 leading-snug">{log.note}</p>
                   </div>

@@ -337,8 +337,8 @@ function DemoReportModal({ isOpen, onClose, demoBookings = [], products = [], pr
                           👤 {b.salesPerson}
                         </td>
                         <td className="p-2.5 px-3 border-r border-slate-800/80 font-mono text-[11px] text-slate-300 text-center">
-                          <div>{b.startDate}</div>
-                          <div className="text-[10px] text-slate-500">ถึง {b.endDate}</div>
+                          <div>{window.formatAeronDate(b.startDate)}</div>
+                          <div className="text-[10px] text-slate-500">ถึง {window.formatAeronDate(b.endDate)}</div>
                         </td>
                         <td className="p-2.5 px-2 border-r border-slate-800/80 text-center">
                           <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono font-bold text-xs">

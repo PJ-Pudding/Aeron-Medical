@@ -207,7 +207,7 @@ function SoldProductsView({ soldProducts = [], projects = [], members = [], onOp
                       <td className="p-3">
                         <div className="font-mono font-bold text-emerald-300">{asset.assetNumber}</div>
                         <div className="text-[10px] text-slate-400 font-mono">สัญญา: {asset.contractNumber || 'N/A'}</div>
-                        <div className="text-[9.5px] text-amber-300 font-mono mt-1">🚚 ส่งมอบ: {asset.deliveryDate}</div>
+                        <div className="text-[9.5px] text-amber-300 font-mono mt-1">🚚 ส่งมอบ: {window.formatAeronDate(asset.deliveryDate)}</div>
                       </td>
 
                       {/* Hospital & Sales */}
@@ -341,7 +341,7 @@ function SoldProductsView({ soldProducts = [], projects = [], members = [], onOp
               </div>
               <div>
                 <div className="text-slate-500 font-bold">ข้อมูลการส่งมอบ:</div>
-                <div className="text-amber-300 font-semibold mt-0.5">📅 วันส่งมอบ: {previewAsset.deliveryDate}</div>
+                <div className="text-amber-300 font-semibold mt-0.5">📅 วันส่งมอบ: {window.formatAeronDate(previewAsset.deliveryDate)}</div>
                 <div className="text-slate-300">💼 เซลส์: {previewAsset.salesPerson}</div>
                 <div className="text-slate-300 font-mono font-bold">💰 มูลค่างาน: {formatCurrency(previewAsset.projectValue)}</div>
               </div>

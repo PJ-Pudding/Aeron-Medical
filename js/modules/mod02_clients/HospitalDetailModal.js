@@ -140,7 +140,7 @@ function HospitalDetailModal({ hospital, demoBookings = [], soldProducts = [], s
                   <div key={b.id} className="p-3 bg-slate-900 rounded-xl border border-purple-800/40 text-xs flex justify-between items-center">
                     <div>
                       <div className="font-bold text-white">📦 สินค้า: {b.productName}</div>
-                      <div className="text-purple-200 font-mono mt-0.5">📅 {b.startDate} ถึง {b.endDate}</div>
+                      <div className="text-purple-200 font-mono mt-0.5">📅 {window.formatAeronDate(b.startDate)} ถึง {window.formatAeronDate(b.endDate)}</div>
                     </div>
                     <span className="px-2.5 py-1 rounded-lg bg-purple-900 text-purple-200 text-[11px] font-bold">
                       {b.status || 'นัดหมายแล้ว'}

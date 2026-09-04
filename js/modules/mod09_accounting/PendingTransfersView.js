@@ -341,7 +341,7 @@ function PendingTransfersView({ transactions = [], currentUser, onSaveTxn, onDel
                 pendingDrafts.map(t => (
                   <tr key={t.id} className="hover:bg-slate-900/50 transition-colors">
                     <td className="p-3 font-mono text-amber-300 font-bold whitespace-nowrap">
-                      {t.date}
+                      {window.formatAeronDate(t.date)}
                     </td>
                     <td className="p-3">
                       <div className="font-bold text-white leading-snug">{t.title}</div>
