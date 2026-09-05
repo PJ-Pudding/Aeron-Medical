@@ -6,14 +6,23 @@
 function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification }) {
   const isHydrated = useRef(false);
 
+  const sanitizeProjects = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map(p => ({
+      ...p,
+      weeklyLogs: Array.isArray(p.weeklyLogs) ? p.weeklyLogs : []
+    }));
+  };
+
   // 1. Projects State
   const [projects, setProjects] = useState(() => {
     try {
       const saved = localStorage.getItem('gov_hospital_projects');
-      return saved ? JSON.parse(saved) : window.INITIAL_PROJECTS || [];
+      const parsed = saved ? JSON.parse(saved) : (window.INITIAL_PROJECTS || []);
+      return sanitizeProjects(parsed);
     } catch (e) {
       console.warn('localStorage parse fallback for gov_hospital_projects:', e);
-      return window.INITIAL_PROJECTS || [];
+      return sanitizeProjects(window.INITIAL_PROJECTS || []);
     }
   });
 
@@ -81,7 +90,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
   }, [demoBookings]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
     async function hydrateProjectsFromCloud() {
@@ -89,35 +98,59 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects (Smart Deep Compare & Empty Protection)
-        const remoteProjects = await fetcher('projects', null);
-        if (isMounted && Array.isArray(remoteProjects)) {
-          setProjects(prev => {
-            if (remoteProjects.length === 0 && prev && prev.length > 0) {
-              if (typeof window.syncToDB === 'function') window.syncToDB('projects', prev);
-              return prev;
-            }
-            if (JSON.stringify(prev) === JSON.stringify(remoteProjects)) return prev;
-            return remoteProjects;
-          });
-          const localSaved = JSON.parse(localStorage.getItem('gov_hospital_projects') || '[]');
-          if (remoteProjects.length > 0 || localSaved.length === 0) {
-            localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+        // 1. Projects (Smart Merge & Empty Protection - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('projects')) {
+          const rawRemoteProjects = await fetcher('projects', null);
+          if (isMounted && Array.isArray(rawRemoteProjects)) {
+            const remoteProjects = sanitizeProjects(rawRemoteProjects);
+            setProjects(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('projects')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteProjects, 'id')
+                : (remoteProjects.length > 0 ? remoteProjects : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('gov_hospital_projects', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
           }
         }
 
-        // 2. Cost Calculations
-        const remoteCost = await fetcher('cost_calculations', null);
-        if (isMounted && Array.isArray(remoteCost)) {
-          setCostCalculations(prev => (JSON.stringify(prev) === JSON.stringify(remoteCost) ? prev : remoteCost));
-          localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
+        // 2. Cost Calculations (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('cost_calculations')) {
+          const remoteCost = await fetcher('cost_calculations', null);
+          if (isMounted && Array.isArray(remoteCost)) {
+            setCostCalculations(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('cost_calculations')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteCost, 'id')
+                : (remoteCost.length > 0 ? remoteCost : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_cost_calculations', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 3. Demo Bookings
-        const remoteDemo = await fetcher('demo_bookings', null);
-        if (isMounted && Array.isArray(remoteDemo)) {
-          setDemoBookings(prev => (JSON.stringify(prev) === JSON.stringify(remoteDemo) ? prev : remoteDemo));
-          localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
+        // 3. Demo Bookings (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('demo_bookings')) {
+          const remoteDemo = await fetcher('demo_bookings', null);
+          if (isMounted && Array.isArray(remoteDemo)) {
+            setDemoBookings(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('demo_bookings')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteDemo, 'id')
+                : (remoteDemo.length > 0 ? remoteDemo : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_demo_bookings', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[Projects Cloud Hydration Notice]:', e.message);
@@ -125,7 +158,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
     hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
     window.addEventListener('focus', hydrateProjectsFromCloud);
-    const poller = setInterval(hydrateProjectsFromCloud, 3000);
+    const poller = setInterval(hydrateProjectsFromCloud, 20000);
     return () => {
       isMounted = false;
       window.removeEventListener('focus', hydrateProjectsFromCloud);

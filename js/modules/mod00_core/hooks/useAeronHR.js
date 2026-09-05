@@ -34,7 +34,7 @@ function useAeronHR({ currentUser }) {
 
   // ⚡ Action-Driven Direct Cloud Sync
 
-  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
 
@@ -43,18 +43,40 @@ function useAeronHR({ currentUser }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Leave Requests
-        const remoteLeaves = await fetcher('leave_requests', null);
-        if (isMounted && Array.isArray(remoteLeaves)) {
-          setLeaveRequests(remoteLeaves);
-          localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+        // 1. Leave Requests (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('leave_requests')) {
+          const remoteLeaves = await fetcher('leave_requests', null);
+          if (isMounted && Array.isArray(remoteLeaves)) {
+            setLeaveRequests(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('leave_requests')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteLeaves, 'id')
+                : (remoteLeaves.length > 0 ? remoteLeaves : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_leave_requests', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 2. Attendance Logs
-        const remoteAttendance = await fetcher('attendance_logs', null);
-        if (isMounted && Array.isArray(remoteAttendance)) {
-          setAttendanceLogs(remoteAttendance);
-          localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+        // 2. Attendance Logs (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('attendance_logs')) {
+          const remoteAttendance = await fetcher('attendance_logs', null);
+          if (isMounted && Array.isArray(remoteAttendance)) {
+            setAttendanceLogs(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('attendance_logs')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteAttendance, 'id')
+                : (remoteAttendance.length > 0 ? remoteAttendance : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_attendance_logs', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[HR Cloud Hydration Notice]:', e.message);
@@ -66,7 +88,7 @@ function useAeronHR({ currentUser }) {
     hydrateHRFromCloud();
 
     window.addEventListener('focus', hydrateHRFromCloud);
-    const poller = setInterval(hydrateHRFromCloud, 3000);
+    const poller = setInterval(hydrateHRFromCloud, 20000);
 
     return () => {
       isMounted = false;
@@ -75,38 +97,93 @@ function useAeronHR({ currentUser }) {
     };
   }, []);
 
-  // Handlers
+  // Handlers (All persistent with LocalStorage & Cloud Sync)
   const handleApproveLeave = useCallback((leaveId, newStatus = '✅ อนุมัติแล้ว') => {
-    setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ' } : l));
+    setLeaveRequests(prev => {
+      const updated = prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ', updated_at: new Date().toISOString() } : l);
+      try {
+        localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('leave_requests', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
   }, [currentUser]);
 
   const handleDeleteLeave = useCallback((leaveId) => {
     if (window.confirm('ต้องการลบใบขอนี้?')) {
-      setLeaveRequests(prev => prev.filter(l => l.id !== leaveId));
+      setLeaveRequests(prev => {
+        const updated = prev.filter(l => l.id !== leaveId);
+        try {
+          localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('leave_requests', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveLeave = useCallback((leaveData) => {
-    if (leaveData.id) {
-      setLeaveRequests(prev => prev.map(l => l.id === leaveData.id ? leaveData : l));
-    } else {
-      setLeaveRequests(prev => [{ ...leaveData, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev]);
-    }
+    const timestampedLeave = {
+      ...leaveData,
+      updated_at: new Date().toISOString()
+    };
+    setLeaveRequests(prev => {
+      let updated;
+      if (timestampedLeave.id) {
+        updated = prev.map(l => l.id === timestampedLeave.id ? timestampedLeave : l);
+      } else {
+        updated = [{ ...timestampedLeave, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('leave_requests', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsLeaveModalOpen(false);
   }, []);
 
   const handleDeleteAttendance = useCallback((attId) => {
     if (window.confirm('ต้องการลบรายการนี้?')) {
-      setAttendanceLogs(prev => prev.filter(a => a.id !== attId));
+      setAttendanceLogs(prev => {
+        const updated = prev.filter(a => a.id !== attId);
+        try {
+          localStorage.setItem('aeron_attendance_logs', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('attendance_logs', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveAttendance = useCallback((attData) => {
-    if (attData.id) {
-      setAttendanceLogs(prev => prev.map(a => a.id === attData.id ? attData : a));
-    } else {
-      setAttendanceLogs(prev => [{ ...attData, id: 'att-' + Date.now() }, ...prev]);
-    }
+    const timestampedAtt = {
+      ...attData,
+      updated_at: new Date().toISOString()
+    };
+    setAttendanceLogs(prev => {
+      let updated;
+      if (timestampedAtt.id) {
+        updated = prev.map(a => a.id === timestampedAtt.id ? timestampedAtt : a);
+      } else {
+        updated = [{ ...timestampedAtt, id: 'att-' + Date.now() }, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_attendance_logs', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('attendance_logs', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsAttendanceModalOpen(false);
   }, []);
 

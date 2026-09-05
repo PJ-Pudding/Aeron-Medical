@@ -43,7 +43,7 @@ try {
         # API Handler for Saving Database Tables to db/*.json
         if ($request.HttpMethod -eq "POST" -and $relativePath -eq "api/save-db") {
             try {
-                $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
+                $reader = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
                 $jsonBody = $reader.ReadToEnd()
                 $tableName = $request.QueryString["table"]
 

@@ -10,6 +10,7 @@ function AccountingModule({
   currentUser, 
   onSaveTxn, 
   onDeleteTxn, 
+  onBatchImportTxns,
   onOpenPOModal,
   onDeletePO,
   accountingSubTab = 'daily_entries', 
@@ -211,7 +212,11 @@ function AccountingModule({
   };
 
   const handleImportTxns = (importedArray) => {
-    importedArray.forEach(t => onSaveTxn(t));
+    if (typeof onBatchImportTxns === 'function') {
+      onBatchImportTxns(importedArray);
+    } else {
+      importedArray.forEach(t => onSaveTxn(t));
+    }
   };
 
   return (

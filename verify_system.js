@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 
 console.log('====================================================');
@@ -21,7 +21,8 @@ global.React = {
   useEffect: (fn) => {},
   useMemo: (fn) => fn(),
   useCallback: (fn) => fn,
-  useRef: (v) => ({ current: v })
+  useRef: (v) => ({ current: v }),
+  memo: (fn) => fn
 };
 
 global.ReactDOM = {

@@ -1,6 +1,6 @@
 // MODULE: mod00_core/SidebarIconRail.js
 
-function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOCount, activeRepairCount, activeShipmentCount, activeFDACount, currentUser }) {
+const SidebarIconRail = React.memo(function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOCount, activeRepairCount, activeShipmentCount, activeFDACount, currentUser }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: null, desc: 'ภาพรวมผลงาน & ดัชนีหลัก' },
     { id: 'clients', label: 'Clients', icon: '🏥', badge: null, desc: 'ฐานข้อมูลลูกค้า รพ. & แพทย์' },
@@ -118,4 +118,6 @@ function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOC
       </div>
     </>
   );
-}
+});
+
+window.SidebarIconRail = SidebarIconRail;

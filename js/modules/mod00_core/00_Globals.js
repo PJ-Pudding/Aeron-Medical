@@ -66,8 +66,10 @@ const _TABLE_LS_MAP = {
   dictionary: 'aeron_autocomplete_dictionary'
 };
 
-// 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
+// 🛡️ Mutation Grace Period & In-Flight Lock Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
 window._aeronLastMutationTime = {};
+window._aeronInFlight = {};
+window._aeronMutationGraceMs = 45000; // 45-second protected grace window (covers Render cold-start latency)
 
 window.markAeronMutation = function(tableName) {
   if (!tableName) return;
@@ -76,8 +78,9 @@ window.markAeronMutation = function(tableName) {
 
 window.isAeronMutating = function(tableName) {
   if (!tableName) return false;
+  if (window._aeronInFlight[tableName]) return true;
   const lastTime = window._aeronLastMutationTime[tableName] || 0;
-  return (Date.now() - lastTime) < 5000; // 5-second protected grace window
+  return (Date.now() - lastTime) < (window._aeronMutationGraceMs || 45000);
 };
 
 // 🛡️ Universal Thai Text Sanitizer (Auto-reverses any Windows-1252 Mojibake)
@@ -119,37 +122,95 @@ function sanitizeThaiData(val) {
 
 window.sanitizeThaiData = sanitizeThaiData;
 
+// 🛡️ Local-First Smart Dataset Merge (CRDT-Inspired: Local Always Protected, Zero Data Loss)
+function mergeAeronDatasets(localList, remoteList, idKey = 'id') {
+  if (!Array.isArray(localList) || localList.length === 0) return Array.isArray(remoteList) ? remoteList : [];
+  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList;
+
+  const remoteMap = new Map();
+  remoteList.forEach(item => {
+    if (item && item[idKey]) remoteMap.set(String(item[idKey]), item);
+  });
+
+  const merged = [];
+  const visitedIds = new Set();
+
+  // 1. Keep all local items (so newly created or modified local items are NEVER wiped by remote)
+  localList.forEach(localItem => {
+    if (!localItem || !localItem[idKey]) {
+      merged.push(localItem);
+      return;
+    }
+    const idStr = String(localItem[idKey]);
+    visitedIds.add(idStr);
+    const remoteItem = remoteMap.get(idStr);
+
+    if (!remoteItem) {
+      // Local item not yet on remote: KEEP IT!
+      merged.push(localItem);
+    } else {
+      // Both exist: check updated timestamp or preserve local if newer
+      const localTime = new Date(localItem.updated_at || localItem.updatedDate || localItem.createdDate || 0).getTime();
+      const remoteTime = new Date(remoteItem.updated_at || remoteItem.updatedDate || remoteItem.createdDate || 0).getTime();
+      if (localTime >= remoteTime) {
+        merged.push(localItem);
+      } else {
+        merged.push(remoteItem);
+      }
+    }
+  });
+
+  // 2. Add remote items that are not in local
+  remoteList.forEach(remoteItem => {
+    if (remoteItem && remoteItem[idKey]) {
+      const idStr = String(remoteItem[idKey]);
+      if (!visitedIds.has(idStr)) {
+        merged.push(remoteItem);
+        visitedIds.add(idStr);
+      }
+    }
+  });
+
+  return merged;
+}
+window.mergeAeronDatasets = mergeAeronDatasets;
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
     const base = getAeronGatewayUrl();
 
-    // Mark mutation lock immediately
+    // Mark mutation lock & in-flight status immediately
+    window._aeronInFlight[tableName] = true;
     window.markAeronMutation(tableName);
 
-    // 1. Mirror to local browser storage immediately
+    // 1. Mirror to local browser storage immediately (compact JSON)
     try {
       const lsKey = _TABLE_LS_MAP[tableName];
       if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
       localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-    } catch(e) {}
+    } catch(e) {
+      console.warn('[AeronCloudDB LocalStorage Warning]:', e.message);
+    }
 
-    // 2. Send to Central Backend Gateway (which handles Supabase Cloud Sync)
+    // 2. Send to Central Backend Gateway (compact JSON to minimize bandwidth and fit under 5MB)
     try {
       await fetch(base + '/api/save-db?table=' + tableName, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify(data, null, 2)
+        body: JSON.stringify(data)
       });
     } catch (err) {
       console.warn('[AeronCloudDB Save Warning]:', err.message);
+    } finally {
+      window._aeronInFlight[tableName] = false;
     }
   },
 
   async load(tableName, fallbackVal) {
     if (!tableName) return fallbackVal;
 
-    // 🛡️ Grace Window Check: If user recently modified this table locally, use local state
+    // 🛡️ Grace Window & In-Flight Check: If user recently modified or is saving this table, protect local state
     if (window.isAeronMutating && window.isAeronMutating(tableName)) {
       try {
         const lsKey = _TABLE_LS_MAP[tableName];
@@ -174,10 +235,16 @@ window.AeronCloudDB = {
             try {
               const cached = localStorage.getItem(lsKey);
               const parsedCached = cached ? JSON.parse(cached) : null;
-              if (Array.isArray(cleanData) && cleanData.length === 0 && Array.isArray(parsedCached) && parsedCached.length > 0) {
-                // Heal cloud with existing non-empty local data
-                window.AeronCloudDB.save(tableName, parsedCached);
-                return parsedCached;
+              if (Array.isArray(cleanData) && Array.isArray(parsedCached)) {
+                // Smart Merge: NEVER destroy local items!
+                const finalData = mergeAeronDatasets(parsedCached, cleanData);
+                if (finalData.length > cleanData.length) {
+                  // Local had pending/unpushed records, heal cloud
+                  window.AeronCloudDB.save(tableName, finalData);
+                }
+                localStorage.setItem(lsKey, JSON.stringify(finalData));
+                localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
+                return finalData;
               }
               localStorage.setItem(lsKey, JSON.stringify(cleanData));
               localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());

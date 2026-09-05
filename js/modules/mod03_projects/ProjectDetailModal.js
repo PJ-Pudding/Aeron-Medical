@@ -5,7 +5,7 @@ function ProjectDetailModal({ project, currentUser, stages = window.STAGES || []
 
   const canEdit = window.canEditProject ? window.canEditProject(currentUser, project) : true;
   const stageInfo = stages.find(s => s.id === project.status) || { title: project.status, badgeColor: 'bg-slate-800 text-slate-300' };
-  const logs = project.weeklyLogs || [];
+  const logs = Array.isArray(project.weeklyLogs) ? project.weeklyLogs : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">

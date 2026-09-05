@@ -113,7 +113,7 @@ function useAeronLogistics({ setActiveView }) {
 
   // ⚡ Action-Driven Direct Cloud Sync: State updates only trigger cloud sync on explicit user actions!
 
-  // ⚡ Universal Hydration with Focus Listener & Heartbeat Poller
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
     async function hydrateLogisticsFromCloud() {
@@ -121,47 +121,99 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Smart Deep Compare - Zero Flicker)
-        const remoteProducts = await fetcher('products', null);
-        if (isMounted && Array.isArray(remoteProducts)) {
-          setProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteProducts) ? prev : remoteProducts));
-          localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
+        // 1. Products (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('products')) {
+          const remoteProducts = await fetcher('products', null);
+          if (isMounted && Array.isArray(remoteProducts)) {
+            setProducts(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('products')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteProducts, 'id')
+                : (remoteProducts.length > 0 ? remoteProducts : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_products', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
         // 2. Categories
-        const remoteCategories = await fetcher('product_categories', null);
-        if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
-          setProductCategories(prev => (JSON.stringify(prev) === JSON.stringify(remoteCategories) ? prev : remoteCategories));
-          localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
-          window.PRODUCT_CATEGORIES = remoteCategories;
+        if (!window.isAeronMutating || !window.isAeronMutating('product_categories')) {
+          const remoteCategories = await fetcher('product_categories', null);
+          if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
+            setProductCategories(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('product_categories')) return prev;
+              const merged = Array.from(new Set([...(prev || []), ...remoteCategories]));
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_product_categories', JSON.stringify(merged)); } catch(e) {}
+              window.PRODUCT_CATEGORIES = merged;
+              return merged;
+            });
+          }
         }
 
-        // 3. Sold Products
-        const remoteSold = await fetcher('sold_products', null);
-        if (isMounted && Array.isArray(remoteSold)) {
-          setSoldProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteSold) ? prev : remoteSold));
-          localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
+        // 3. Sold Products (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('sold_products')) {
+          const remoteSold = await fetcher('sold_products', null);
+          if (isMounted && Array.isArray(remoteSold)) {
+            setSoldProducts(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('sold_products')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteSold, 'id')
+                : (remoteSold.length > 0 ? remoteSold : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_sold_products', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 4. Shipments
-        const remoteShipments = await fetcher('shipments', null);
-        if (isMounted && Array.isArray(remoteShipments)) {
-          setShipments(prev => (JSON.stringify(prev) === JSON.stringify(remoteShipments) ? prev : remoteShipments));
-          localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
+        // 4. Shipments (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('shipments')) {
+          const remoteShipments = await fetcher('shipments', null);
+          if (isMounted && Array.isArray(remoteShipments)) {
+            setShipments(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('shipments')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteShipments, 'id')
+                : (remoteShipments.length > 0 ? remoteShipments : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_shipments', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 5. Repair Tickets
-        const remoteRepairs = await fetcher('repair_tickets', null);
-        if (isMounted && Array.isArray(remoteRepairs)) {
-          setRepairTickets(prev => (JSON.stringify(prev) === JSON.stringify(remoteRepairs) ? prev : remoteRepairs));
-          localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs));
+        // 5. Repair Tickets (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('repair_tickets')) {
+          const remoteRepairs = await fetcher('repair_tickets', null);
+          if (isMounted && Array.isArray(remoteRepairs)) {
+            setRepairTickets(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('repair_tickets')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteRepairs, 'id')
+                : (remoteRepairs.length > 0 ? remoteRepairs : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 6. FDA Registrations
-        const remoteFDA = await fetcher('fda_registrations', null);
-        if (isMounted && Array.isArray(remoteFDA)) {
-          setFdaRegistrations(prev => (JSON.stringify(prev) === JSON.stringify(remoteFDA) ? prev : remoteFDA));
-          localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA));
+        // 6. FDA Registrations (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('fda_registrations')) {
+          const remoteFDA = await fetcher('fda_registrations', null);
+          if (isMounted && Array.isArray(remoteFDA)) {
+            setFdaRegistrations(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('fda_registrations')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteFDA, 'id')
+                : (remoteFDA.length > 0 ? remoteFDA : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[Logistics Cloud Hydration Notice]:', e.message);
@@ -173,7 +225,7 @@ function useAeronLogistics({ setActiveView }) {
     hydrateLogisticsFromCloud();
 
     window.addEventListener('focus', hydrateLogisticsFromCloud);
-    const poller = setInterval(hydrateLogisticsFromCloud, 3000);
+    const poller = setInterval(hydrateLogisticsFromCloud, 20000);
 
     return () => {
       isMounted = false;
@@ -182,22 +234,29 @@ function useAeronLogistics({ setActiveView }) {
     };
   }, []);
 
-  // Handlers
+  // Handlers (All persistent with LocalStorage & Cloud Sync)
   const handleSaveProduct = useCallback((productData) => {
+    const timestamped = {
+      ...productData,
+      updated_at: new Date().toISOString()
+    };
     setProducts(prev => {
       let updated;
-      if (productData.id) {
-        updated = prev.map(p => p.id === productData.id ? productData : p);
+      if (timestamped.id) {
+        updated = prev.map(p => p.id === timestamped.id ? timestamped : p);
       } else {
         const newProd = {
-          ...productData,
+          ...timestamped,
           id: 'prod-' + Date.now()
         };
         updated = [newProd, ...prev];
       }
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('products', updated);
-      }
+      try {
+        localStorage.setItem('aeron_products', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('products', updated);
+        }
+      } catch(e) {}
       return updated;
     });
     setIsProductModalOpen(false);
@@ -205,77 +264,146 @@ function useAeronLogistics({ setActiveView }) {
   }, []);
 
   const handleSaveSoldAsset = useCallback((assetData) => {
-    if (assetData.id) {
-      setSoldProducts(prev => prev.map(a => a.id === assetData.id ? assetData : a));
-    } else {
-      const newAsset = {
-        ...assetData,
-        id: 'sold-' + Date.now()
-      };
-      setSoldProducts(prev => [newAsset, ...prev]);
-    }
+    const timestamped = {
+      ...assetData,
+      updated_at: new Date().toISOString()
+    };
+    setSoldProducts(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(a => a.id === timestamped.id ? timestamped : a);
+      } else {
+        const newAsset = {
+          ...timestamped,
+          id: 'sold-' + Date.now()
+        };
+        updated = [newAsset, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_sold_products', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('sold_products', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsSoldModalOpen(false);
     setEditingSoldAsset(null);
   }, []);
 
   const handleDeleteSoldAsset = useCallback((assetId) => {
     if (window.confirm('คุณต้องการลบรายการเครื่องที่ส่งมอบนี้ใช่หรือไม่?')) {
-      setSoldProducts(prev => prev.filter(a => a.id !== assetId));
+      setSoldProducts(prev => {
+        const updated = prev.filter(a => a.id !== assetId);
+        try {
+          localStorage.setItem('aeron_sold_products', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('sold_products', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveShipment = useCallback((shipmentData) => {
-    if (shipmentData.id) {
-      setShipments(prev => prev.map(s => s.id === shipmentData.id ? shipmentData : s));
-    } else {
-      const newShipment = {
-        ...shipmentData,
-        id: 'shp-' + Date.now()
-      };
-      setShipments(prev => [newShipment, ...prev]);
-    }
+    const timestamped = {
+      ...shipmentData,
+      updated_at: new Date().toISOString()
+    };
+    setShipments(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(s => s.id === timestamped.id ? timestamped : s);
+      } else {
+        const newShipment = {
+          ...timestamped,
+          id: 'shp-' + Date.now()
+        };
+        updated = [newShipment, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_shipments', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('shipments', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsShipmentModalOpen(false);
     setEditingShipment(null);
   }, []);
 
   const handleDeleteShipment = useCallback((shipmentId) => {
     if (window.confirm('คุณต้องการลบรายการนำเข้าสินค้านี้ใช่หรือไม่?')) {
-      setShipments(prev => prev.filter(s => s.id !== shipmentId));
+      setShipments(prev => {
+        const updated = prev.filter(s => s.id !== shipmentId);
+        try {
+          localStorage.setItem('aeron_shipments', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('shipments', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveRepairTicket = useCallback((ticketData) => {
-    if (ticketData.id) {
-      setRepairTickets(prev => prev.map(t => t.id === ticketData.id ? ticketData : t));
-    } else {
-      const newTicket = {
-        ...ticketData,
-        id: 'rep-' + Date.now()
-      };
-      setRepairTickets(prev => [newTicket, ...prev]);
-    }
+    const timestamped = {
+      ...ticketData,
+      updated_at: new Date().toISOString()
+    };
+    setRepairTickets(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(t => t.id === timestamped.id ? timestamped : t);
+      } else {
+        const newTicket = {
+          ...timestamped,
+          id: 'rep-' + Date.now()
+        };
+        updated = [newTicket, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_repair_tickets', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('repair_tickets', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
 
     // Auto Link back to Central Demo Catalog if category is "เครื่อง Demo"
     if (ticketData.category === 'เครื่อง Demo' && ticketData.sn) {
       const isFixed = ticketData.status === 'ซ่อมเสร็จแล้ว' || ticketData.status === 'ส่งคืนเรียบร้อย';
       const newUnitStatus = isFixed ? 'พร้อมใช้งาน' : 'ส่งซ่อม';
 
-      setProducts(prevProducts => prevProducts.map(p => {
-        if (p.demoUnits && p.demoUnits.some(u => u.sn === ticketData.sn)) {
-          const updatedUnits = p.demoUnits.map(u => {
-            if (u.sn === ticketData.sn) {
-              return {
-                ...u,
-                status: newUnitStatus,
-                location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
-              };
-            }
-            return u;
-          });
-          return { ...p, demoUnits: updatedUnits };
-        }
-        return p;
-      }));
+      setProducts(prevProducts => {
+        const updatedProds = prevProducts.map(p => {
+          if (p.demoUnits && p.demoUnits.some(u => u.sn === ticketData.sn)) {
+            const updatedUnits = p.demoUnits.map(u => {
+              if (u.sn === ticketData.sn) {
+                return {
+                  ...u,
+                  status: newUnitStatus,
+                  location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
+                };
+              }
+              return u;
+            });
+            return { ...p, demoUnits: updatedUnits };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem('aeron_products', JSON.stringify(updatedProds));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('products', updatedProds);
+          }
+        } catch(e) {}
+        return updatedProds;
+      });
     }
 
     setIsRepairModalOpen(false);
@@ -284,7 +412,16 @@ function useAeronLogistics({ setActiveView }) {
 
   const handleDeleteRepairTicket = useCallback((ticketId) => {
     if (window.confirm('คุณต้องการลบรายการส่งซ่อมนี้ใช่หรือไม่?')) {
-      setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
+      setRepairTickets(prev => {
+        const updated = prev.filter(t => t.id !== ticketId);
+        try {
+          localStorage.setItem('aeron_repair_tickets', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('repair_tickets', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
@@ -307,22 +444,45 @@ function useAeronLogistics({ setActiveView }) {
   }, [setActiveView]);
 
   const handleSaveFDA = useCallback((fdaData) => {
-    if (fdaData.id) {
-      setFdaRegistrations(prev => prev.map(f => f.id === fdaData.id ? fdaData : f));
-    } else {
-      const newFDA = {
-        ...fdaData,
-        id: 'fda-' + Date.now()
-      };
-      setFdaRegistrations(prev => [newFDA, ...prev]);
-    }
+    const timestamped = {
+      ...fdaData,
+      updated_at: new Date().toISOString()
+    };
+    setFdaRegistrations(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(f => f.id === timestamped.id ? timestamped : f);
+      } else {
+        const newFDA = {
+          ...timestamped,
+          id: 'fda-' + Date.now()
+        };
+        updated = [newFDA, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_fda_registrations', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('fda_registrations', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsFDAModalOpen(false);
     setEditingFDA(null);
   }, []);
 
   const handleDeleteFDA = useCallback((fdaId) => {
     if (window.confirm('คุณต้องการลบรายการ อย. นี้ใช่หรือไม่?')) {
-      setFdaRegistrations(prev => prev.filter(f => f.id !== fdaId));
+      setFdaRegistrations(prev => {
+        const updated = prev.filter(f => f.id !== fdaId);
+        try {
+          localStorage.setItem('aeron_fda_registrations', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('fda_registrations', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 

@@ -72,8 +72,10 @@ const _TABLE_LS_MAP = {
   dictionary: 'aeron_autocomplete_dictionary'
 };
 
-// 🛡️ Mutation Grace Period Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
+// 🛡️ Mutation Grace Period & In-Flight Lock Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
 window._aeronLastMutationTime = {};
+window._aeronInFlight = {};
+window._aeronMutationGraceMs = 45000; // 45-second protected grace window (covers Render cold-start latency)
 
 window.markAeronMutation = function(tableName) {
   if (!tableName) return;
@@ -82,8 +84,9 @@ window.markAeronMutation = function(tableName) {
 
 window.isAeronMutating = function(tableName) {
   if (!tableName) return false;
+  if (window._aeronInFlight[tableName]) return true;
   const lastTime = window._aeronLastMutationTime[tableName] || 0;
-  return (Date.now() - lastTime) < 5000; // 5-second protected grace window
+  return (Date.now() - lastTime) < (window._aeronMutationGraceMs || 45000);
 };
 
 // 🛡️ Universal Thai Text Sanitizer (Auto-reverses any Windows-1252 Mojibake)
@@ -125,37 +128,95 @@ function sanitizeThaiData(val) {
 
 window.sanitizeThaiData = sanitizeThaiData;
 
+// 🛡️ Local-First Smart Dataset Merge (CRDT-Inspired: Local Always Protected, Zero Data Loss)
+function mergeAeronDatasets(localList, remoteList, idKey = 'id') {
+  if (!Array.isArray(localList) || localList.length === 0) return Array.isArray(remoteList) ? remoteList : [];
+  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList;
+
+  const remoteMap = new Map();
+  remoteList.forEach(item => {
+    if (item && item[idKey]) remoteMap.set(String(item[idKey]), item);
+  });
+
+  const merged = [];
+  const visitedIds = new Set();
+
+  // 1. Keep all local items (so newly created or modified local items are NEVER wiped by remote)
+  localList.forEach(localItem => {
+    if (!localItem || !localItem[idKey]) {
+      merged.push(localItem);
+      return;
+    }
+    const idStr = String(localItem[idKey]);
+    visitedIds.add(idStr);
+    const remoteItem = remoteMap.get(idStr);
+
+    if (!remoteItem) {
+      // Local item not yet on remote: KEEP IT!
+      merged.push(localItem);
+    } else {
+      // Both exist: check updated timestamp or preserve local if newer
+      const localTime = new Date(localItem.updated_at || localItem.updatedDate || localItem.createdDate || 0).getTime();
+      const remoteTime = new Date(remoteItem.updated_at || remoteItem.updatedDate || remoteItem.createdDate || 0).getTime();
+      if (localTime >= remoteTime) {
+        merged.push(localItem);
+      } else {
+        merged.push(remoteItem);
+      }
+    }
+  });
+
+  // 2. Add remote items that are not in local
+  remoteList.forEach(remoteItem => {
+    if (remoteItem && remoteItem[idKey]) {
+      const idStr = String(remoteItem[idKey]);
+      if (!visitedIds.has(idStr)) {
+        merged.push(remoteItem);
+        visitedIds.add(idStr);
+      }
+    }
+  });
+
+  return merged;
+}
+window.mergeAeronDatasets = mergeAeronDatasets;
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
     const base = getAeronGatewayUrl();
 
-    // Mark mutation lock immediately
+    // Mark mutation lock & in-flight status immediately
+    window._aeronInFlight[tableName] = true;
     window.markAeronMutation(tableName);
 
-    // 1. Mirror to local browser storage immediately
+    // 1. Mirror to local browser storage immediately (compact JSON)
     try {
       const lsKey = _TABLE_LS_MAP[tableName];
       if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
       localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-    } catch(e) {}
+    } catch(e) {
+      console.warn('[AeronCloudDB LocalStorage Warning]:', e.message);
+    }
 
-    // 2. Send to Central Backend Gateway (which handles Supabase Cloud Sync)
+    // 2. Send to Central Backend Gateway (compact JSON to minimize bandwidth and fit under 5MB)
     try {
       await fetch(base + '/api/save-db?table=' + tableName, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify(data, null, 2)
+        body: JSON.stringify(data)
       });
     } catch (err) {
       console.warn('[AeronCloudDB Save Warning]:', err.message);
+    } finally {
+      window._aeronInFlight[tableName] = false;
     }
   },
 
   async load(tableName, fallbackVal) {
     if (!tableName) return fallbackVal;
 
-    // 🛡️ Grace Window Check: If user recently modified this table locally, use local state
+    // 🛡️ Grace Window & In-Flight Check: If user recently modified or is saving this table, protect local state
     if (window.isAeronMutating && window.isAeronMutating(tableName)) {
       try {
         const lsKey = _TABLE_LS_MAP[tableName];
@@ -180,10 +241,16 @@ window.AeronCloudDB = {
             try {
               const cached = localStorage.getItem(lsKey);
               const parsedCached = cached ? JSON.parse(cached) : null;
-              if (Array.isArray(cleanData) && cleanData.length === 0 && Array.isArray(parsedCached) && parsedCached.length > 0) {
-                // Heal cloud with existing non-empty local data
-                window.AeronCloudDB.save(tableName, parsedCached);
-                return parsedCached;
+              if (Array.isArray(cleanData) && Array.isArray(parsedCached)) {
+                // Smart Merge: NEVER destroy local items!
+                const finalData = mergeAeronDatasets(parsedCached, cleanData);
+                if (finalData.length > cleanData.length) {
+                  // Local had pending/unpushed records, heal cloud
+                  window.AeronCloudDB.save(tableName, finalData);
+                }
+                localStorage.setItem(lsKey, JSON.stringify(finalData));
+                localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
+                return finalData;
               }
               localStorage.setItem(lsKey, JSON.stringify(cleanData));
               localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
@@ -1094,6 +1161,330 @@ window.saveAeronDictionaryItem = saveAeronDictionaryItem;
 window.findSimilarDictionaryName = findSimilarDictionaryName;
 
 
+// --- Module File: js/modules/mod00_core/AppModalsContainer.js ---
+﻿// MODULE: mod00_core/AppModalsContainer.js
+// Centralized Popups & Modals Container extracted from App.js for Clean Architecture
+
+function AppModalsContainer({
+  // Demo Booking Modal
+  isDemoModalOpen, setIsDemoModalOpen, demoPrefill, setDemoPrefill,
+  projects, products, members, demoBookings, handleSaveDemoBooking,
+  
+  // Product Master Modal
+  isProductModalOpen, setIsProductModalOpen, editingProduct, setEditingProduct,
+  productCategories, handleUpdateCategories, handleSaveProduct,
+  
+  // Purchase Order Modal
+  isPOModalOpen, setIsPOModalOpen, editingPO, setEditingPO, handleSavePO,
+  
+  // Repair Ticket Modal
+  isRepairModalOpen, setIsRepairModalOpen, editingRepairTicket, setEditingRepairTicket,
+  handleSaveRepairTicket,
+  
+  // Delivered / Sold Product Modal
+  isSoldModalOpen, setIsSoldModalOpen, editingSoldAsset, setEditingSoldAsset,
+  handleSaveSoldAsset,
+  
+  // Import Shipment Modal
+  isShipmentModalOpen, setIsShipmentModalOpen, editingShipment, setEditingShipment,
+  purchaseOrders, handleSaveShipment,
+  
+  // FDA Registration Modal
+  isFDAModalOpen, setIsFDAModalOpen, editingFDA, setEditingFDA, handleSaveFDA,
+  
+  // Project History & Timeline Modal
+  isHistoryModalOpen, setIsHistoryModalOpen, historyTargetProject, setHistoryTargetProject,
+  handleAddWeeklyLog,
+  
+  // Cost Sheet Modal
+  isCostModalOpen, setIsCostModalOpen, editingCostCalc, setEditingCostCalc,
+  handleSaveCostCalc,
+  
+  // Demo Checklist Modal
+  isChecklistModalOpen, setIsChecklistModalOpen, checklistTargetBooking, setChecklistTargetBooking,
+  
+  // Toast Notification
+  toastNotification, setToastNotification, setActiveView,
+  
+  // Leave & Attendance Modals
+  isLeaveModalOpen, setIsLeaveModalOpen, currentUser, handleSaveLeave,
+  isAttendanceModalOpen, setIsAttendanceModalOpen, handleSaveAttendance,
+  
+  // User Accounts & System Notifications Modals
+  isUserAccountModalOpen, setIsUserAccountModalOpen,
+  isNotificationModalOpen, setIsNotificationModalOpen, systemAlerts,
+  
+  // Universal Report Viewer Modal
+  isUniversalReportModalOpen, setIsUniversalReportModalOpen, activeReportId,
+  soldProducts, fdaRegistrations, costCalculations, leaveRequests, attendanceLogs,
+  
+  // Category Manager & Login Modals
+  isGlobalCategoryManagerOpen, setIsGlobalCategoryManagerOpen,
+  isLoginModalOpen, setIsLoginModalOpen, handleLoginSuccess
+}) {
+  return (
+    <>
+      {/* Demo Booking Modal */}
+      {isDemoModalOpen && (
+        <DemoBookingModal
+          prefill={demoPrefill}
+          projects={projects}
+          products={products}
+          members={members}
+          existingBookings={demoBookings}
+          onSave={handleSaveDemoBooking}
+          onClose={() => { setIsDemoModalOpen(false); setDemoPrefill(null); }}
+        />
+      )}
+
+      {/* Product Master Modal */}
+      {isProductModalOpen && (
+        <ProductModal
+          product={editingProduct}
+          categories={productCategories}
+          onUpdateCategories={handleUpdateCategories}
+          onSave={handleSaveProduct}
+          onClose={() => { setIsProductModalOpen(false); setEditingProduct(null); }}
+        />
+      )}
+
+      {/* Purchase Order Modal */}
+      {isPOModalOpen && (
+        <PurchaseOrderModal
+          po={editingPO}
+          projects={projects}
+          products={products}
+          onSave={handleSavePO}
+          onClose={() => { setIsPOModalOpen(false); setEditingPO(null); }}
+        />
+      )}
+
+      {/* Repair Ticket Modal */}
+      {isRepairModalOpen && (
+        <RepairTicketModal
+          ticket={editingRepairTicket}
+          products={products}
+          members={members}
+          onSave={handleSaveRepairTicket}
+          onClose={() => { setIsRepairModalOpen(false); setEditingRepairTicket(null); }}
+        />
+      )}
+
+      {/* Delivered / Sold Product Modal */}
+      {isSoldModalOpen && (
+        <SoldProductModal
+          asset={editingSoldAsset}
+          projects={projects}
+          members={members}
+          onSave={handleSaveSoldAsset}
+          onClose={() => { setIsSoldModalOpen(false); setEditingSoldAsset(null); }}
+        />
+      )}
+
+      {/* Import Logistics / Shipment Modal */}
+      {isShipmentModalOpen && (
+        <ShipmentModal
+          shipment={editingShipment}
+          purchaseOrders={purchaseOrders}
+          products={products}
+          onSave={handleSaveShipment}
+          onClose={() => { setIsShipmentModalOpen(false); setEditingShipment(null); }}
+        />
+      )}
+
+      {/* Thai FDA Registration Modal */}
+      {isFDAModalOpen && (
+        <FDAModal
+          fda={editingFDA}
+          products={products}
+          members={members}
+          onSave={handleSaveFDA}
+          onClose={() => { setIsFDAModalOpen(false); setEditingFDA(null); }}
+        />
+      )}
+
+      {/* Project History & Activity Timeline Modal */}
+      {isHistoryModalOpen && historyTargetProject && (
+        <ProjectHistoryModal
+          project={historyTargetProject}
+          members={members}
+          stages={window.STAGES}
+          products={products}
+          onAddLog={handleAddWeeklyLog}
+          onClose={() => { setIsHistoryModalOpen(false); setHistoryTargetProject(null); }}
+        />
+      )}
+
+      {/* Cost & Minimum Selling Price Financial Sheet Modal */}
+      {isCostModalOpen && (
+        <CostSheetModal 
+          calc={editingCostCalc}
+          projects={projects}
+          onSave={handleSaveCostCalc}
+          onClose={() => { setIsCostModalOpen(false); setEditingCostCalc(null); }}
+        />
+      )}
+
+      {/* Demo Checklist Modal */}
+      {isChecklistModalOpen && checklistTargetBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <span>📋 รายการตรวจสอบคิวเครื่อง Demo (Checklist)</span>
+              </h3>
+              <button 
+                onClick={() => { setIsChecklistModalOpen(false); setChecklistTargetBooking(null); }}
+                className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 bg-slate-800 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 text-xs text-slate-300">
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
+                <div className="font-bold text-emerald-400">🏥 โรงพยาบาล: {checklistTargetBooking.hospitalName || checklistTargetBooking.hospital}</div>
+                <div className="text-slate-400">📦 สินค้า: {checklistTargetBooking.productName}</div>
+                <div className="text-amber-300 font-mono">📅 {checklistTargetBooking.startDate || 'N/A'} ถึง {checklistTargetBooking.endDate || 'N/A'}</div>
+              </div>
+              <div className="space-y-2 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
+                  <input type="checkbox" defaultChecked className="accent-emerald-500 rounded" />
+                  <span>ตรวจสอบสภาพเครื่องก่อนส่งมอบ (Hardware Inspection)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
+                  <input type="checkbox" defaultChecked className="accent-emerald-500 rounded" />
+                  <span>อุปกรณ์เสริมครบถ้วน (Accessories Checklist)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
+                  <input type="checkbox" className="accent-emerald-500 rounded" />
+                  <span>ใบรับ-ส่งเครื่อง และเอกสารยินยอมทดลองใช้งาน</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => { setIsChecklistModalOpen(false); setChecklistTargetBooking(null); }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md"
+              >
+                บันทึกเรียบร้อย
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification when Sales Wins a Project */}
+      {toastNotification && toastNotification.show && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900/95 border-2 border-amber-500/80 p-4 rounded-2xl shadow-2xl shadow-amber-500/30 text-white backdrop-blur-md animate-modal space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl animate-bounce">🔔</span>
+              <h4 className="font-bold text-amber-300 text-sm leading-snug">{toastNotification.title}</h4>
+            </div>
+            <button onClick={() => setToastNotification(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
+          </div>
+          <p className="text-xs text-slate-300">{toastNotification.message}</p>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              onClick={() => { setActiveView('purchase_orders'); setToastNotification(null); }}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-500/30"
+            >
+              🛒 ไปยังหน้าสั่งซื้อ Vendor (PO)
+            </button>
+            <button
+              onClick={() => setToastNotification(null)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs"
+            >
+              รับทราบ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Modal */}
+      {isLeaveModalOpen && (
+        <LeaveModal
+          members={members}
+          currentUser={currentUser}
+          onSave={handleSaveLeave}
+          onClose={() => setIsLeaveModalOpen(false)}
+        />
+      )}
+
+      {/* Attendance Modal */}
+      {isAttendanceModalOpen && (
+        <AttendanceModal
+          members={members}
+          onSave={handleSaveAttendance}
+          onClose={() => setIsAttendanceModalOpen(false)}
+        />
+      )}
+
+      {/* User Account Management Modal (Root Level - Top Z-Index 1000) */}
+      {isUserAccountModalOpen && (
+        <UserAccountManagementModal
+          isOpen={isUserAccountModalOpen}
+          onClose={() => setIsUserAccountModalOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {/* 🔔 Smart Notification Action Center Modal */}
+      {isNotificationModalOpen && (
+        <NotificationModal
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+          currentUser={currentUser}
+          alerts={systemAlerts}
+        />
+      )}
+
+      {/* 📊 Universal Report Viewer Modal */}
+      {isUniversalReportModalOpen && (
+        <UniversalReportModal
+          isOpen={isUniversalReportModalOpen}
+          onClose={() => setIsUniversalReportModalOpen(false)}
+          reportId={activeReportId}
+          appState={{
+            projects,
+            members,
+            products,
+            demoBookings,
+            purchaseOrders,
+            shipments,
+            repairTickets,
+            soldProducts,
+            fdaRegistrations,
+            costCalculations,
+            leaveRequests,
+            attendanceLogs,
+            accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
+            currentUser
+          }}
+        />
+      )}
+
+      {/* Global Category Master Data Manager Modal */}
+      <CategoryManagerModal
+        isOpen={isGlobalCategoryManagerOpen}
+        onClose={() => setIsGlobalCategoryManagerOpen(false)}
+        categories={productCategories || window.PRODUCT_CATEGORIES || []}
+        onUpdateCategories={handleUpdateCategories}
+      />
+
+      {/* Login & Role Switcher Modal */}
+      {(isLoginModalOpen || !currentUser) && (
+        <LoginModal
+          onLoginSuccess={handleLoginSuccess}
+          onClose={() => setIsLoginModalOpen(false)}
+          isSwitching={!!currentUser}
+        />
+      )}
+    </>
+  );
+}
+
+
 // --- Module File: js/modules/mod00_core/Header.js ---
 function Header({ 
   currentUser,
@@ -1633,437 +2024,541 @@ function Header({
       </div>
 
       {/* Dynamic Module Sub-Navigation Bar */}
-      <div className="bg-slate-950/90 border-t border-slate-800 px-4 sm:px-6 py-2 flex items-center justify-between overflow-x-auto gap-3 text-xs scrollbar-none">
-        
-        {/* LOGISTIC MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'logistic' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>🚚</span> <span>คลังสินค้า & ขนส่ง:</span>
-            </span>
-
-            <button
-              onClick={() => setLogisticSubView('product_catalog')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'product_catalog'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📦 ฐานข้อมูลสินค้า & เครื่อง Demo
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('shipment_tracking')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'shipment_tracking'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🚢 ติดตามการ Import ({activeShipmentCount})
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('repair_service')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'repair_service'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔧 ทะเบียนส่งซ่อม ({activeRepairCount})
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('sold_products')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'sold_products'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏥 เครื่องที่ขายแล้ว ({soldProductsCount})
-            </button>
-          </div>
-        )}
-
-        {/* FINANCE MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'finance' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>💰 การเงิน & วางแผน:</span>
-            </span>
-
-            <button
-              onClick={() => setFinanceSubView('cost_calculation')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'cost_calculation'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📊 คำนวณต้นทุนโครงการ (Cost Sheet)
-            </button>
-
-            <button
-              onClick={() => setFinanceSubView('cash_forecast')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'cash_forecast'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 font-black shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔮 ประมาณการกระแสเงินสด (Cash Forecast)
-            </button>
-          </div>
-        )}
-
-        {/* REPORT MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'report' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>📊 รายงาน & เอกสาร:</span>
-            </span>
-
-            <button
-              onClick={() => setReportSubView('hub')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📊 ศูนย์รวมรายงานทุกระบบ (All Reports Hub)
-            </button>
-
-            <button
-              onClick={() => setReportSubView('fda_registration')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'fda_registration'
-                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📜 ทะเบียน อย. / ใบอนุญาต ({activeFDACount})
-            </button>
-
-            <button
-              onClick={() => setReportSubView('activity_logs')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'activity_logs'
-                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔐 ประวัติใช้งานระบบ Audit Logs ({activityLogsCount})
-            </button>
-          </div>
-        )}
-
-        {/* HR MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'hr' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>👥 บุคลากร & HR:</span>
-            </span>
-
-            <button
-              onClick={() => setHRSubView('leave_attendance')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                hrSubView === 'leave_attendance'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📅 ตารางวันลา & ขาด ลา มาสาย
-            </button>
-
-            <button
-              onClick={() => setHRSubView('team_roster')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                hrSubView === 'team_roster'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              👥 รายชื่อทีม Sales ({members.length} คน)
-            </button>
-          </div>
-        )}
-
-        {/* ACCOUNTING MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'accounting' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>🧾 บัญชี & การเงิน:</span>
-            </span>
-
-            <button
-              onClick={() => setAccountingSubTab('daily_entries')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'daily_entries'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📋 บันทึกรายรับ-รายจ่ายรายวัน
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('purchase_orders')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'purchase_orders'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📦 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('financial_statements')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'financial_statements'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📈 งบการเงิน P&L & Cash Flow
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('pending_transfers')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'pending_transfers'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              ⏳ ค้างโอนประจำเดือน
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('hospital_payee_analytics')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'hospital_payee_analytics'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏥 รายจ่ายราย รพ./ผู้รับ
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('bank_reconciliation')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'bank_reconciliation'
-                  ? 'bg-teal-600 text-white border-teal-400 font-black shadow-md shadow-teal-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏦 Bank Reconciliation
-            </button>
-          </div>
-        )}
-
-        {/* DASHBOARD / PROJECT / CLIENTS / CALENDAR GENERAL SHORTCUTS */}
-        {(activeSidebarTab === 'dashboard' || activeSidebarTab === 'project' || activeSidebarTab === 'clients' || activeSidebarTab === 'calendar') && (
-          <>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1">
-                <span>📌</span> <span>ทางลัดมุมมอง:</span>
-              </span>
-
-              <button
-                onClick={() => handleSelectViewChange('manager')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'manager'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>📊 ภาพรวมหัวหน้างาน</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectViewChange('kanban_all')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'kanban_all'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>📋 Kanban รวมทุกโครงการ ({projects.length})</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectViewChange('cost_calculation')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'cost_calculation'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>🧮 คำนวณต้นทุน & ราคาขาย</span>
-              </button>
-            </div>
-
-            {/* Member Kanban Quick Pills */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-slate-400 font-medium text-[11px] hidden lg:inline mr-1">Kanban เซลส์รายบุคคล:</span>
-              {(members || []).filter(m => !currentUser || (window.canViewMemberKanban ? window.canViewMemberKanban(currentUser, m) : true)).map(m => {
-                const isSelected = activeView === m.id;
-                const count = projects.filter(p => p.assignee === m.name).length;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => handleSelectViewChange(m.id)}
-                    className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 border ${
-                      isSelected
-                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/40'
-                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800/90'
-                    }`}
-                    title={`คลิกเพื่อดู Kanban Board ของ ${m.name}`}
-                  >
-                    <span>{m.avatar} {m.name.split(' ')[0]}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      isSelected ? 'bg-emerald-900 text-white font-bold' : 'bg-slate-950 text-slate-400'
-                    }`}>
-                      {count} งาน
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-      </div>
+      <HeaderSubNav 
+        activeSidebarTab={activeSidebarTab}
+        logisticSubView={logisticSubView}
+        setLogisticSubView={setLogisticSubView}
+        activeShipmentCount={activeShipmentCount}
+        activeRepairCount={activeRepairCount}
+        soldProductsCount={soldProductsCount}
+        financeSubView={financeSubView}
+        setFinanceSubView={setFinanceSubView}
+        reportSubView={reportSubView}
+        setReportSubView={setReportSubView}
+        activeFDACount={activeFDACount}
+        activityLogsCount={activityLogsCount}
+        hrSubView={hrSubView}
+        setHRSubView={setHRSubView}
+        members={members}
+        accountingSubTab={accountingSubTab}
+        setAccountingSubTab={setAccountingSubTab}
+        pendingPOCount={pendingPOCount}
+        activeView={activeView}
+        handleSelectViewChange={handleSelectViewChange}
+        projects={projects}
+        currentUser={currentUser}
+      />
 
       {/* 📱 Mobile Quick Action Bottom Sheet */}
-      {isMobileActionSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">⚡</span>
-                <h3 className="font-bold text-white text-sm">เมนูจัดการด่วน (Quick Actions)</h3>
-              </div>
-              <button
-                onClick={() => setIsMobileActionSheetOpen(false)}
-                className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs"
-              >
-                ✕ ปิด
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNotificationModal(); }}
-                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation relative"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xl">🔔</span>
-                  {alerts && alerts.length > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-                      {alerts.length} งาน
-                    </span>
-                  )}
-                </div>
-                <span className="font-bold text-xs text-white">ศูนย์แจ้งเตือน</span>
-                <span className="text-[10px] text-rose-300">งานค้าง & ลงต้นทุน</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
-                className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">➕</span>
-                <span className="font-bold text-xs text-white">เพิ่มโครงการ</span>
-                <span className="text-[10px] text-emerald-300">สร้างโครงการใหม่</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenDemoModal(); }}
-                className="p-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">🧪</span>
-                <span className="font-bold text-xs text-white">จองเครื่อง Demo</span>
-                <span className="text-[10px] text-purple-300">ลงคิวทดสอบสินค้า</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenRepairModal(); }}
-                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">🔧</span>
-                <span className="font-bold text-xs text-white">แจ้งส่งซ่อม</span>
-                <span className="text-[10px] text-rose-300">เปิดใบงานซ่อมบำรุง</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); exportToCSV(); }}
-                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">📥</span>
-                <span className="font-bold text-xs text-white">ส่งออก CSV</span>
-                <span className="text-[10px] text-slate-400">ดาวน์โหลดรายงาน</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenMemberModal(); }}
-                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">👥</span>
-                <span className="font-bold text-xs text-white">จัดการทีม</span>
-                <span className="text-[10px] text-slate-400">รายชื่อสมาชิก Sales</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); triggerCloudSync(); }}
-                className="p-3 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">☁️</span>
-                <span className="font-bold text-xs text-white">ซิงค์ Cloud ทันที</span>
-                <span className="text-[10px] text-teal-300">{cloudStatus.isSyncing ? 'กำลังซิงค์...' : 'อัปเดต Supabase'}</span>
-              </button>
-            </div>
-
-            {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); if (onOpenUserAccountModal) onOpenUserAccountModal(); }}
-                className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🔐</span>
-                  <span>จัดการบัญชีผู้ใช้งานระบบ (OWNER & HEAD ADMIN)</span>
-                </div>
-                <span>➔</span>
-              </button>
-            )}
-
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onResetDemo(); }}
-                className="text-[11px] text-rose-400 hover:text-rose-300 underline"
-              >
-                🔄 รีเซ็ตข้อมูลตัวอย่าง
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onLogout(); }}
-                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 font-bold"
-              >
-                <span>🚪 ออกจากระบบ</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <HeaderMobileActionSheet 
+        isOpen={isMobileActionSheetOpen}
+        onClose={() => setIsMobileActionSheetOpen(false)}
+        alerts={alerts}
+        onOpenNotificationModal={onOpenNotificationModal}
+        onOpenNewModal={onOpenNewModal}
+        onOpenDemoModal={onOpenDemoModal}
+        onOpenRepairModal={onOpenRepairModal}
+        exportToCSV={exportToCSV}
+        onOpenMemberModal={onOpenMemberModal}
+        triggerCloudSync={triggerCloudSync}
+        cloudStatus={cloudStatus}
+        currentUser={currentUser}
+        onOpenUserAccountModal={onOpenUserAccountModal}
+        onResetDemo={onResetDemo}
+        onLogout={onLogout}
+      />
     </header>
   );
 }
+
+
+// --- Module File: js/modules/mod00_core/HeaderMobileActionSheet.js ---
+// MODULE: mod00_core/HeaderMobileActionSheet.js
+// Mobile Action Sheet & Quick Drawer extracted from Header.js for Clean Architecture
+
+const HeaderMobileActionSheet = React.memo(function HeaderMobileActionSheet({
+  isOpen,
+  onClose,
+  alerts = [],
+  onOpenNotificationModal = () => {},
+  onOpenNewModal = () => {},
+  onOpenDemoModal = () => {},
+  onOpenRepairModal = () => {},
+  exportToCSV = () => {},
+  onOpenMemberModal = () => {},
+  triggerCloudSync = () => {},
+  cloudStatus = {},
+  currentUser,
+  onOpenUserAccountModal = () => {},
+  onResetDemo = () => {},
+  onLogout = () => {}
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚡</span>
+            <h3 className="font-bold text-white text-sm">เมนูจัดการด่วน (Quick Actions)</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs"
+          >
+            ✕ ปิด
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={() => { onClose(); onOpenNotificationModal(); }}
+            className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation relative"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xl">🔔</span>
+              {alerts && alerts.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                  {alerts.length} งาน
+                </span>
+              )}
+            </div>
+            <span className="font-bold text-xs text-white">ศูนย์แจ้งเตือน</span>
+            <span className="text-[10px] text-rose-300">งานค้าง & ลงต้นทุน</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); onOpenNewModal(); }}
+            className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">➕</span>
+            <span className="font-bold text-xs text-white">เพิ่มโครงการ</span>
+            <span className="text-[10px] text-emerald-300">สร้างโครงการใหม่</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); onOpenDemoModal(); }}
+            className="p-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">🧪</span>
+            <span className="font-bold text-xs text-white">จองเครื่อง Demo</span>
+            <span className="text-[10px] text-purple-300">ลงคิวทดสอบสินค้า</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); onOpenRepairModal(); }}
+            className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">🔧</span>
+            <span className="font-bold text-xs text-white">แจ้งส่งซ่อม</span>
+            <span className="text-[10px] text-rose-300">เปิดใบงานซ่อมบำรุง</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); exportToCSV(); }}
+            className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">📥</span>
+            <span className="font-bold text-xs text-white">ส่งออก CSV</span>
+            <span className="text-[10px] text-slate-400">ดาวน์โหลดรายงาน</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); onOpenMemberModal(); }}
+            className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">👥</span>
+            <span className="font-bold text-xs text-white">จัดการทีม</span>
+            <span className="text-[10px] text-slate-400">รายชื่อสมาชิก Sales</span>
+          </button>
+
+          <button
+            onClick={() => { onClose(); triggerCloudSync(); }}
+            className="p-3 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
+          >
+            <span className="text-xl">☁️</span>
+            <span className="font-bold text-xs text-white">ซิงค์ Cloud ทันที</span>
+            <span className="text-[10px] text-teal-300">{cloudStatus.isSyncing ? 'กำลังซิงค์...' : 'อัปเดต Supabase'}</span>
+          </button>
+        </div>
+
+        {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
+          <button
+            onClick={() => { onClose(); if (onOpenUserAccountModal) onOpenUserAccountModal(); }}
+            className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔐</span>
+              <span>จัดการบัญชีผู้ใช้งานระบบ (OWNER & HEAD ADMIN)</span>
+            </div>
+            <span>➔</span>
+          </button>
+        )}
+
+        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+          <button
+            onClick={() => { onClose(); onResetDemo(); }}
+            className="text-[11px] text-rose-400 hover:text-rose-300 underline"
+          >
+            🔄 รีเซ็ตข้อมูลตัวอย่าง
+          </button>
+
+          <button
+            onClick={() => { onClose(); onLogout(); }}
+            className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 font-bold"
+          >
+            <span>🚪 ออกจากระบบ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+window.HeaderMobileActionSheet = HeaderMobileActionSheet;
+
+
+// --- Module File: js/modules/mod00_core/HeaderSubNav.js ---
+// MODULE: mod00_core/HeaderSubNav.js
+// Dynamic Module Sub-Navigation Bar extracted from Header.js for Clean Architecture
+
+const HeaderSubNav = React.memo(function HeaderSubNav({
+  activeSidebarTab,
+  logisticSubView,
+  setLogisticSubView,
+  activeShipmentCount = 0,
+  activeRepairCount = 0,
+  soldProductsCount = 0,
+  financeSubView,
+  setFinanceSubView,
+  reportSubView,
+  setReportSubView,
+  activeFDACount = 0,
+  activityLogsCount = 0,
+  hrSubView,
+  setHRSubView,
+  members = [],
+  accountingSubTab,
+  setAccountingSubTab,
+  pendingPOCount = 0,
+  activeView,
+  handleSelectViewChange,
+  projects = [],
+  currentUser
+}) {
+  return (
+    <div className="bg-slate-950/90 border-t border-slate-800 px-4 sm:px-6 py-2 flex items-center justify-between overflow-x-auto gap-3 text-xs scrollbar-none">
+      
+      {/* LOGISTIC MODULE SUB-VIEWS */}
+      {activeSidebarTab === 'logistic' && (
+        <div className="flex items-center gap-2 flex-shrink-0 w-full">
+          <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span>🚚</span> <span>คลังสินค้า & ขนส่ง:</span>
+          </span>
+
+          <button
+            onClick={() => setLogisticSubView('product_catalog')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              logisticSubView === 'product_catalog'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📦 ฐานข้อมูลสินค้า & เครื่อง Demo
+          </button>
+
+          <button
+            onClick={() => setLogisticSubView('shipment_tracking')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              logisticSubView === 'shipment_tracking'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🚢 ติดตามการ Import ({activeShipmentCount})
+          </button>
+
+          <button
+            onClick={() => setLogisticSubView('repair_service')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              logisticSubView === 'repair_service'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🔧 ทะเบียนส่งซ่อม ({activeRepairCount})
+          </button>
+
+          <button
+            onClick={() => setLogisticSubView('sold_products')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              logisticSubView === 'sold_products'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🏥 เครื่องที่ขายแล้ว ({soldProductsCount})
+          </button>
+        </div>
+      )}
+
+      {/* FINANCE MODULE SUB-VIEWS */}
+      {activeSidebarTab === 'finance' && (
+        <div className="flex items-center gap-2 flex-shrink-0 w-full">
+          <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span>💰 การเงิน & วางแผน:</span>
+          </span>
+
+          <button
+            onClick={() => setFinanceSubView('cost_calculation')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              financeSubView === 'cost_calculation'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📊 คำนวณต้นทุนโครงการ (Cost Sheet)
+          </button>
+
+          <button
+            onClick={() => setFinanceSubView('cash_forecast')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              financeSubView === 'cash_forecast'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 font-black shadow-md shadow-indigo-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🔮 ประมาณการกระแสเงินสด (Cash Forecast)
+          </button>
+        </div>
+      )}
+
+      {/* REPORT MODULE SUB-VIEWS */}
+      {activeSidebarTab === 'report' && (
+        <div className="flex items-center gap-2 flex-shrink-0 w-full">
+          <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span>📊 รายงาน & เอกสาร:</span>
+          </span>
+
+          <button
+            onClick={() => setReportSubView('hub')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📊 ศูนย์รวมรายงานทุกระบบ (All Reports Hub)
+          </button>
+
+          <button
+            onClick={() => setReportSubView('fda_registration')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              reportSubView === 'fda_registration'
+                ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📜 ทะเบียน อย. / ใบอนุญาต ({activeFDACount})
+          </button>
+
+          <button
+            onClick={() => setReportSubView('activity_logs')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              reportSubView === 'activity_logs'
+                ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🔐 ประวัติใช้งานระบบ Audit Logs ({activityLogsCount})
+          </button>
+        </div>
+      )}
+
+      {/* HR MODULE SUB-VIEWS */}
+      {activeSidebarTab === 'hr' && (
+        <div className="flex items-center gap-2 flex-shrink-0 w-full">
+          <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span>👥 บุคลากร & HR:</span>
+          </span>
+
+          <button
+            onClick={() => setHRSubView('leave_attendance')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              hrSubView === 'leave_attendance'
+                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📅 ตารางวันลา & ขาด ลา มาสาย
+          </button>
+
+          <button
+            onClick={() => setHRSubView('team_roster')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              hrSubView === 'team_roster'
+                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            👥 รายชื่อทีม Sales ({members.length} คน)
+          </button>
+        </div>
+      )}
+
+      {/* ACCOUNTING MODULE SUB-VIEWS */}
+      {activeSidebarTab === 'accounting' && (
+        <div className="flex items-center gap-2 flex-shrink-0 w-full">
+          <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
+            <span>🧾 บัญชี & การเงิน:</span>
+          </span>
+
+          <button
+            onClick={() => setAccountingSubTab('daily_entries')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'daily_entries'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📋 บันทึกรายรับ-รายจ่ายรายวัน
+          </button>
+
+          <button
+            onClick={() => setAccountingSubTab('purchase_orders')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'purchase_orders'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📦 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
+          </button>
+
+          <button
+            onClick={() => setAccountingSubTab('financial_statements')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'financial_statements'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            📈 งบการเงิน P&L & Cash Flow
+          </button>
+
+          <button
+            onClick={() => setAccountingSubTab('pending_transfers')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'pending_transfers'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            ⏳ ค้างโอนประจำเดือน
+          </button>
+
+          <button
+            onClick={() => setAccountingSubTab('hospital_payee_analytics')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'hospital_payee_analytics'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🏥 รายจ่ายราย รพ./ผู้รับ
+          </button>
+
+          <button
+            onClick={() => setAccountingSubTab('bank_reconciliation')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
+              accountingSubTab === 'bank_reconciliation'
+                ? 'bg-teal-600 text-white border-teal-400 font-black shadow-md shadow-teal-500/20'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+            }`}
+          >
+            🏦 Bank Reconciliation
+          </button>
+        </div>
+      )}
+
+      {/* DASHBOARD / PROJECT / CLIENTS / CALENDAR GENERAL SHORTCUTS */}
+      {(activeSidebarTab === 'dashboard' || activeSidebarTab === 'project' || activeSidebarTab === 'clients' || activeSidebarTab === 'calendar') && (
+        <>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1">
+              <span>📌</span> <span>ทางลัดมุมมอง:</span>
+            </span>
+
+            <button
+              onClick={() => handleSelectViewChange('manager')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
+                activeView === 'manager'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              <span>📊 ภาพรวมหัวหน้างาน</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectViewChange('kanban_all')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
+                activeView === 'kanban_all'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              <span>📋 Kanban รวมทุกโครงการ ({projects.length})</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectViewChange('cost_calculation')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
+                activeView === 'cost_calculation'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
+              }`}
+            >
+              <span>🧮 คำนวณต้นทุน & ราคาขาย</span>
+            </button>
+          </div>
+
+          {/* Member Kanban Quick Pills */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-slate-400 font-medium text-[11px] hidden lg:inline mr-1">Kanban เซลส์รายบุคคล:</span>
+            {(members || []).filter(m => !currentUser || (window.canViewMemberKanban ? window.canViewMemberKanban(currentUser, m) : true)).map(m => {
+              const isSelected = activeView === m.id;
+              const count = projects.filter(p => p.assignee === m.name).length;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => handleSelectViewChange(m.id)}
+                  className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 border ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/40'
+                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800/90'
+                  }`}
+                  title={`คลิกเพื่อดู Kanban Board ของ ${m.name}`}
+                >
+                  <span>{m.avatar} {m.name.split(' ')[0]}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    isSelected ? 'bg-emerald-900 text-white font-bold' : 'bg-slate-950 text-slate-400'
+                  }`}>
+                    {count} งาน
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+    </div>
+  );
+});
+
+window.HeaderSubNav = HeaderSubNav;
 
 
 // --- Module File: js/modules/mod00_core/LoginModal.js ---
@@ -2505,7 +3000,7 @@ function NotificationModal({
 // --- Module File: js/modules/mod00_core/SidebarIconRail.js ---
 // MODULE: mod00_core/SidebarIconRail.js
 
-function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOCount, activeRepairCount, activeShipmentCount, activeFDACount, currentUser }) {
+const SidebarIconRail = React.memo(function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOCount, activeRepairCount, activeShipmentCount, activeFDACount, currentUser }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: null, desc: 'ภาพรวมผลงาน & ดัชนีหลัก' },
     { id: 'clients', label: 'Clients', icon: '🏥', badge: null, desc: 'ฐานข้อมูลลูกค้า รพ. & แพทย์' },
@@ -2623,7 +3118,9 @@ function SidebarIconRail({ activeTab, setActiveTab, onOpenFullDrawer, pendingPOC
       </div>
     </>
   );
-}
+});
+
+window.SidebarIconRail = SidebarIconRail;
 
 
 // --- Module File: js/modules/mod00_core/SidebarNavDrawer.js ---
@@ -3513,7 +4010,7 @@ function useAeronAccounting({ setShipments }) {
 
   // ⚡ Action-Driven Direct Cloud Sync
 
-  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
 
@@ -3522,20 +4019,41 @@ function useAeronAccounting({ setShipments }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Transactions (Smart Deep Compare & Universal Thai Sanitizer)
+        // 🛡️ Skip hydration if user has active local mutations
+        if (window.isAeronMutating && window.isAeronMutating('accounting')) return;
+
+        // 1. Transactions (Smart Merge & Universal Thai Sanitizer - NEVER wipes local items)
         const remoteTxns = await fetcher('accounting', null);
         if (isMounted && Array.isArray(remoteTxns)) {
           const rawTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
-          const cleanTxns = rawTxns.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
-          setTransactions(prev => (JSON.stringify(prev) === JSON.stringify(cleanTxns) ? prev : cleanTxns));
-          localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
+          setTransactions(prev => {
+            if (window.isAeronMutating && window.isAeronMutating('accounting')) return prev;
+            const merged = typeof window.mergeAeronDatasets === 'function'
+              ? window.mergeAeronDatasets(prev, rawTxns, 'id')
+              : (rawTxns.length > 0 ? rawTxns : prev);
+            const cleanTxns = merged.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
+            if (JSON.stringify(prev) === JSON.stringify(cleanTxns)) return prev;
+            try {
+              localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
+            } catch(e) {}
+            return cleanTxns;
+          });
         }
 
-        // 2. Purchase Orders
+        // 2. Purchase Orders (Smart Merge)
         const remotePOs = await fetcher('purchase_orders', null);
         if (isMounted && Array.isArray(remotePOs)) {
-          setPurchaseOrders(remotePOs);
-          localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
+          setPurchaseOrders(prev => {
+            if (window.isAeronMutating && window.isAeronMutating('purchase_orders')) return prev;
+            const merged = typeof window.mergeAeronDatasets === 'function'
+              ? window.mergeAeronDatasets(prev, remotePOs, 'id')
+              : (remotePOs.length > 0 ? remotePOs : prev);
+            if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+            try {
+              localStorage.setItem('aeron_purchase_orders', JSON.stringify(merged));
+            } catch(e) {}
+            return merged;
+          });
         }
       } catch (e) {
         console.warn('[Accounting Cloud Hydration Notice]:', e.message);
@@ -3547,7 +4065,7 @@ function useAeronAccounting({ setShipments }) {
     hydrateAccountingFromCloud();
 
     window.addEventListener('focus', hydrateAccountingFromCloud);
-    const poller = setInterval(hydrateAccountingFromCloud, 3000);
+    const poller = setInterval(hydrateAccountingFromCloud, 20000);
 
     return () => {
       isMounted = false;
@@ -3558,14 +4076,18 @@ function useAeronAccounting({ setShipments }) {
 
   // Handlers
   const handleSaveTransaction = useCallback((txnData) => {
+    const timestampedTxn = {
+      ...txnData,
+      updated_at: new Date().toISOString()
+    };
     setTransactions(prev => {
       let updated;
-      const idx = prev.findIndex(t => t.id === txnData.id);
+      const idx = prev.findIndex(t => t.id === timestampedTxn.id);
       if (idx >= 0) {
         updated = [...prev];
-        updated[idx] = { ...txnData };
+        updated[idx] = { ...timestampedTxn };
       } else {
-        updated = [{ ...txnData }, ...prev];
+        updated = [{ ...timestampedTxn }, ...prev];
       }
       try {
         localStorage.setItem('aeron_accounting_txns', JSON.stringify(updated));
@@ -3576,6 +4098,50 @@ function useAeronAccounting({ setShipments }) {
         console.error('Error saving transaction to storage/cloud:', e);
       }
       return updated;
+    });
+  }, []);
+
+  // ⚡ Notion-Style Atomic Batch Import (Deduplicates, updates state ONCE, saves to storage ONCE, syncs ONCE)
+  const handleBatchImportTransactions = useCallback((importedList) => {
+    if (!Array.isArray(importedList) || importedList.length === 0) return;
+    setTransactions(prev => {
+      const existingMap = new Map();
+      prev.forEach(t => {
+        if (t.id) existingMap.set(String(t.id), t);
+        // Also index by composite key for items imported without unique IDs
+        const compositeKey = `${t.date || ''}_${(t.title || '').trim()}_${Number(t.amount) || 0}`;
+        existingMap.set(compositeKey, t);
+      });
+
+      const newRecords = [];
+      const now = new Date().toISOString();
+      importedList.forEach((item, idx) => {
+        const compositeKey = `${item.date || ''}_${(item.title || '').trim()}_${Number(item.amount) || 0}`;
+        const itemId = item.id ? String(item.id) : `TXN-IMP-${Date.now()}-${idx}`;
+
+        if (!existingMap.has(itemId) && !existingMap.has(compositeKey)) {
+          const rec = {
+            ...item,
+            id: itemId,
+            updated_at: now,
+            createdDate: item.createdDate || now
+          };
+          newRecords.push(rec);
+          existingMap.set(itemId, rec);
+          existingMap.set(compositeKey, rec);
+        }
+      });
+
+      const merged = [...newRecords, ...prev].sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
+      try {
+        localStorage.setItem('aeron_accounting_txns', JSON.stringify(merged));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('accounting', merged);
+        }
+      } catch (e) {
+        console.error('Error saving batch import to storage/cloud:', e);
+      }
+      return merged;
     });
   }, []);
 
@@ -3598,11 +4164,15 @@ function useAeronAccounting({ setShipments }) {
 
   // Save Purchase Order with Auto-Linking to Shipment Tracking
   const handleSavePO = useCallback((poData) => {
-    let savedPO = poData;
+    const timestampedPO = {
+      ...poData,
+      updated_at: new Date().toISOString()
+    };
+    let savedPO = timestampedPO;
     let nextPOs;
-    if (poData.id) {
+    if (timestampedPO.id) {
       setPurchaseOrders(prev => {
-        nextPOs = prev.map(po => po.id === poData.id ? poData : po);
+        nextPOs = prev.map(po => po.id === timestampedPO.id ? timestampedPO : po);
         try {
           localStorage.setItem('aeron_purchase_orders', JSON.stringify(nextPOs));
           if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
@@ -3613,7 +4183,7 @@ function useAeronAccounting({ setShipments }) {
       });
     } else {
       savedPO = {
-        ...poData,
+        ...timestampedPO,
         id: 'po-' + Date.now()
       };
       setPurchaseOrders(prev => {
@@ -3656,7 +4226,8 @@ function useAeronAccounting({ setShipments }) {
             etd: savedPO.poDate || new Date().toISOString().split('T')[0],
             eta: savedPO.expectedDelivery || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
             status: 'รอดำเนินการ',
-            notes: `เปิด PO ส่งให้ Vendor ${savedPO.vendorName} เรียบร้อยแล้ว`
+            notes: `เปิด PO ส่งให้ Vendor ${savedPO.vendorName} เรียบร้อยแล้ว`,
+            updated_at: new Date().toISOString()
           };
           return [newShipment, ...prevShipments];
         }
@@ -3683,33 +4254,13 @@ function useAeronAccounting({ setShipments }) {
     }
   }, []);
 
-  // Continuous auto-sync when state changes after initial hydration
-  useEffect(() => {
-    if (!isHydrated.current) return;
-    try {
-      localStorage.setItem('aeron_accounting_txns', JSON.stringify(transactions));
-      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
-        window.syncToDB('accounting', transactions);
-      }
-    } catch (e) {}
-  }, [transactions]);
-
-  useEffect(() => {
-    if (!isHydrated.current) return;
-    try {
-      localStorage.setItem('aeron_purchase_orders', JSON.stringify(purchaseOrders));
-      if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
-        window.syncToDB('purchase_orders', purchaseOrders);
-      }
-    } catch (e) {}
-  }, [purchaseOrders]);
-
   return {
     transactions, setTransactions,
     purchaseOrders, setPurchaseOrders,
     isPOModalOpen, setIsPOModalOpen,
     editingPO, setEditingPO,
     handleSaveTransaction,
+    handleBatchImportTransactions,
     handleDeleteTransaction,
     handleSavePO,
     handleDeletePO
@@ -3756,7 +4307,7 @@ function useAeronHR({ currentUser }) {
 
   // ⚡ Action-Driven Direct Cloud Sync
 
-  // ⚡ Real-Time Universal Hydration: Initial Mount + Tab Focus + 10s Heartbeat Poller
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
 
@@ -3765,18 +4316,40 @@ function useAeronHR({ currentUser }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Leave Requests
-        const remoteLeaves = await fetcher('leave_requests', null);
-        if (isMounted && Array.isArray(remoteLeaves)) {
-          setLeaveRequests(remoteLeaves);
-          localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+        // 1. Leave Requests (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('leave_requests')) {
+          const remoteLeaves = await fetcher('leave_requests', null);
+          if (isMounted && Array.isArray(remoteLeaves)) {
+            setLeaveRequests(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('leave_requests')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteLeaves, 'id')
+                : (remoteLeaves.length > 0 ? remoteLeaves : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_leave_requests', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 2. Attendance Logs
-        const remoteAttendance = await fetcher('attendance_logs', null);
-        if (isMounted && Array.isArray(remoteAttendance)) {
-          setAttendanceLogs(remoteAttendance);
-          localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+        // 2. Attendance Logs (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('attendance_logs')) {
+          const remoteAttendance = await fetcher('attendance_logs', null);
+          if (isMounted && Array.isArray(remoteAttendance)) {
+            setAttendanceLogs(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('attendance_logs')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteAttendance, 'id')
+                : (remoteAttendance.length > 0 ? remoteAttendance : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_attendance_logs', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[HR Cloud Hydration Notice]:', e.message);
@@ -3788,7 +4361,7 @@ function useAeronHR({ currentUser }) {
     hydrateHRFromCloud();
 
     window.addEventListener('focus', hydrateHRFromCloud);
-    const poller = setInterval(hydrateHRFromCloud, 3000);
+    const poller = setInterval(hydrateHRFromCloud, 20000);
 
     return () => {
       isMounted = false;
@@ -3797,38 +4370,93 @@ function useAeronHR({ currentUser }) {
     };
   }, []);
 
-  // Handlers
+  // Handlers (All persistent with LocalStorage & Cloud Sync)
   const handleApproveLeave = useCallback((leaveId, newStatus = '✅ อนุมัติแล้ว') => {
-    setLeaveRequests(prev => prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ' } : l));
+    setLeaveRequests(prev => {
+      const updated = prev.map(l => l.id === leaveId ? { ...l, status: newStatus, approvedBy: currentUser?.name || 'ผู้จัดการ', updated_at: new Date().toISOString() } : l);
+      try {
+        localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('leave_requests', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
   }, [currentUser]);
 
   const handleDeleteLeave = useCallback((leaveId) => {
     if (window.confirm('ต้องการลบใบขอนี้?')) {
-      setLeaveRequests(prev => prev.filter(l => l.id !== leaveId));
+      setLeaveRequests(prev => {
+        const updated = prev.filter(l => l.id !== leaveId);
+        try {
+          localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('leave_requests', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveLeave = useCallback((leaveData) => {
-    if (leaveData.id) {
-      setLeaveRequests(prev => prev.map(l => l.id === leaveData.id ? leaveData : l));
-    } else {
-      setLeaveRequests(prev => [{ ...leaveData, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev]);
-    }
+    const timestampedLeave = {
+      ...leaveData,
+      updated_at: new Date().toISOString()
+    };
+    setLeaveRequests(prev => {
+      let updated;
+      if (timestampedLeave.id) {
+        updated = prev.map(l => l.id === timestampedLeave.id ? timestampedLeave : l);
+      } else {
+        updated = [{ ...timestampedLeave, id: 'leave-' + Date.now(), status: '⏳ รออนุมัติ' }, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_leave_requests', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('leave_requests', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsLeaveModalOpen(false);
   }, []);
 
   const handleDeleteAttendance = useCallback((attId) => {
     if (window.confirm('ต้องการลบรายการนี้?')) {
-      setAttendanceLogs(prev => prev.filter(a => a.id !== attId));
+      setAttendanceLogs(prev => {
+        const updated = prev.filter(a => a.id !== attId);
+        try {
+          localStorage.setItem('aeron_attendance_logs', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+            window.syncToDB('attendance_logs', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveAttendance = useCallback((attData) => {
-    if (attData.id) {
-      setAttendanceLogs(prev => prev.map(a => a.id === attData.id ? attData : a));
-    } else {
-      setAttendanceLogs(prev => [{ ...attData, id: 'att-' + Date.now() }, ...prev]);
-    }
+    const timestampedAtt = {
+      ...attData,
+      updated_at: new Date().toISOString()
+    };
+    setAttendanceLogs(prev => {
+      let updated;
+      if (timestampedAtt.id) {
+        updated = prev.map(a => a.id === timestampedAtt.id ? timestampedAtt : a);
+      } else {
+        updated = [{ ...timestampedAtt, id: 'att-' + Date.now() }, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_attendance_logs', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && typeof window.syncToDB === 'function') {
+          window.syncToDB('attendance_logs', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsAttendanceModalOpen(false);
   }, []);
 
@@ -3964,7 +4592,7 @@ function useAeronLogistics({ setActiveView }) {
 
   // ⚡ Action-Driven Direct Cloud Sync: State updates only trigger cloud sync on explicit user actions!
 
-  // ⚡ Universal Hydration with Focus Listener & Heartbeat Poller
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
     async function hydrateLogisticsFromCloud() {
@@ -3972,47 +4600,99 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Smart Deep Compare - Zero Flicker)
-        const remoteProducts = await fetcher('products', null);
-        if (isMounted && Array.isArray(remoteProducts)) {
-          setProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteProducts) ? prev : remoteProducts));
-          localStorage.setItem('aeron_products', JSON.stringify(remoteProducts));
+        // 1. Products (Smart Merge - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('products')) {
+          const remoteProducts = await fetcher('products', null);
+          if (isMounted && Array.isArray(remoteProducts)) {
+            setProducts(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('products')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteProducts, 'id')
+                : (remoteProducts.length > 0 ? remoteProducts : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_products', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
         // 2. Categories
-        const remoteCategories = await fetcher('product_categories', null);
-        if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
-          setProductCategories(prev => (JSON.stringify(prev) === JSON.stringify(remoteCategories) ? prev : remoteCategories));
-          localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories));
-          window.PRODUCT_CATEGORIES = remoteCategories;
+        if (!window.isAeronMutating || !window.isAeronMutating('product_categories')) {
+          const remoteCategories = await fetcher('product_categories', null);
+          if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
+            setProductCategories(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('product_categories')) return prev;
+              const merged = Array.from(new Set([...(prev || []), ...remoteCategories]));
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_product_categories', JSON.stringify(merged)); } catch(e) {}
+              window.PRODUCT_CATEGORIES = merged;
+              return merged;
+            });
+          }
         }
 
-        // 3. Sold Products
-        const remoteSold = await fetcher('sold_products', null);
-        if (isMounted && Array.isArray(remoteSold)) {
-          setSoldProducts(prev => (JSON.stringify(prev) === JSON.stringify(remoteSold) ? prev : remoteSold));
-          localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold));
+        // 3. Sold Products (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('sold_products')) {
+          const remoteSold = await fetcher('sold_products', null);
+          if (isMounted && Array.isArray(remoteSold)) {
+            setSoldProducts(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('sold_products')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteSold, 'id')
+                : (remoteSold.length > 0 ? remoteSold : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_sold_products', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 4. Shipments
-        const remoteShipments = await fetcher('shipments', null);
-        if (isMounted && Array.isArray(remoteShipments)) {
-          setShipments(prev => (JSON.stringify(prev) === JSON.stringify(remoteShipments) ? prev : remoteShipments));
-          localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments));
+        // 4. Shipments (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('shipments')) {
+          const remoteShipments = await fetcher('shipments', null);
+          if (isMounted && Array.isArray(remoteShipments)) {
+            setShipments(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('shipments')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteShipments, 'id')
+                : (remoteShipments.length > 0 ? remoteShipments : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_shipments', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 5. Repair Tickets
-        const remoteRepairs = await fetcher('repair_tickets', null);
-        if (isMounted && Array.isArray(remoteRepairs)) {
-          setRepairTickets(prev => (JSON.stringify(prev) === JSON.stringify(remoteRepairs) ? prev : remoteRepairs));
-          localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs));
+        // 5. Repair Tickets (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('repair_tickets')) {
+          const remoteRepairs = await fetcher('repair_tickets', null);
+          if (isMounted && Array.isArray(remoteRepairs)) {
+            setRepairTickets(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('repair_tickets')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteRepairs, 'id')
+                : (remoteRepairs.length > 0 ? remoteRepairs : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 6. FDA Registrations
-        const remoteFDA = await fetcher('fda_registrations', null);
-        if (isMounted && Array.isArray(remoteFDA)) {
-          setFdaRegistrations(prev => (JSON.stringify(prev) === JSON.stringify(remoteFDA) ? prev : remoteFDA));
-          localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA));
+        // 6. FDA Registrations (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('fda_registrations')) {
+          const remoteFDA = await fetcher('fda_registrations', null);
+          if (isMounted && Array.isArray(remoteFDA)) {
+            setFdaRegistrations(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('fda_registrations')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteFDA, 'id')
+                : (remoteFDA.length > 0 ? remoteFDA : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(merged)); } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[Logistics Cloud Hydration Notice]:', e.message);
@@ -4024,7 +4704,7 @@ function useAeronLogistics({ setActiveView }) {
     hydrateLogisticsFromCloud();
 
     window.addEventListener('focus', hydrateLogisticsFromCloud);
-    const poller = setInterval(hydrateLogisticsFromCloud, 3000);
+    const poller = setInterval(hydrateLogisticsFromCloud, 20000);
 
     return () => {
       isMounted = false;
@@ -4033,22 +4713,29 @@ function useAeronLogistics({ setActiveView }) {
     };
   }, []);
 
-  // Handlers
+  // Handlers (All persistent with LocalStorage & Cloud Sync)
   const handleSaveProduct = useCallback((productData) => {
+    const timestamped = {
+      ...productData,
+      updated_at: new Date().toISOString()
+    };
     setProducts(prev => {
       let updated;
-      if (productData.id) {
-        updated = prev.map(p => p.id === productData.id ? productData : p);
+      if (timestamped.id) {
+        updated = prev.map(p => p.id === timestamped.id ? timestamped : p);
       } else {
         const newProd = {
-          ...productData,
+          ...timestamped,
           id: 'prod-' + Date.now()
         };
         updated = [newProd, ...prev];
       }
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('products', updated);
-      }
+      try {
+        localStorage.setItem('aeron_products', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('products', updated);
+        }
+      } catch(e) {}
       return updated;
     });
     setIsProductModalOpen(false);
@@ -4056,77 +4743,146 @@ function useAeronLogistics({ setActiveView }) {
   }, []);
 
   const handleSaveSoldAsset = useCallback((assetData) => {
-    if (assetData.id) {
-      setSoldProducts(prev => prev.map(a => a.id === assetData.id ? assetData : a));
-    } else {
-      const newAsset = {
-        ...assetData,
-        id: 'sold-' + Date.now()
-      };
-      setSoldProducts(prev => [newAsset, ...prev]);
-    }
+    const timestamped = {
+      ...assetData,
+      updated_at: new Date().toISOString()
+    };
+    setSoldProducts(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(a => a.id === timestamped.id ? timestamped : a);
+      } else {
+        const newAsset = {
+          ...timestamped,
+          id: 'sold-' + Date.now()
+        };
+        updated = [newAsset, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_sold_products', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('sold_products', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsSoldModalOpen(false);
     setEditingSoldAsset(null);
   }, []);
 
   const handleDeleteSoldAsset = useCallback((assetId) => {
     if (window.confirm('คุณต้องการลบรายการเครื่องที่ส่งมอบนี้ใช่หรือไม่?')) {
-      setSoldProducts(prev => prev.filter(a => a.id !== assetId));
+      setSoldProducts(prev => {
+        const updated = prev.filter(a => a.id !== assetId);
+        try {
+          localStorage.setItem('aeron_sold_products', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('sold_products', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveShipment = useCallback((shipmentData) => {
-    if (shipmentData.id) {
-      setShipments(prev => prev.map(s => s.id === shipmentData.id ? shipmentData : s));
-    } else {
-      const newShipment = {
-        ...shipmentData,
-        id: 'shp-' + Date.now()
-      };
-      setShipments(prev => [newShipment, ...prev]);
-    }
+    const timestamped = {
+      ...shipmentData,
+      updated_at: new Date().toISOString()
+    };
+    setShipments(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(s => s.id === timestamped.id ? timestamped : s);
+      } else {
+        const newShipment = {
+          ...timestamped,
+          id: 'shp-' + Date.now()
+        };
+        updated = [newShipment, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_shipments', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('shipments', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsShipmentModalOpen(false);
     setEditingShipment(null);
   }, []);
 
   const handleDeleteShipment = useCallback((shipmentId) => {
     if (window.confirm('คุณต้องการลบรายการนำเข้าสินค้านี้ใช่หรือไม่?')) {
-      setShipments(prev => prev.filter(s => s.id !== shipmentId));
+      setShipments(prev => {
+        const updated = prev.filter(s => s.id !== shipmentId);
+        try {
+          localStorage.setItem('aeron_shipments', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('shipments', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
   const handleSaveRepairTicket = useCallback((ticketData) => {
-    if (ticketData.id) {
-      setRepairTickets(prev => prev.map(t => t.id === ticketData.id ? ticketData : t));
-    } else {
-      const newTicket = {
-        ...ticketData,
-        id: 'rep-' + Date.now()
-      };
-      setRepairTickets(prev => [newTicket, ...prev]);
-    }
+    const timestamped = {
+      ...ticketData,
+      updated_at: new Date().toISOString()
+    };
+    setRepairTickets(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(t => t.id === timestamped.id ? timestamped : t);
+      } else {
+        const newTicket = {
+          ...timestamped,
+          id: 'rep-' + Date.now()
+        };
+        updated = [newTicket, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_repair_tickets', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('repair_tickets', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
 
     // Auto Link back to Central Demo Catalog if category is "เครื่อง Demo"
     if (ticketData.category === 'เครื่อง Demo' && ticketData.sn) {
       const isFixed = ticketData.status === 'ซ่อมเสร็จแล้ว' || ticketData.status === 'ส่งคืนเรียบร้อย';
       const newUnitStatus = isFixed ? 'พร้อมใช้งาน' : 'ส่งซ่อม';
 
-      setProducts(prevProducts => prevProducts.map(p => {
-        if (p.demoUnits && p.demoUnits.some(u => u.sn === ticketData.sn)) {
-          const updatedUnits = p.demoUnits.map(u => {
-            if (u.sn === ticketData.sn) {
-              return {
-                ...u,
-                status: newUnitStatus,
-                location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
-              };
-            }
-            return u;
-          });
-          return { ...p, demoUnits: updatedUnits };
-        }
-        return p;
-      }));
+      setProducts(prevProducts => {
+        const updatedProds = prevProducts.map(p => {
+          if (p.demoUnits && p.demoUnits.some(u => u.sn === ticketData.sn)) {
+            const updatedUnits = p.demoUnits.map(u => {
+              if (u.sn === ticketData.sn) {
+                return {
+                  ...u,
+                  status: newUnitStatus,
+                  location: isFixed ? (ticketData.location || 'สำนักงาน AERON') : (ticketData.repairVendor || 'ศูนย์ซ่อม AERON')
+                };
+              }
+              return u;
+            });
+            return { ...p, demoUnits: updatedUnits };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem('aeron_products', JSON.stringify(updatedProds));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('products', updatedProds);
+          }
+        } catch(e) {}
+        return updatedProds;
+      });
     }
 
     setIsRepairModalOpen(false);
@@ -4135,7 +4891,16 @@ function useAeronLogistics({ setActiveView }) {
 
   const handleDeleteRepairTicket = useCallback((ticketId) => {
     if (window.confirm('คุณต้องการลบรายการส่งซ่อมนี้ใช่หรือไม่?')) {
-      setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
+      setRepairTickets(prev => {
+        const updated = prev.filter(t => t.id !== ticketId);
+        try {
+          localStorage.setItem('aeron_repair_tickets', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('repair_tickets', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
@@ -4158,22 +4923,45 @@ function useAeronLogistics({ setActiveView }) {
   }, [setActiveView]);
 
   const handleSaveFDA = useCallback((fdaData) => {
-    if (fdaData.id) {
-      setFdaRegistrations(prev => prev.map(f => f.id === fdaData.id ? fdaData : f));
-    } else {
-      const newFDA = {
-        ...fdaData,
-        id: 'fda-' + Date.now()
-      };
-      setFdaRegistrations(prev => [newFDA, ...prev]);
-    }
+    const timestamped = {
+      ...fdaData,
+      updated_at: new Date().toISOString()
+    };
+    setFdaRegistrations(prev => {
+      let updated;
+      if (timestamped.id) {
+        updated = prev.map(f => f.id === timestamped.id ? timestamped : f);
+      } else {
+        const newFDA = {
+          ...timestamped,
+          id: 'fda-' + Date.now()
+        };
+        updated = [newFDA, ...prev];
+      }
+      try {
+        localStorage.setItem('aeron_fda_registrations', JSON.stringify(updated));
+        if (typeof window.syncToDB === 'function') {
+          window.syncToDB('fda_registrations', updated);
+        }
+      } catch(e) {}
+      return updated;
+    });
     setIsFDAModalOpen(false);
     setEditingFDA(null);
   }, []);
 
   const handleDeleteFDA = useCallback((fdaId) => {
     if (window.confirm('คุณต้องการลบรายการ อย. นี้ใช่หรือไม่?')) {
-      setFdaRegistrations(prev => prev.filter(f => f.id !== fdaId));
+      setFdaRegistrations(prev => {
+        const updated = prev.filter(f => f.id !== fdaId);
+        try {
+          localStorage.setItem('aeron_fda_registrations', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('fda_registrations', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
     }
   }, []);
 
@@ -4220,14 +5008,23 @@ window.useAeronLogistics = useAeronLogistics;
 function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification }) {
   const isHydrated = useRef(false);
 
+  const sanitizeProjects = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map(p => ({
+      ...p,
+      weeklyLogs: Array.isArray(p.weeklyLogs) ? p.weeklyLogs : []
+    }));
+  };
+
   // 1. Projects State
   const [projects, setProjects] = useState(() => {
     try {
       const saved = localStorage.getItem('gov_hospital_projects');
-      return saved ? JSON.parse(saved) : window.INITIAL_PROJECTS || [];
+      const parsed = saved ? JSON.parse(saved) : (window.INITIAL_PROJECTS || []);
+      return sanitizeProjects(parsed);
     } catch (e) {
       console.warn('localStorage parse fallback for gov_hospital_projects:', e);
-      return window.INITIAL_PROJECTS || [];
+      return sanitizeProjects(window.INITIAL_PROJECTS || []);
     }
   });
 
@@ -4295,7 +5092,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
   }, [demoBookings]);
 
-  // ⚡ Startup Cloud Hydration: Fetch latest live projects & cost sheets from Supabase Cloud on mount
+  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
   useEffect(() => {
     let isMounted = true;
     async function hydrateProjectsFromCloud() {
@@ -4303,35 +5100,59 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects (Smart Deep Compare & Empty Protection)
-        const remoteProjects = await fetcher('projects', null);
-        if (isMounted && Array.isArray(remoteProjects)) {
-          setProjects(prev => {
-            if (remoteProjects.length === 0 && prev && prev.length > 0) {
-              if (typeof window.syncToDB === 'function') window.syncToDB('projects', prev);
-              return prev;
-            }
-            if (JSON.stringify(prev) === JSON.stringify(remoteProjects)) return prev;
-            return remoteProjects;
-          });
-          const localSaved = JSON.parse(localStorage.getItem('gov_hospital_projects') || '[]');
-          if (remoteProjects.length > 0 || localSaved.length === 0) {
-            localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
+        // 1. Projects (Smart Merge & Empty Protection - NEVER wipes local items)
+        if (!window.isAeronMutating || !window.isAeronMutating('projects')) {
+          const rawRemoteProjects = await fetcher('projects', null);
+          if (isMounted && Array.isArray(rawRemoteProjects)) {
+            const remoteProjects = sanitizeProjects(rawRemoteProjects);
+            setProjects(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('projects')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteProjects, 'id')
+                : (remoteProjects.length > 0 ? remoteProjects : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('gov_hospital_projects', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
           }
         }
 
-        // 2. Cost Calculations
-        const remoteCost = await fetcher('cost_calculations', null);
-        if (isMounted && Array.isArray(remoteCost)) {
-          setCostCalculations(prev => (JSON.stringify(prev) === JSON.stringify(remoteCost) ? prev : remoteCost));
-          localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
+        // 2. Cost Calculations (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('cost_calculations')) {
+          const remoteCost = await fetcher('cost_calculations', null);
+          if (isMounted && Array.isArray(remoteCost)) {
+            setCostCalculations(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('cost_calculations')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteCost, 'id')
+                : (remoteCost.length > 0 ? remoteCost : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_cost_calculations', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
 
-        // 3. Demo Bookings
-        const remoteDemo = await fetcher('demo_bookings', null);
-        if (isMounted && Array.isArray(remoteDemo)) {
-          setDemoBookings(prev => (JSON.stringify(prev) === JSON.stringify(remoteDemo) ? prev : remoteDemo));
-          localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
+        // 3. Demo Bookings (Smart Merge)
+        if (!window.isAeronMutating || !window.isAeronMutating('demo_bookings')) {
+          const remoteDemo = await fetcher('demo_bookings', null);
+          if (isMounted && Array.isArray(remoteDemo)) {
+            setDemoBookings(prev => {
+              if (window.isAeronMutating && window.isAeronMutating('demo_bookings')) return prev;
+              const merged = typeof window.mergeAeronDatasets === 'function'
+                ? window.mergeAeronDatasets(prev, remoteDemo, 'id')
+                : (remoteDemo.length > 0 ? remoteDemo : prev);
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              try {
+                localStorage.setItem('aeron_demo_bookings', JSON.stringify(merged));
+              } catch(e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.warn('[Projects Cloud Hydration Notice]:', e.message);
@@ -4339,7 +5160,7 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
     }
     hydrateProjectsFromCloud().finally(() => { if (isMounted) isHydrated.current = true; });
     window.addEventListener('focus', hydrateProjectsFromCloud);
-    const poller = setInterval(hydrateProjectsFromCloud, 3000);
+    const poller = setInterval(hydrateProjectsFromCloud, 20000);
     return () => {
       isMounted = false;
       window.removeEventListener('focus', hydrateProjectsFromCloud);
@@ -6255,7 +7076,7 @@ function ProjectDetailModal({ project, currentUser, stages = window.STAGES || []
 
   const canEdit = window.canEditProject ? window.canEditProject(currentUser, project) : true;
   const stageInfo = stages.find(s => s.id === project.status) || { title: project.status, badgeColor: 'bg-slate-800 text-slate-300' };
-  const logs = project.weeklyLogs || [];
+  const logs = Array.isArray(project.weeklyLogs) ? project.weeklyLogs : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
@@ -6480,7 +7301,7 @@ function ProjectHistoryModal({ project, members = [], stages = window.STAGES || 
   const currentStageObj = stages.find(s => s.id === project.status) || { title: project.status, badgeColor: 'bg-slate-800 text-slate-300' };
 
   // Filtered Logs
-  const logs = project.weeklyLogs || [];
+  const logs = Array.isArray(project.weeklyLogs) ? project.weeklyLogs : [];
   const filteredLogs = useMemo(() => {
     if (!logSearchQuery.trim()) return logs;
     const q = logSearchQuery.toLowerCase();
@@ -16151,6 +16972,7 @@ function AccountingModule({
   currentUser, 
   onSaveTxn, 
   onDeleteTxn, 
+  onBatchImportTxns,
   onOpenPOModal,
   onDeletePO,
   accountingSubTab = 'daily_entries', 
@@ -16352,7 +17174,11 @@ function AccountingModule({
   };
 
   const handleImportTxns = (importedArray) => {
-    importedArray.forEach(t => onSaveTxn(t));
+    if (typeof onBatchImportTxns === 'function') {
+      onBatchImportTxns(importedArray);
+    } else {
+      importedArray.forEach(t => onSaveTxn(t));
+    }
   };
 
   return (
@@ -17142,6 +17968,8 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
 
   const [activeSlipUrl, setActiveSlipUrl] = useState(null);
   const fileInputRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState('');
 
   // Filter out Pending Drafts from active daily log grid until confirmed by Admin
   const activeTxns = useMemo(() => {
@@ -17264,55 +18092,191 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
     document.body.removeChild(link);
   };
 
-  // Import File CSV Handler
+  // Helper: robust CSV line/quote parser
+  const parseCSVRows = (text) => {
+    const clean = (text || '').replace(/^\uFEFF/, '');
+    const rows = [];
+    let currentRow = [];
+    let currentCell = '';
+    let insideQuotes = false;
+    for (let i = 0; i < clean.length; i++) {
+      const c = clean[i];
+      const next = clean[i + 1];
+      if (c === '"') {
+        if (insideQuotes && next === '"') {
+          currentCell += '"';
+          i++;
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      } else if (c === ',' && !insideQuotes) {
+        currentRow.push(currentCell.trim());
+        currentCell = '';
+      } else if ((c === '\r' || c === '\n') && !insideQuotes) {
+        if (c === '\r' && next === '\n') i++;
+        currentRow.push(currentCell.trim());
+        if (currentRow.some(cell => cell !== '')) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentCell = '';
+      } else {
+        currentCell += c;
+      }
+    }
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell.trim());
+      if (currentRow.some(cell => cell !== '')) rows.push(currentRow);
+    }
+    return rows;
+  };
+
+  // Helper: Format date string or Excel serial
+  const parseImportDate = (raw) => {
+    if (!raw) return new Date().toISOString().split('T')[0];
+    const num = Number(raw);
+    if (!isNaN(num) && num > 20000 && num < 60000) {
+      const d = new Date((num - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    const str = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    if (str.includes('/')) {
+      const p = str.split('/');
+      if (p.length === 3) {
+        if (p[2].length === 4) return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+        if (p[0].length === 4) return `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+      }
+    }
+    return str.split('T')[0] || new Date().toISOString().split('T')[0];
+  };
+
+  // Import File Excel & CSV Handler
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length <= 1) {
-          alert('ไฟล์ไม่มีข้อมูลธุรกรรม');
-          return;
-        }
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    setIsImporting(true);
+    setImportStatus(`กำลังอ่านไฟล์ ${file.name}...`);
 
-        const imported = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-          if (cols.length >= 5) {
-            imported.push({
-              id: cols[0] || `TXN-${Date.now()}-${i}`,
-              date: cols[1] || new Date().toISOString().split('T')[0],
-              title: cols[2] || 'รายการนำเข้า',
-              expense_type: cols[3] || 'ค่าใช้จ่ายทั่วไป',
-              account_type: cols[4] || 'บริษัท KBANK',
-              amount: Number(cols[5]) || 0,
-              withholding_tax: Number(cols[6]) || 0,
-              social_security: Number(cols[7]) || 0,
-              loan_for_employee: Number(cols[8]) || 0,
-              net_transfer: Number(cols[9]) || Number(cols[5]) || 0,
-              notes: cols[10] || 'นำเข้าจาก CSV',
-              payee: cols[11] || '',
-              transaction_type: cols[12] || 'รายจ่าย',
-              off_book_expense: cols[13] === 'ใช่',
-              hospital_name: cols[14] || '',
-              attachment_url: cols[15] || ''
-            });
-          }
-        }
-
-        if (imported.length > 0 && onImportTxns) {
-          onImportTxns(imported);
-          alert(`นำเข้าข้อมูลสำเร็จ ${imported.length} รายการ`);
-        }
-      } catch (err) {
-        alert('เกิดข้อผิดพลาดในการอ่านไฟล์ CSV');
+    const processAOA = (aoa) => {
+      if (!Array.isArray(aoa) || aoa.length <= 1) {
+        alert('ไฟล์ไม่มีข้อมูลธุรกรรม');
+        setIsImporting(false);
+        return;
       }
+
+      // Detect header row
+      const headers = aoa[0].map(h => String(h || '').trim().toLowerCase());
+      const findCol = (candidates) => {
+        return headers.findIndex(h => candidates.some(c => h.includes(c.toLowerCase())));
+      };
+
+      const idIdx = findCol(['id', 'รหัส']);
+      const dateIdx = findCol(['วันที่', 'date', 'วัน']);
+      const titleIdx = findCol(['รายการคำอธิบาย', 'รายการ', 'คำอธิบาย', 'title', 'description', 'รายละเอียด']);
+      const expenseTypeIdx = findCol(['หมวดหมู่', 'category', 'expense_type', 'ประเภท']);
+      const accountIdx = findCol(['ช่องทางชำระเงิน', 'บัญชี', 'account', 'account_type']);
+      const amountIdx = findCol(['จำนวนเงินรวม', 'จำนวนเงิน', 'ยอดเงิน', 'amount', 'ยอดรวม']);
+      const taxIdx = findCol(['ภาษีหัก', 'ภาษี', 'withholding_tax', 'wht']);
+      const sSecIdx = findCol(['ประกันสังคม', 'social_security']);
+      const loanIdx = findCol(['หักกู้ยืม', 'loan_for_employee', 'กู้ยืม']);
+      const netIdx = findCol(['ยอดโอนรวม', 'ยอดโอน', 'net_transfer', 'net']);
+      const notesIdx = findCol(['หมายเหตุ', 'notes', 'remark']);
+      const payeeIdx = findCol(['ผู้รับ/จ่ายเงิน', 'ผู้รับเงิน', 'payee', 'ผู้รับ']);
+      const txnTypeIdx = findCol(['รายรับ/รายจ่าย', 'transaction_type', 'ประเภทรายการ']);
+      const offBookIdx = findCol(['นอกบิล', 'off_book']);
+      const hospitalIdx = findCol(['โรงพยาบาล', 'โครงการ', 'hospital']);
+
+      const imported = [];
+      for (let i = 1; i < aoa.length; i++) {
+        const row = aoa[i];
+        if (!row || row.length === 0) continue;
+
+        const rawTitle = titleIdx !== -1 ? String(row[titleIdx] || '').trim() : (row[2] || '');
+        const rawAmtStr = amountIdx !== -1 ? String(row[amountIdx] || '0').replace(/,/g, '').trim() : String(row[5] || '0').replace(/,/g, '');
+        const amt = parseFloat(rawAmtStr) || 0;
+
+        // Skip blank rows or total rows
+        if (!rawTitle || rawTitle === 'รายการ' || rawTitle.includes('รวมทั้งสิ้น') || rawTitle.includes('ยอดรวม') || isNaN(amt) || amt <= 0) {
+          continue;
+        }
+
+        const rawDate = dateIdx !== -1 ? row[dateIdx] : row[1];
+        const rawDateStr = parseImportDate(rawDate);
+
+        const rawTax = taxIdx !== -1 ? parseFloat(String(row[taxIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[6]) || 0);
+        const rawSS = sSecIdx !== -1 ? parseFloat(String(row[sSecIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[7]) || 0);
+        const rawLoan = loanIdx !== -1 ? parseFloat(String(row[loanIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[8]) || 0);
+        const rawNet = netIdx !== -1 ? parseFloat(String(row[netIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[9]) || amt);
+
+        imported.push({
+          id: (idIdx !== -1 && row[idIdx]) ? String(row[idIdx]).trim() : `TXN-${rawDateStr.replace(/-/g, '')}-${Date.now().toString(36)}-${i}`,
+          date: rawDateStr,
+          title: rawTitle,
+          expense_type: (expenseTypeIdx !== -1 && row[expenseTypeIdx]) ? String(row[expenseTypeIdx]).trim() : (row[3] || 'ค่าใช้จ่ายทั่วไป'),
+          account_type: (accountIdx !== -1 && row[accountIdx]) ? String(row[accountIdx]).trim() : (row[4] || 'บริษัท KBANK'),
+          amount: amt,
+          withholding_tax: rawTax,
+          social_security: rawSS,
+          loan_for_employee: rawLoan,
+          net_transfer: (rawNet > 0) ? rawNet : amt,
+          notes: (notesIdx !== -1 && row[notesIdx]) ? String(row[notesIdx]).trim() : (row[10] || 'นำเข้าจากระบบ'),
+          payee: (payeeIdx !== -1 && row[payeeIdx]) ? String(row[payeeIdx]).trim() : (row[11] || ''),
+          transaction_type: (txnTypeIdx !== -1 && row[txnTypeIdx]) ? String(row[txnTypeIdx]).trim() : (row[12] || 'รายจ่าย'),
+          off_book_expense: (offBookIdx !== -1 && (row[offBookIdx] === 'ใช่' || row[offBookIdx] === true)) || row[13] === 'ใช่',
+          hospital_name: (hospitalIdx !== -1 && row[hospitalIdx]) ? String(row[hospitalIdx]).trim() : (row[14] || ''),
+          attachment_url: ''
+        });
+      }
+
+      if (imported.length > 0 && onImportTxns) {
+        setImportStatus(`กำลังบันทึก ${imported.length} รายการลงในระบบ...`);
+        onImportTxns(imported);
+        setTimeout(() => {
+          setIsImporting(false);
+          alert(`🎉 นำเข้าข้อมูลสำเร็จทั้งหมด ${imported.length} รายการ เรียบร้อยแล้ว!`);
+        }, 300);
+      } else {
+        setIsImporting(false);
+        alert('ไม่พบแถวข้อมูลธุรกรรมที่ถูกต้องในไฟล์');
+      }
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
     };
-    reader.readAsText(file);
+
+    if (isExcel && typeof window.XLSX !== 'undefined') {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = window.XLSX.read(data, { type: 'array' });
+          const firstSheet = wb.Sheets[wb.SheetNames[0]];
+          const aoa = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          processAOA(aoa);
+        } catch (err) {
+          setIsImporting(false);
+          alert('เกิดข้อผิดพลาดในการประมวลผลไฟล์ Excel: ' + err.message);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const text = evt.target.result;
+          const rows = parseCSVRows(text);
+          processAOA(rows);
+        } catch (err) {
+          setIsImporting(false);
+          alert('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + err.message);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   return (
@@ -17322,10 +18286,21 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
       <input
         type="file"
         ref={fileInputRef}
-        accept=".csv,.txt"
+        accept=".csv,.txt,.xlsx,.xls"
         onChange={handleFileUpload}
         className="hidden"
       />
+
+      {/* Import Progress Overlay */}
+      {isImporting && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-sm w-full rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mx-auto"></div>
+            <h4 className="font-extrabold text-white text-base">กำลังนำเข้าข้อมูล</h4>
+            <p className="text-xs text-slate-300">{importStatus}</p>
+          </div>
+        </div>
+      )}
 
       {/* Slip Attachment Preview Modal */}
       {activeSlipUrl && (
@@ -17508,7 +18483,7 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
             onClick={() => fileInputRef.current && fileInputRef.current.click()}
             className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 shadow-md"
           >
-            <span>📥 Import CSV</span>
+            <span>📥 นำเข้า Excel / CSV</span>
           </button>
 
           <button
@@ -21580,6 +22555,7 @@ function App() {
     isPOModalOpen, setIsPOModalOpen,
     editingPO, setEditingPO,
     handleSaveTransaction,
+    handleBatchImportTransactions,
     handleDeleteTransaction,
     handleSavePO,
     handleDeletePO
@@ -22429,6 +23405,7 @@ function App() {
               onSubTabChange={setAccountingSubTab}
               onSaveTxn={handleSaveTransaction}
               onDeleteTxn={handleDeleteTransaction}
+              onBatchImportTxns={handleBatchImportTransactions}
               onOpenPOModal={(po) => { setEditingPO(po || null); setIsPOModalOpen(true); }}
               onDeletePO={handleDeletePO}
             />
@@ -22533,263 +23510,95 @@ function App() {
         />
       )}
 
-      {/* Demo Booking Modal */}
-      {isDemoModalOpen && (
-        <DemoBookingModal
-          prefill={demoPrefill}
-          projects={projects}
-          products={products}
-          members={members}
-          existingBookings={demoBookings}
-          onSave={handleSaveDemoBooking}
-          onClose={() => { setIsDemoModalOpen(false); setDemoPrefill(null); }}
-        />
-      )}
-
-      {/* Product Master Modal */}
-      {isProductModalOpen && (
-        <ProductModal
-          product={editingProduct}
-          categories={productCategories}
-          onUpdateCategories={handleUpdateCategories}
-          onSave={handleSaveProduct}
-          onClose={() => { setIsProductModalOpen(false); setEditingProduct(null); }}
-        />
-      )}
-
-      {/* Purchase Order Modal */}
-      {isPOModalOpen && (
-        <PurchaseOrderModal
-          po={editingPO}
-          projects={projects}
-          products={products}
-          onSave={handleSavePO}
-          onClose={() => { setIsPOModalOpen(false); setEditingPO(null); }}
-        />
-      )}
-
-      {/* Repair Ticket Modal */}
-      {isRepairModalOpen && (
-        <RepairTicketModal
-          ticket={editingRepairTicket}
-          products={products}
-          members={members}
-          onSave={handleSaveRepairTicket}
-          onClose={() => { setIsRepairModalOpen(false); setEditingRepairTicket(null); }}
-        />
-      )}
-
-      {/* Delivered / Sold Product Modal */}
-      {isSoldModalOpen && (
-        <SoldProductModal
-          asset={editingSoldAsset}
-          projects={projects}
-          members={members}
-          onSave={handleSaveSoldAsset}
-          onClose={() => { setIsSoldModalOpen(false); setEditingSoldAsset(null); }}
-        />
-      )}
-
-      {/* Import Logistics / Shipment Modal */}
-      {isShipmentModalOpen && (
-        <ShipmentModal
-          shipment={editingShipment}
-          purchaseOrders={purchaseOrders}
-          products={products}
-          onSave={handleSaveShipment}
-          onClose={() => { setIsShipmentModalOpen(false); setEditingShipment(null); }}
-        />
-      )}
-
-      {/* Thai FDA Registration Modal */}
-      {isFDAModalOpen && (
-        <FDAModal
-          fda={editingFDA}
-          products={products}
-          members={members}
-          onSave={handleSaveFDA}
-          onClose={() => { setIsFDAModalOpen(false); setEditingFDA(null); }}
-        />
-      )}
-
-      {/* Project History & Activity Timeline Modal */}
-      {isHistoryModalOpen && historyTargetProject && (
-        <ProjectHistoryModal
-          project={historyTargetProject}
-          members={members}
-          stages={window.STAGES}
-          products={products}
-          onAddLog={handleAddWeeklyLog}
-          onClose={() => { setIsHistoryModalOpen(false); setHistoryTargetProject(null); }}
-        />
-      )}
-
-      {/* Cost & Minimum Selling Price Financial Sheet Modal */}
-      {isCostModalOpen && (
-        <CostSheetModal 
-          calc={editingCostCalc}
-          projects={projects}
-          onSave={handleSaveCostCalc}
-          onClose={() => { setIsCostModalOpen(false); setEditingCostCalc(null); }}
-        />
-      )}
-
-      {/* Demo Checklist Modal */}
-      {isChecklistModalOpen && checklistTargetBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <span>📋 รายการตรวจสอบคิวเครื่อง Demo (Checklist)</span>
-              </h3>
-              <button 
-                onClick={() => { setIsChecklistModalOpen(false); setChecklistTargetBooking(null); }}
-                className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 bg-slate-800 rounded-lg"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-2 text-xs text-slate-300">
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
-                <div className="font-bold text-emerald-400">🏥 โรงพยาบาล: {checklistTargetBooking.hospitalName || checklistTargetBooking.hospital}</div>
-                <div className="text-slate-400">📦 สินค้า: {checklistTargetBooking.productName}</div>
-                <div className="text-amber-300 font-mono">📅 {checklistTargetBooking.startDate || 'N/A'} ถึง {checklistTargetBooking.endDate || 'N/A'}</div>
-              </div>
-              <div className="space-y-2 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
-                  <input type="checkbox" defaultChecked className="accent-emerald-500 rounded" />
-                  <span>ตรวจสอบสภาพเครื่องก่อนส่งมอบ (Hardware Inspection)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
-                  <input type="checkbox" defaultChecked className="accent-emerald-500 rounded" />
-                  <span>อุปกรณ์เสริมครบถ้วน (Accessories Checklist)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer p-2 bg-slate-950/40 rounded-lg hover:bg-slate-950/80">
-                  <input type="checkbox" className="accent-emerald-500 rounded" />
-                  <span>ใบรับ-ส่งเครื่อง และเอกสารยินยอมทดลองใช้งาน</span>
-                </label>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-              <button
-                onClick={() => { setIsChecklistModalOpen(false); setChecklistTargetBooking(null); }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md"
-              >
-                บันทึกเรียบร้อย
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Toast Notification when Sales Wins a Project */}
-      {toastNotification && toastNotification.show && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900/95 border-2 border-amber-500/80 p-4 rounded-2xl shadow-2xl shadow-amber-500/30 text-white backdrop-blur-md animate-modal space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl animate-bounce">🔔</span>
-              <h4 className="font-bold text-amber-300 text-sm leading-snug">{toastNotification.title}</h4>
-            </div>
-            <button onClick={() => setToastNotification(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
-          </div>
-          <p className="text-xs text-slate-300">{toastNotification.message}</p>
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              onClick={() => { setActiveView('purchase_orders'); setToastNotification(null); }}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-500/30"
-            >
-              🛒 ไปยังหน้าสั่งซื้อ Vendor (PO)
-            </button>
-            <button
-              onClick={() => setToastNotification(null)}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs"
-            >
-              รับทราบ
-            </button>
-          </div>
-        </div>
-      )}
       </div>
       
-      {/* Leave Modal */}
-      {isLeaveModalOpen && (
-        <LeaveModal
-          members={members}
-          currentUser={currentUser}
-          onSave={handleSaveLeave}
-          onClose={() => setIsLeaveModalOpen(false)}
-        />
-      )}
-
-      {/* Attendance Modal */}
-      {isAttendanceModalOpen && (
-        <AttendanceModal
-          members={members}
-          onSave={handleSaveAttendance}
-          onClose={() => setIsAttendanceModalOpen(false)}
-        />
-      )}
-
-      {/* User Account Management Modal (Root Level - Top Z-Index 1000) */}
-      {isUserAccountModalOpen && (
-        <UserAccountManagementModal
-          isOpen={isUserAccountModalOpen}
-          onClose={() => setIsUserAccountModalOpen(false)}
-          currentUser={currentUser}
-        />
-      )}
-
-      {/* 🔔 Smart Notification Action Center Modal */}
-      {isNotificationModalOpen && (
-        <NotificationModal
-          isOpen={isNotificationModalOpen}
-          onClose={() => setIsNotificationModalOpen(false)}
-          currentUser={currentUser}
-          alerts={systemAlerts}
-        />
-      )}
-
-      {/* 📊 Universal Report Viewer Modal */}
-      {isUniversalReportModalOpen && (
-        <UniversalReportModal
-          isOpen={isUniversalReportModalOpen}
-          onClose={() => setIsUniversalReportModalOpen(false)}
-          reportId={activeReportId}
-          appState={{
-            projects,
-            members,
-            products,
-            demoBookings,
-            purchaseOrders,
-            shipments,
-            repairTickets,
-            soldProducts,
-            fdaRegistrations,
-            costCalculations,
-            leaveRequests,
-            attendanceLogs,
-            accountingTransactions: window.INITIAL_ACCOUNTING_TRANSACTIONS || [],
-            currentUser
-          }}
-        />
-      )}
-
-      {/* Global Category Master Data Manager Modal */}
-      <CategoryManagerModal
-        isOpen={isGlobalCategoryManagerOpen}
-        onClose={() => setIsGlobalCategoryManagerOpen(false)}
-        categories={productCategories || window.PRODUCT_CATEGORIES || []}
-        onUpdateCategories={handleUpdateCategories}
+      {/* 🚀 Centralized App Modals & Popups Container */}
+      <AppModalsContainer
+        isDemoModalOpen={isDemoModalOpen}
+        setIsDemoModalOpen={setIsDemoModalOpen}
+        demoPrefill={demoPrefill}
+        setDemoPrefill={setDemoPrefill}
+        projects={projects}
+        products={products}
+        members={members}
+        demoBookings={demoBookings}
+        handleSaveDemoBooking={handleSaveDemoBooking}
+        isProductModalOpen={isProductModalOpen}
+        setIsProductModalOpen={setIsProductModalOpen}
+        editingProduct={editingProduct}
+        setEditingProduct={setEditingProduct}
+        productCategories={productCategories}
+        handleUpdateCategories={handleUpdateCategories}
+        handleSaveProduct={handleSaveProduct}
+        isPOModalOpen={isPOModalOpen}
+        setIsPOModalOpen={setIsPOModalOpen}
+        editingPO={editingPO}
+        setEditingPO={setEditingPO}
+        handleSavePO={handleSavePO}
+        isRepairModalOpen={isRepairModalOpen}
+        setIsRepairModalOpen={setIsRepairModalOpen}
+        editingRepairTicket={editingRepairTicket}
+        setEditingRepairTicket={setEditingRepairTicket}
+        handleSaveRepairTicket={handleSaveRepairTicket}
+        isSoldModalOpen={isSoldModalOpen}
+        setIsSoldModalOpen={setIsSoldModalOpen}
+        editingSoldAsset={editingSoldAsset}
+        setEditingSoldAsset={setEditingSoldAsset}
+        handleSaveSoldAsset={handleSaveSoldAsset}
+        isShipmentModalOpen={isShipmentModalOpen}
+        setIsShipmentModalOpen={setIsShipmentModalOpen}
+        editingShipment={editingShipment}
+        setEditingShipment={setEditingShipment}
+        purchaseOrders={purchaseOrders}
+        handleSaveShipment={handleSaveShipment}
+        isFDAModalOpen={isFDAModalOpen}
+        setIsFDAModalOpen={setIsFDAModalOpen}
+        editingFDA={editingFDA}
+        setEditingFDA={setEditingFDA}
+        handleSaveFDA={handleSaveFDA}
+        isHistoryModalOpen={isHistoryModalOpen}
+        setIsHistoryModalOpen={setIsHistoryModalOpen}
+        historyTargetProject={historyTargetProject}
+        setHistoryTargetProject={setHistoryTargetProject}
+        handleAddWeeklyLog={handleAddWeeklyLog}
+        isCostModalOpen={isCostModalOpen}
+        setIsCostModalOpen={setIsCostModalOpen}
+        editingCostCalc={editingCostCalc}
+        setEditingCostCalc={setEditingCostCalc}
+        handleSaveCostCalc={handleSaveCostCalc}
+        isChecklistModalOpen={isChecklistModalOpen}
+        setIsChecklistModalOpen={setIsChecklistModalOpen}
+        checklistTargetBooking={checklistTargetBooking}
+        setChecklistTargetBooking={setChecklistTargetBooking}
+        toastNotification={toastNotification}
+        setToastNotification={setToastNotification}
+        setActiveView={setActiveView}
+        isLeaveModalOpen={isLeaveModalOpen}
+        setIsLeaveModalOpen={setIsLeaveModalOpen}
+        currentUser={currentUser}
+        handleSaveLeave={handleSaveLeave}
+        isAttendanceModalOpen={isAttendanceModalOpen}
+        setIsAttendanceModalOpen={setIsAttendanceModalOpen}
+        handleSaveAttendance={handleSaveAttendance}
+        isUserAccountModalOpen={isUserAccountModalOpen}
+        setIsUserAccountModalOpen={setIsUserAccountModalOpen}
+        isNotificationModalOpen={isNotificationModalOpen}
+        setIsNotificationModalOpen={setIsNotificationModalOpen}
+        systemAlerts={systemAlerts}
+        isUniversalReportModalOpen={isUniversalReportModalOpen}
+        setIsUniversalReportModalOpen={setIsUniversalReportModalOpen}
+        activeReportId={activeReportId}
+        soldProducts={soldProducts}
+        fdaRegistrations={fdaRegistrations}
+        costCalculations={costCalculations}
+        leaveRequests={leaveRequests}
+        attendanceLogs={attendanceLogs}
+        isGlobalCategoryManagerOpen={isGlobalCategoryManagerOpen}
+        setIsGlobalCategoryManagerOpen={setIsGlobalCategoryManagerOpen}
+        isLoginModalOpen={isLoginModalOpen}
+        setIsLoginModalOpen={setIsLoginModalOpen}
+        handleLoginSuccess={handleLoginSuccess}
       />
-
-      {/* Login & Role Switcher Modal */}
-      {(isLoginModalOpen || !currentUser) && (
-        <LoginModal
-          onLoginSuccess={handleLoginSuccess}
-          onClose={() => setIsLoginModalOpen(false)}
-          isSwitching={!!currentUser}
-        />
-      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ function ProjectHistoryModal({ project, members = [], stages = window.STAGES || 
   const currentStageObj = stages.find(s => s.id === project.status) || { title: project.status, badgeColor: 'bg-slate-800 text-slate-300' };
 
   // Filtered Logs
-  const logs = project.weeklyLogs || [];
+  const logs = Array.isArray(project.weeklyLogs) ? project.weeklyLogs : [];
   const filteredLogs = useMemo(() => {
     if (!logSearchQuery.trim()) return logs;
     const q = logSearchQuery.toLowerCase();

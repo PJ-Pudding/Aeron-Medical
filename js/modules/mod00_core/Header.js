@@ -536,434 +536,49 @@ function Header({
       </div>
 
       {/* Dynamic Module Sub-Navigation Bar */}
-      <div className="bg-slate-950/90 border-t border-slate-800 px-4 sm:px-6 py-2 flex items-center justify-between overflow-x-auto gap-3 text-xs scrollbar-none">
-        
-        {/* LOGISTIC MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'logistic' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>🚚</span> <span>คลังสินค้า & ขนส่ง:</span>
-            </span>
-
-            <button
-              onClick={() => setLogisticSubView('product_catalog')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'product_catalog'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📦 ฐานข้อมูลสินค้า & เครื่อง Demo
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('shipment_tracking')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'shipment_tracking'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🚢 ติดตามการ Import ({activeShipmentCount})
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('repair_service')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'repair_service'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔧 ทะเบียนส่งซ่อม ({activeRepairCount})
-            </button>
-
-            <button
-              onClick={() => setLogisticSubView('sold_products')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                logisticSubView === 'sold_products'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏥 เครื่องที่ขายแล้ว ({soldProductsCount})
-            </button>
-          </div>
-        )}
-
-        {/* FINANCE MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'finance' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>💰 การเงิน & วางแผน:</span>
-            </span>
-
-            <button
-              onClick={() => setFinanceSubView('cost_calculation')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'cost_calculation'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📊 คำนวณต้นทุนโครงการ (Cost Sheet)
-            </button>
-
-            <button
-              onClick={() => setFinanceSubView('cash_forecast')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                financeSubView === 'cash_forecast'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 font-black shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔮 ประมาณการกระแสเงินสด (Cash Forecast)
-            </button>
-          </div>
-        )}
-
-        {/* REPORT MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'report' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>📊 รายงาน & เอกสาร:</span>
-            </span>
-
-            <button
-              onClick={() => setReportSubView('hub')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'hub' || !reportSubView || reportSubView === 'analytics_reports'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📊 ศูนย์รวมรายงานทุกระบบ (All Reports Hub)
-            </button>
-
-            <button
-              onClick={() => setReportSubView('fda_registration')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'fda_registration'
-                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📜 ทะเบียน อย. / ใบอนุญาต ({activeFDACount})
-            </button>
-
-            <button
-              onClick={() => setReportSubView('activity_logs')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                reportSubView === 'activity_logs'
-                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🔐 ประวัติใช้งานระบบ Audit Logs ({activityLogsCount})
-            </button>
-          </div>
-        )}
-
-        {/* HR MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'hr' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>👥 บุคลากร & HR:</span>
-            </span>
-
-            <button
-              onClick={() => setHRSubView('leave_attendance')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                hrSubView === 'leave_attendance'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📅 ตารางวันลา & ขาด ลา มาสาย
-            </button>
-
-            <button
-              onClick={() => setHRSubView('team_roster')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                hrSubView === 'team_roster'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              👥 รายชื่อทีม Sales ({members.length} คน)
-            </button>
-          </div>
-        )}
-
-        {/* ACCOUNTING MODULE SUB-VIEWS */}
-        {activeSidebarTab === 'accounting' && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-full">
-            <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 mr-1">
-              <span>🧾 บัญชี & การเงิน:</span>
-            </span>
-
-            <button
-              onClick={() => setAccountingSubTab('daily_entries')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'daily_entries'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📋 บันทึกรายรับ-รายจ่ายรายวัน
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('purchase_orders')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'purchase_orders'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📦 ใบสั่งซื้อ PO (Vendor) {pendingPOCount > 0 ? `(🔔 ${pendingPOCount})` : ''}
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('financial_statements')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'financial_statements'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              📈 งบการเงิน P&L & Cash Flow
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('pending_transfers')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'pending_transfers'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              ⏳ ค้างโอนประจำเดือน
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('hospital_payee_analytics')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'hospital_payee_analytics'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏥 รายจ่ายราย รพ./ผู้รับ
-            </button>
-
-            <button
-              onClick={() => setAccountingSubTab('bank_reconciliation')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all border ${
-                accountingSubTab === 'bank_reconciliation'
-                  ? 'bg-teal-600 text-white border-teal-400 font-black shadow-md shadow-teal-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-              }`}
-            >
-              🏦 Bank Reconciliation
-            </button>
-          </div>
-        )}
-
-        {/* DASHBOARD / PROJECT / CLIENTS / CALENDAR GENERAL SHORTCUTS */}
-        {(activeSidebarTab === 'dashboard' || activeSidebarTab === 'project' || activeSidebarTab === 'clients' || activeSidebarTab === 'calendar') && (
-          <>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1">
-                <span>📌</span> <span>ทางลัดมุมมอง:</span>
-              </span>
-
-              <button
-                onClick={() => handleSelectViewChange('manager')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'manager'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>📊 ภาพรวมหัวหน้างาน</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectViewChange('kanban_all')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'kanban_all'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>📋 Kanban รวมทุกโครงการ ({projects.length})</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectViewChange('cost_calculation')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  activeView === 'cost_calculation'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20'
-                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800'
-                }`}
-              >
-                <span>🧮 คำนวณต้นทุน & ราคาขาย</span>
-              </button>
-            </div>
-
-            {/* Member Kanban Quick Pills */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-slate-400 font-medium text-[11px] hidden lg:inline mr-1">Kanban เซลส์รายบุคคล:</span>
-              {(members || []).filter(m => !currentUser || (window.canViewMemberKanban ? window.canViewMemberKanban(currentUser, m) : true)).map(m => {
-                const isSelected = activeView === m.id;
-                const count = projects.filter(p => p.assignee === m.name).length;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => handleSelectViewChange(m.id)}
-                    className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 border ${
-                      isSelected
-                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/40'
-                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border-slate-800/90'
-                    }`}
-                    title={`คลิกเพื่อดู Kanban Board ของ ${m.name}`}
-                  >
-                    <span>{m.avatar} {m.name.split(' ')[0]}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      isSelected ? 'bg-emerald-900 text-white font-bold' : 'bg-slate-950 text-slate-400'
-                    }`}>
-                      {count} งาน
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-      </div>
+      <HeaderSubNav 
+        activeSidebarTab={activeSidebarTab}
+        logisticSubView={logisticSubView}
+        setLogisticSubView={setLogisticSubView}
+        activeShipmentCount={activeShipmentCount}
+        activeRepairCount={activeRepairCount}
+        soldProductsCount={soldProductsCount}
+        financeSubView={financeSubView}
+        setFinanceSubView={setFinanceSubView}
+        reportSubView={reportSubView}
+        setReportSubView={setReportSubView}
+        activeFDACount={activeFDACount}
+        activityLogsCount={activityLogsCount}
+        hrSubView={hrSubView}
+        setHRSubView={setHRSubView}
+        members={members}
+        accountingSubTab={accountingSubTab}
+        setAccountingSubTab={setAccountingSubTab}
+        pendingPOCount={pendingPOCount}
+        activeView={activeView}
+        handleSelectViewChange={handleSelectViewChange}
+        projects={projects}
+        currentUser={currentUser}
+      />
 
       {/* 📱 Mobile Quick Action Bottom Sheet */}
-      {isMobileActionSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700/80 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">⚡</span>
-                <h3 className="font-bold text-white text-sm">เมนูจัดการด่วน (Quick Actions)</h3>
-              </div>
-              <button
-                onClick={() => setIsMobileActionSheetOpen(false)}
-                className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs"
-              >
-                ✕ ปิด
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNotificationModal(); }}
-                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/50 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation relative"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xl">🔔</span>
-                  {alerts && alerts.length > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-                      {alerts.length} งาน
-                    </span>
-                  )}
-                </div>
-                <span className="font-bold text-xs text-white">ศูนย์แจ้งเตือน</span>
-                <span className="text-[10px] text-rose-300">งานค้าง & ลงต้นทุน</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenNewModal(); }}
-                className="p-3 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">➕</span>
-                <span className="font-bold text-xs text-white">เพิ่มโครงการ</span>
-                <span className="text-[10px] text-emerald-300">สร้างโครงการใหม่</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenDemoModal(); }}
-                className="p-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">🧪</span>
-                <span className="font-bold text-xs text-white">จองเครื่อง Demo</span>
-                <span className="text-[10px] text-purple-300">ลงคิวทดสอบสินค้า</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenRepairModal(); }}
-                className="p-3 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">🔧</span>
-                <span className="font-bold text-xs text-white">แจ้งส่งซ่อม</span>
-                <span className="text-[10px] text-rose-300">เปิดใบงานซ่อมบำรุง</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); exportToCSV(); }}
-                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">📥</span>
-                <span className="font-bold text-xs text-white">ส่งออก CSV</span>
-                <span className="text-[10px] text-slate-400">ดาวน์โหลดรายงาน</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onOpenMemberModal(); }}
-                className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">👥</span>
-                <span className="font-bold text-xs text-white">จัดการทีม</span>
-                <span className="text-[10px] text-slate-400">รายชื่อสมาชิก Sales</span>
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); triggerCloudSync(); }}
-                className="p-3 bg-teal-950/60 hover:bg-teal-900/80 border border-teal-500/40 rounded-2xl text-left flex flex-col gap-1 active:scale-95 touch-manipulation"
-              >
-                <span className="text-xl">☁️</span>
-                <span className="font-bold text-xs text-white">ซิงค์ Cloud ทันที</span>
-                <span className="text-[10px] text-teal-300">{cloudStatus.isSyncing ? 'กำลังซิงค์...' : 'อัปเดต Supabase'}</span>
-              </button>
-            </div>
-
-            {currentUser && ['OWNER', 'HEAD_ADMIN'].includes(String(currentUser.role).toUpperCase()) && (
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); if (onOpenUserAccountModal) onOpenUserAccountModal(); }}
-                className="w-full p-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-2xl text-left flex items-center justify-between text-amber-300 font-bold text-xs active:scale-95"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🔐</span>
-                  <span>จัดการบัญชีผู้ใช้งานระบบ (OWNER & HEAD ADMIN)</span>
-                </div>
-                <span>➔</span>
-              </button>
-            )}
-
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onResetDemo(); }}
-                className="text-[11px] text-rose-400 hover:text-rose-300 underline"
-              >
-                🔄 รีเซ็ตข้อมูลตัวอย่าง
-              </button>
-
-              <button
-                onClick={() => { setIsMobileActionSheetOpen(false); onLogout(); }}
-                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 font-bold"
-              >
-                <span>🚪 ออกจากระบบ</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <HeaderMobileActionSheet 
+        isOpen={isMobileActionSheetOpen}
+        onClose={() => setIsMobileActionSheetOpen(false)}
+        alerts={alerts}
+        onOpenNotificationModal={onOpenNotificationModal}
+        onOpenNewModal={onOpenNewModal}
+        onOpenDemoModal={onOpenDemoModal}
+        onOpenRepairModal={onOpenRepairModal}
+        exportToCSV={exportToCSV}
+        onOpenMemberModal={onOpenMemberModal}
+        triggerCloudSync={triggerCloudSync}
+        cloudStatus={cloudStatus}
+        currentUser={currentUser}
+        onOpenUserAccountModal={onOpenUserAccountModal}
+        onResetDemo={onResetDemo}
+        onLogout={onLogout}
+      />
     </header>
   );
 }

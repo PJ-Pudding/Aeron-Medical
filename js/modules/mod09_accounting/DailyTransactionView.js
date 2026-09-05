@@ -15,6 +15,8 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
 
   const [activeSlipUrl, setActiveSlipUrl] = useState(null);
   const fileInputRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState('');
 
   // Filter out Pending Drafts from active daily log grid until confirmed by Admin
   const activeTxns = useMemo(() => {
@@ -137,55 +139,191 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
     document.body.removeChild(link);
   };
 
-  // Import File CSV Handler
+  // Helper: robust CSV line/quote parser
+  const parseCSVRows = (text) => {
+    const clean = (text || '').replace(/^\uFEFF/, '');
+    const rows = [];
+    let currentRow = [];
+    let currentCell = '';
+    let insideQuotes = false;
+    for (let i = 0; i < clean.length; i++) {
+      const c = clean[i];
+      const next = clean[i + 1];
+      if (c === '"') {
+        if (insideQuotes && next === '"') {
+          currentCell += '"';
+          i++;
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      } else if (c === ',' && !insideQuotes) {
+        currentRow.push(currentCell.trim());
+        currentCell = '';
+      } else if ((c === '\r' || c === '\n') && !insideQuotes) {
+        if (c === '\r' && next === '\n') i++;
+        currentRow.push(currentCell.trim());
+        if (currentRow.some(cell => cell !== '')) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+        currentCell = '';
+      } else {
+        currentCell += c;
+      }
+    }
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell.trim());
+      if (currentRow.some(cell => cell !== '')) rows.push(currentRow);
+    }
+    return rows;
+  };
+
+  // Helper: Format date string or Excel serial
+  const parseImportDate = (raw) => {
+    if (!raw) return new Date().toISOString().split('T')[0];
+    const num = Number(raw);
+    if (!isNaN(num) && num > 20000 && num < 60000) {
+      const d = new Date((num - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    const str = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    if (str.includes('/')) {
+      const p = str.split('/');
+      if (p.length === 3) {
+        if (p[2].length === 4) return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+        if (p[0].length === 4) return `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+      }
+    }
+    return str.split('T')[0] || new Date().toISOString().split('T')[0];
+  };
+
+  // Import File Excel & CSV Handler
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length <= 1) {
-          alert('ไฟล์ไม่มีข้อมูลธุรกรรม');
-          return;
-        }
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    setIsImporting(true);
+    setImportStatus(`กำลังอ่านไฟล์ ${file.name}...`);
 
-        const imported = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-          if (cols.length >= 5) {
-            imported.push({
-              id: cols[0] || `TXN-${Date.now()}-${i}`,
-              date: cols[1] || new Date().toISOString().split('T')[0],
-              title: cols[2] || 'รายการนำเข้า',
-              expense_type: cols[3] || 'ค่าใช้จ่ายทั่วไป',
-              account_type: cols[4] || 'บริษัท KBANK',
-              amount: Number(cols[5]) || 0,
-              withholding_tax: Number(cols[6]) || 0,
-              social_security: Number(cols[7]) || 0,
-              loan_for_employee: Number(cols[8]) || 0,
-              net_transfer: Number(cols[9]) || Number(cols[5]) || 0,
-              notes: cols[10] || 'นำเข้าจาก CSV',
-              payee: cols[11] || '',
-              transaction_type: cols[12] || 'รายจ่าย',
-              off_book_expense: cols[13] === 'ใช่',
-              hospital_name: cols[14] || '',
-              attachment_url: cols[15] || ''
-            });
-          }
-        }
-
-        if (imported.length > 0 && onImportTxns) {
-          onImportTxns(imported);
-          alert(`นำเข้าข้อมูลสำเร็จ ${imported.length} รายการ`);
-        }
-      } catch (err) {
-        alert('เกิดข้อผิดพลาดในการอ่านไฟล์ CSV');
+    const processAOA = (aoa) => {
+      if (!Array.isArray(aoa) || aoa.length <= 1) {
+        alert('ไฟล์ไม่มีข้อมูลธุรกรรม');
+        setIsImporting(false);
+        return;
       }
+
+      // Detect header row
+      const headers = aoa[0].map(h => String(h || '').trim().toLowerCase());
+      const findCol = (candidates) => {
+        return headers.findIndex(h => candidates.some(c => h.includes(c.toLowerCase())));
+      };
+
+      const idIdx = findCol(['id', 'รหัส']);
+      const dateIdx = findCol(['วันที่', 'date', 'วัน']);
+      const titleIdx = findCol(['รายการคำอธิบาย', 'รายการ', 'คำอธิบาย', 'title', 'description', 'รายละเอียด']);
+      const expenseTypeIdx = findCol(['หมวดหมู่', 'category', 'expense_type', 'ประเภท']);
+      const accountIdx = findCol(['ช่องทางชำระเงิน', 'บัญชี', 'account', 'account_type']);
+      const amountIdx = findCol(['จำนวนเงินรวม', 'จำนวนเงิน', 'ยอดเงิน', 'amount', 'ยอดรวม']);
+      const taxIdx = findCol(['ภาษีหัก', 'ภาษี', 'withholding_tax', 'wht']);
+      const sSecIdx = findCol(['ประกันสังคม', 'social_security']);
+      const loanIdx = findCol(['หักกู้ยืม', 'loan_for_employee', 'กู้ยืม']);
+      const netIdx = findCol(['ยอดโอนรวม', 'ยอดโอน', 'net_transfer', 'net']);
+      const notesIdx = findCol(['หมายเหตุ', 'notes', 'remark']);
+      const payeeIdx = findCol(['ผู้รับ/จ่ายเงิน', 'ผู้รับเงิน', 'payee', 'ผู้รับ']);
+      const txnTypeIdx = findCol(['รายรับ/รายจ่าย', 'transaction_type', 'ประเภทรายการ']);
+      const offBookIdx = findCol(['นอกบิล', 'off_book']);
+      const hospitalIdx = findCol(['โรงพยาบาล', 'โครงการ', 'hospital']);
+
+      const imported = [];
+      for (let i = 1; i < aoa.length; i++) {
+        const row = aoa[i];
+        if (!row || row.length === 0) continue;
+
+        const rawTitle = titleIdx !== -1 ? String(row[titleIdx] || '').trim() : (row[2] || '');
+        const rawAmtStr = amountIdx !== -1 ? String(row[amountIdx] || '0').replace(/,/g, '').trim() : String(row[5] || '0').replace(/,/g, '');
+        const amt = parseFloat(rawAmtStr) || 0;
+
+        // Skip blank rows or total rows
+        if (!rawTitle || rawTitle === 'รายการ' || rawTitle.includes('รวมทั้งสิ้น') || rawTitle.includes('ยอดรวม') || isNaN(amt) || amt <= 0) {
+          continue;
+        }
+
+        const rawDate = dateIdx !== -1 ? row[dateIdx] : row[1];
+        const rawDateStr = parseImportDate(rawDate);
+
+        const rawTax = taxIdx !== -1 ? parseFloat(String(row[taxIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[6]) || 0);
+        const rawSS = sSecIdx !== -1 ? parseFloat(String(row[sSecIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[7]) || 0);
+        const rawLoan = loanIdx !== -1 ? parseFloat(String(row[loanIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[8]) || 0);
+        const rawNet = netIdx !== -1 ? parseFloat(String(row[netIdx] || '0').replace(/,/g, '')) || 0 : (parseFloat(row[9]) || amt);
+
+        imported.push({
+          id: (idIdx !== -1 && row[idIdx]) ? String(row[idIdx]).trim() : `TXN-${rawDateStr.replace(/-/g, '')}-${Date.now().toString(36)}-${i}`,
+          date: rawDateStr,
+          title: rawTitle,
+          expense_type: (expenseTypeIdx !== -1 && row[expenseTypeIdx]) ? String(row[expenseTypeIdx]).trim() : (row[3] || 'ค่าใช้จ่ายทั่วไป'),
+          account_type: (accountIdx !== -1 && row[accountIdx]) ? String(row[accountIdx]).trim() : (row[4] || 'บริษัท KBANK'),
+          amount: amt,
+          withholding_tax: rawTax,
+          social_security: rawSS,
+          loan_for_employee: rawLoan,
+          net_transfer: (rawNet > 0) ? rawNet : amt,
+          notes: (notesIdx !== -1 && row[notesIdx]) ? String(row[notesIdx]).trim() : (row[10] || 'นำเข้าจากระบบ'),
+          payee: (payeeIdx !== -1 && row[payeeIdx]) ? String(row[payeeIdx]).trim() : (row[11] || ''),
+          transaction_type: (txnTypeIdx !== -1 && row[txnTypeIdx]) ? String(row[txnTypeIdx]).trim() : (row[12] || 'รายจ่าย'),
+          off_book_expense: (offBookIdx !== -1 && (row[offBookIdx] === 'ใช่' || row[offBookIdx] === true)) || row[13] === 'ใช่',
+          hospital_name: (hospitalIdx !== -1 && row[hospitalIdx]) ? String(row[hospitalIdx]).trim() : (row[14] || ''),
+          attachment_url: ''
+        });
+      }
+
+      if (imported.length > 0 && onImportTxns) {
+        setImportStatus(`กำลังบันทึก ${imported.length} รายการลงในระบบ...`);
+        onImportTxns(imported);
+        setTimeout(() => {
+          setIsImporting(false);
+          alert(`🎉 นำเข้าข้อมูลสำเร็จทั้งหมด ${imported.length} รายการ เรียบร้อยแล้ว!`);
+        }, 300);
+      } else {
+        setIsImporting(false);
+        alert('ไม่พบแถวข้อมูลธุรกรรมที่ถูกต้องในไฟล์');
+      }
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
     };
-    reader.readAsText(file);
+
+    if (isExcel && typeof window.XLSX !== 'undefined') {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = window.XLSX.read(data, { type: 'array' });
+          const firstSheet = wb.Sheets[wb.SheetNames[0]];
+          const aoa = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          processAOA(aoa);
+        } catch (err) {
+          setIsImporting(false);
+          alert('เกิดข้อผิดพลาดในการประมวลผลไฟล์ Excel: ' + err.message);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const text = evt.target.result;
+          const rows = parseCSVRows(text);
+          processAOA(rows);
+        } catch (err) {
+          setIsImporting(false);
+          alert('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + err.message);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   return (
@@ -195,10 +333,21 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
       <input
         type="file"
         ref={fileInputRef}
-        accept=".csv,.txt"
+        accept=".csv,.txt,.xlsx,.xls"
         onChange={handleFileUpload}
         className="hidden"
       />
+
+      {/* Import Progress Overlay */}
+      {isImporting && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-sm w-full rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mx-auto"></div>
+            <h4 className="font-extrabold text-white text-base">กำลังนำเข้าข้อมูล</h4>
+            <p className="text-xs text-slate-300">{importStatus}</p>
+          </div>
+        </div>
+      )}
 
       {/* Slip Attachment Preview Modal */}
       {activeSlipUrl && (
@@ -381,7 +530,7 @@ function DailyTransactionView({ transactions = [], frozenMonths = [], currentUse
             onClick={() => fileInputRef.current && fileInputRef.current.click()}
             className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 font-bold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 shadow-md"
           >
-            <span>📥 Import CSV</span>
+            <span>📥 นำเข้า Excel / CSV</span>
           </button>
 
           <button
