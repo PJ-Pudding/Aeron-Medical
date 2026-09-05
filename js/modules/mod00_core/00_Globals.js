@@ -66,6 +66,48 @@ const _TABLE_LS_MAP = {
   dictionary: 'aeron_autocomplete_dictionary'
 };
 
+// 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
+(function purgeLegacyMockData() {
+  const PURGE_KEY = 'aeron_purge_v3';
+  try {
+    if (localStorage.getItem(PURGE_KEY) !== 'true') {
+      const keysToPurge = [
+        'gov_hospital_projects',
+        'aeron_demo_bookings',
+        'aeron_purchase_orders',
+        'aeron_shipments',
+        'aeron_sold_products',
+        'aeron_repair_tickets',
+        'aeron_fda_registrations',
+        'aeron_products',
+        'aeron_product_categories',
+        'aeron_leave_requests',
+        'aeron_attendance_logs',
+        'aeron_messenger_trips',
+        'aeron_cost_calculations',
+        'aeron_accounting_audit',
+        'aeron_accounting_frozen_months',
+        'aeron_accounting_recurring',
+        'aeron_petty_cash_accounts',
+        'aeron_forecast_hospital_collections',
+        'aeron_forecast_projected_expenses',
+        'aeron_autocomplete_dictionary',
+        'aeron_activity_logs'
+      ];
+      keysToPurge.forEach(k => {
+        localStorage.removeItem(k);
+        localStorage.removeItem('aeron_ts_' + k);
+      });
+      Object.keys(_TABLE_LS_MAP || {}).forEach(t => {
+        if (t !== 'accounting' && t !== 'daily_transactions' && t !== 'users' && t !== 'members') {
+          localStorage.removeItem('aeron_ts_' + t);
+        }
+      });
+      localStorage.setItem(PURGE_KEY, 'true');
+    }
+  } catch(e) {}
+})();
+
 // 🛡️ Mutation Grace Period & In-Flight Lock Engine (Prevents In-Flight Server Responses from Overwriting Active User Edits)
 window._aeronLastMutationTime = {};
 window._aeronInFlight = {};
@@ -247,6 +289,11 @@ window.AeronCloudDB = {
               const cached = localStorage.getItem(lsKey);
               const parsedCached = cached ? JSON.parse(cached) : null;
               if (Array.isArray(cleanData) && Array.isArray(parsedCached)) {
+                if (cleanData.length === 0 && !window.isAeronMutating(tableName)) {
+                  localStorage.setItem(lsKey, JSON.stringify([]));
+                  localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
+                  return [];
+                }
                 // Smart Merge: NEVER destroy local items!
                 const finalData = mergeAeronDatasets(parsedCached, cleanData);
                 if (finalData.length > cleanData.length) {
