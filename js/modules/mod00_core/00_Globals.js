@@ -1233,15 +1233,34 @@ function getAeronDictionary(category) {
     const raw = localStorage.getItem('aeron_autocomplete_dictionary');
     const dict = raw ? JSON.parse(raw) : {};
     if (category) {
-      const list = Array.isArray(dict[category]) ? dict[category] : [];
-      if (list.length === 0 && DEFAULT_DICTIONARY_SEEDS[category]) {
-        return [...DEFAULT_DICTIONARY_SEEDS[category]];
+      const savedList = Array.isArray(dict[category]) ? dict[category] : [];
+      const seeds = DEFAULT_DICTIONARY_SEEDS[category] || [];
+      const mergedSet = new Set(seeds.map(s => String(s).trim().toLowerCase()));
+      const result = [...seeds];
+      for (const item of savedList) {
+        if (item && !mergedSet.has(String(item).trim().toLowerCase())) {
+          result.push(String(item).trim());
+          mergedSet.add(String(item).trim().toLowerCase());
+        }
       }
-      return list;
+      result.sort((a, b) => a.localeCompare(b, 'th'));
+      return result;
     }
-    return dict;
+    const merged = { ...DEFAULT_DICTIONARY_SEEDS };
+    for (const cat of Object.keys(dict)) {
+      if (!Array.isArray(merged[cat])) merged[cat] = [];
+      const existingSet = new Set(merged[cat].map(x => String(x).trim().toLowerCase()));
+      for (const item of (dict[cat] || [])) {
+        if (item && !existingSet.has(String(item).trim().toLowerCase())) {
+          merged[cat].push(String(item).trim());
+          existingSet.add(String(item).trim().toLowerCase());
+        }
+      }
+      merged[cat].sort((a, b) => a.localeCompare(b, 'th'));
+    }
+    return merged;
   } catch(e) {
-    return category ? (DEFAULT_DICTIONARY_SEEDS[category] || []) : {};
+    return category ? (DEFAULT_DICTIONARY_SEEDS[category] || []) : DEFAULT_DICTIONARY_SEEDS;
   }
 }
 
