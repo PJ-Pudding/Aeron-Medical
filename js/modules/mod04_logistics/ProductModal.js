@@ -131,9 +131,24 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     const validComponents = componentsList.filter(c => c.name && c.name.trim());
     const autoAccessoriesSummary = validComponents.map(c => `${c.name} (${c.qty} ${c.unit})`).join(', ');
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: [formData.name],
+        brand: formData.brand ? [formData.brand] : [],
+        accessory: validComponents.map(c => c.name),
+        unit: validComponents.map(c => c.unit).filter(Boolean),
+        location: validUnits.map(u => u.location).filter(Boolean)
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.name) window.saveAeronDictionaryItem('product', formData.name);
       if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+      validComponents.forEach(c => {
+        if (c.name) window.saveAeronDictionaryItem('accessory', c.name);
+        if (c.unit) window.saveAeronDictionaryItem('unit', c.unit);
+      });
+      validUnits.forEach(u => {
+        if (u.location) window.saveAeronDictionaryItem('location', u.location);
+      });
     }
     onSave({
       ...formData,
@@ -351,13 +366,14 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                         {/* 2. ชื่อรายการชิ้นส่วน */}
                         <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="text"
+                          <SmartSuggestInput
+                            category="accessory"
+                            compact={true}
                             required
                             placeholder="เช่น สาย Patient Cable 10-Lead, ลีดดูดสูญญากาศ"
                             value={comp.name}
                             onChange={(e) => handleComponentChange(idx, 'name', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 px-2 text-slate-100 outline-none text-xs focus:border-emerald-500 font-medium"
+                            onSelect={(val) => handleComponentChange(idx, 'name', val)}
                           />
                         </td>
 
@@ -395,14 +411,14 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                         </td>
 
                         {/* 6. หน่วยนับ */}
-                        <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="text"
-                            list="units-datalist"
-                            placeholder="เครื่อง/เส้น/ลูก"
+                        <td className="p-1.5 px-2 border-r border-slate-800/80 w-24">
+                          <SmartSuggestInput
+                            category="unit"
+                            compact={true}
+                            placeholder="เครื่อง/ชิ้น"
                             value={comp.unit}
                             onChange={(e) => handleComponentChange(idx, 'unit', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 text-center text-slate-200 outline-none text-xs focus:border-emerald-500 font-medium"
+                            onSelect={(val) => handleComponentChange(idx, 'unit', val)}
                           />
                         </td>
 
@@ -512,12 +528,13 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                   <div className="space-y-1">
                     <label className="text-slate-300 font-semibold">📍 สถานที่ประจำการเครื่องขณะนี้</label>
-                    <input
-                      type="text"
+                    <SmartSuggestInput
+                      category="location"
                       placeholder="เช่น สำนักงาน AERON กรุงเทพฯ / โรงพยาบาลศิริราช (ยืมสาธิต)"
                       value={unit.location || ''}
                       onChange={(e) => handleUnitChange(idx, 'location', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none"
+                      onSelect={(val) => handleUnitChange(idx, 'location', val)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none text-xs"
                     />
                   </div>
                 </div>

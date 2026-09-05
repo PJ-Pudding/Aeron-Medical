@@ -1159,28 +1159,114 @@ function stringSimilarity(s1, s2) {
   return 1 - (distance / maxLen);
 }
 
+// 🧠 Central Auto-Learning Master Dictionary Engine (SSoT)
+const DEFAULT_DICTIONARY_SEEDS = {
+  brand: ['AERON MEDICAL', 'Bojin', 'Mindray', 'Sonoscape'],
+  product: ['BJ 3500', 'Bojin 5600'],
+  hospital: [
+    'โรงพยาบาลศิริราช',
+    'โรงพยาบาลรามาธิบดี',
+    'โรงพยาบาลจุฬาลงกรณ์',
+    'โรงพยาบาลพระมงกุฎเกล้า',
+    'โรงพยาบาลมหาราชนครเชียงใหม่',
+    'โรงพยาบาลขอนแก่น',
+    'โรงพยาบาลสงขลานครินทร์'
+  ],
+  department: [
+    'แผนกห้องผ่าตัด (OR)',
+    'แผนกผู้ป่วยวิกฤต (ICU)',
+    'แผนกฉุกเฉินและอุบัติเหตุ (ER)',
+    'แผนกผู้ป่วยนอก (OPD)',
+    'แผนกรังสีวิทยา (X-Ray)',
+    'แผนกพัสดุและจัดซื้อ',
+    'แผนกซ่อมบำรุงและเครื่องมือแพทย์'
+  ],
+  accessory: [
+    'ตัวเครื่องหลัก (Main Unit)',
+    'สายไฟหลัก Power Cord & AC Adapter',
+    'หัวโพรบ Linear Probe',
+    'หัวโพรบ Convex Probe',
+    'สาย Patient Cable 10-Lead',
+    'แท่นชาร์จและแบตเตอรี่สำรอง',
+    'คู่มือการใช้งานภาษาไทย'
+  ],
+  unit: [
+    'เครื่อง',
+    'ชุด',
+    'ชิ้น',
+    'เส้น',
+    'ลูก',
+    'ม้วน',
+    'กล่อง',
+    'เล่ม',
+    'ใบ',
+    'อัน'
+  ],
+  location: [
+    'สำนักงาน AERON กรุงเทพฯ',
+    'คลังสินค้ากลาง AERON',
+    'สำนักงานเชียงใหม่'
+  ],
+  repair_symptom: [
+    'ชาร์จไฟไม่เข้า / แบตเตอรี่ไม่เก็บประจุ',
+    'หน้าจอไม่ติด / จอมืด',
+    'หัวโพรบภาพไม่ขึ้น / สัญญาณขาดหาย',
+    'สายไฟขาด / หัวต่อชำรุด',
+    'มอเตอร์ไม่หมุน / กำลังตก',
+    'ปุ่มกดไม่ตอบสนอง'
+  ],
+  payee: [
+    'บริษัท เมดิคอลไบโอ จำกัด',
+    'DHL Global Forwarding (Thailand)'
+  ],
+  forwarder: [
+    'DHL Express',
+    'DHL Global Forwarding',
+    'Kuehne+Nagel',
+    'FedEx',
+    'Kerry Express'
+  ]
+};
+
 function getAeronDictionary(category) {
   try {
     const raw = localStorage.getItem('aeron_autocomplete_dictionary');
     const dict = raw ? JSON.parse(raw) : {};
     if (category) {
-      return Array.isArray(dict[category]) ? dict[category] : [];
+      const list = Array.isArray(dict[category]) ? dict[category] : [];
+      if (list.length === 0 && DEFAULT_DICTIONARY_SEEDS[category]) {
+        return [...DEFAULT_DICTIONARY_SEEDS[category]];
+      }
+      return list;
     }
     return dict;
   } catch(e) {
-    return category ? [] : {};
+    return category ? (DEFAULT_DICTIONARY_SEEDS[category] || []) : {};
   }
+}
+
+let _dictDebounceTimer = null;
+function _triggerDebouncedCloudSave(dict) {
+  if (_dictDebounceTimer) clearTimeout(_dictDebounceTimer);
+  _dictDebounceTimer = setTimeout(() => {
+    if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
+      window.AeronCloudDB.save('dictionary', dict);
+    }
+  }, 500);
 }
 
 function saveAeronDictionaryItem(category, value) {
   if (!category || !value || typeof value !== 'string') return;
   const valClean = value.trim();
-  if (valClean.length < 2) return;
+  const minLen = category === 'unit' ? 1 : 2;
+  if (valClean.length < minLen) return;
 
   try {
     const raw = localStorage.getItem('aeron_autocomplete_dictionary');
     const dict = raw ? JSON.parse(raw) : {};
-    if (!Array.isArray(dict[category])) dict[category] = [];
+    if (!Array.isArray(dict[category])) {
+      dict[category] = DEFAULT_DICTIONARY_SEEDS[category] ? [...DEFAULT_DICTIONARY_SEEDS[category]] : [];
+    }
 
     const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
     if (!exists) {
@@ -1188,17 +1274,100 @@ function saveAeronDictionaryItem(category, value) {
       dict[category].sort((a, b) => a.localeCompare(b, 'th'));
       localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
 
-      if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
-        window.AeronCloudDB.save('dictionary', dict);
-      }
-
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { category, dict } }));
       }
+
+      _triggerDebouncedCloudSave(dict);
     }
   } catch(e) {
     console.warn('Error saving to dictionary:', e);
   }
+}
+
+function batchSaveAeronDictionary(categoryItemsMap) {
+  if (!categoryItemsMap || typeof categoryItemsMap !== 'object') return;
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    let hasChanges = false;
+
+    for (const category of Object.keys(categoryItemsMap)) {
+      const items = categoryItemsMap[category];
+      if (!items) continue;
+      const arr = Array.isArray(items) ? items : [items];
+      const minLen = category === 'unit' ? 1 : 2;
+
+      if (!Array.isArray(dict[category])) {
+        dict[category] = DEFAULT_DICTIONARY_SEEDS[category] ? [...DEFAULT_DICTIONARY_SEEDS[category]] : [];
+      }
+
+      for (const val of arr) {
+        if (!val || typeof val !== 'string') continue;
+        const valClean = val.trim();
+        if (valClean.length < minLen) continue;
+
+        const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
+        if (!exists) {
+          dict[category].push(valClean);
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges) {
+        dict[category].sort((a, b) => a.localeCompare(b, 'th'));
+      }
+    }
+
+    if (hasChanges) {
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { dict } }));
+      }
+      _triggerDebouncedCloudSave(dict);
+    }
+  } catch(e) {
+    console.warn('Error batch saving to dictionary:', e);
+  }
+}
+
+// 🌐 Auto-Hydrate Central Dictionary from Cloud on Startup
+async function hydrateAeronDictionary() {
+  try {
+    const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+    if (!fetcher) return;
+    const remoteDict = await fetcher('dictionary', null);
+    if (remoteDict && typeof remoteDict === 'object' && !Array.isArray(remoteDict)) {
+      const rawLocal = localStorage.getItem('aeron_autocomplete_dictionary');
+      const localDict = rawLocal ? JSON.parse(rawLocal) : {};
+      const merged = { ...DEFAULT_DICTIONARY_SEEDS, ...remoteDict };
+
+      for (const cat of Object.keys(localDict)) {
+        if (!Array.isArray(merged[cat])) merged[cat] = [];
+        const existingSet = new Set(merged[cat].map(x => String(x).trim().toLowerCase()));
+        for (const item of (localDict[cat] || [])) {
+          if (item && !existingSet.has(String(item).trim().toLowerCase())) {
+            merged[cat].push(String(item).trim());
+            existingSet.add(String(item).trim().toLowerCase());
+          }
+        }
+        merged[cat].sort((a, b) => a.localeCompare(b, 'th'));
+      }
+
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(merged));
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { dict: merged } }));
+      }
+    }
+  } catch(e) {
+    console.warn('[Dictionary Hydration Warning]:', e.message);
+  }
+}
+
+// Initialize Hydration immediately & on window focus
+if (typeof window !== 'undefined') {
+  if (typeof setTimeout === 'function') setTimeout(hydrateAeronDictionary, 150);
+  if (typeof window.addEventListener === 'function') window.addEventListener('focus', hydrateAeronDictionary);
 }
 
 function findSimilarDictionaryName(input, category) {
@@ -1224,8 +1393,11 @@ function findSimilarDictionaryName(input, category) {
   return bestMatch;
 }
 
+window.DEFAULT_DICTIONARY_SEEDS = DEFAULT_DICTIONARY_SEEDS;
 window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;
 window.getAeronDictionary = getAeronDictionary;
 window.saveAeronDictionaryItem = saveAeronDictionaryItem;
+window.batchSaveAeronDictionary = batchSaveAeronDictionary;
+window.hydrateAeronDictionary = hydrateAeronDictionary;
 window.findSimilarDictionaryName = findSimilarDictionaryName;

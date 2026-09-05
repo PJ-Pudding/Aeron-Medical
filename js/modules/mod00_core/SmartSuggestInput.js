@@ -2,14 +2,16 @@
 // 🧠 Universal Smart Autocomplete Input with Interactive Dropdown & Fuzzy Similarity Warning
 
 function SmartSuggestInput({
-  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom'
+  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom' | 'accessory' | 'unit' | 'location' | 'department'
   value = '',
   onChange,
+  onSelect,
   onBlur,
   placeholder = '',
   className = '',
   required = false,
   disabled = false,
+  compact = false,
   id,
   name
 }) {
@@ -75,6 +77,9 @@ function SmartSuggestInput({
     if (onChange) {
       onChange({ target: { name: name || id, value: item } });
     }
+    if (onSelect) {
+      onSelect(item);
+    }
     setIsOpen(false);
     setSimilarMatch(null);
     if (window.saveAeronDictionaryItem) {
@@ -83,7 +88,8 @@ function SmartSuggestInput({
   };
 
   const handleInputBlur = (e) => {
-    if (value && value.trim().length >= 2 && window.saveAeronDictionaryItem) {
+    const minLen = category === 'unit' ? 1 : 2;
+    if (value && value.trim().length >= minLen && window.saveAeronDictionaryItem) {
       window.saveAeronDictionaryItem(category, value.trim());
     }
     if (onBlur) onBlur(e);
@@ -93,9 +99,16 @@ function SmartSuggestInput({
     if (onChange) {
       onChange({ target: { name: name || id, value: suggestedName } });
     }
+    if (onSelect) {
+      onSelect(suggestedName);
+    }
     setSimilarMatch(null);
     setIsOpen(false);
   };
+
+  const defaultInputClass = compact
+    ? "w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 px-2 text-slate-100 outline-none text-xs focus:border-emerald-500 font-medium pr-6"
+    : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition";
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -113,7 +126,7 @@ function SmartSuggestInput({
           required={required}
           disabled={disabled}
           autoComplete="off"
-          className={className ? `${className} pr-8` : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition"}
+          className={className ? `${className} ${compact ? 'pr-6' : 'pr-8'}` : defaultInputClass}
         />
 
         {/* Dropdown Toggle Button ⌄ */}
@@ -125,10 +138,10 @@ function SmartSuggestInput({
             setIsOpen(!isOpen);
             if (!isOpen && inputRef.current) inputRef.current.focus();
           }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors"
+          className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors ${compact ? 'right-1 p-0.5' : 'right-2.5'}`}
           title="ดูตัวเลือกที่มีในระบบ"
         >
-          <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`transition-transform duration-200 ${compact ? 'w-3 h-3' : 'w-4 h-4'} ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -136,7 +149,7 @@ function SmartSuggestInput({
 
       {/* Fuzzy Similarity Alert Banner */}
       {similarMatch && (
-        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn">
+        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn z-[1060]">
           <div className="flex items-center gap-1.5 truncate">
             <span className="shrink-0 text-amber-400">💡</span>
             <span className="truncate">พบชื่อใกล้เคียงในระบบ: <strong className="text-amber-200 font-bold">"{similarMatch.item}"</strong></span>
@@ -153,10 +166,10 @@ function SmartSuggestInput({
 
       {/* Custom Interactive Suggestions Dropdown */}
       {isOpen && filteredSuggestions.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
+        <div className="absolute left-0 min-w-[180px] w-full top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
           <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase bg-slate-950/60 flex items-center justify-between">
-            <span>ตัวเลือกที่มีในระบบ ({filteredSuggestions.length})</span>
-            <span className="text-[9px] text-amber-400 font-normal">คลิกเพื่อเลือกทันที</span>
+            <span>ตัวเลือกในระบบ ({filteredSuggestions.length})</span>
+            <span className="text-[9px] text-amber-400 font-normal">คลิกเลือก</span>
           </div>
           {filteredSuggestions.map((item, idx) => {
             const isExact = value && item.toLowerCase() === value.trim().toLowerCase();

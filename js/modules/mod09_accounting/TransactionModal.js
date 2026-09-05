@@ -70,7 +70,13 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        payee: formData.payee ? [formData.payee] : [],
+        hospital: formData.hospital_name ? [formData.hospital_name] : [],
+        title: formData.title ? [formData.title] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       window.saveAeronDictionaryItem('payee', formData.payee);
       window.saveAeronDictionaryItem('hospital', formData.hospital_name);
       window.saveAeronDictionaryItem('title', formData.title);

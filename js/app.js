@@ -1165,28 +1165,114 @@ function stringSimilarity(s1, s2) {
   return 1 - (distance / maxLen);
 }
 
+// 🧠 Central Auto-Learning Master Dictionary Engine (SSoT)
+const DEFAULT_DICTIONARY_SEEDS = {
+  brand: ['AERON MEDICAL', 'Bojin', 'Mindray', 'Sonoscape'],
+  product: ['BJ 3500', 'Bojin 5600'],
+  hospital: [
+    'โรงพยาบาลศิริราช',
+    'โรงพยาบาลรามาธิบดี',
+    'โรงพยาบาลจุฬาลงกรณ์',
+    'โรงพยาบาลพระมงกุฎเกล้า',
+    'โรงพยาบาลมหาราชนครเชียงใหม่',
+    'โรงพยาบาลขอนแก่น',
+    'โรงพยาบาลสงขลานครินทร์'
+  ],
+  department: [
+    'แผนกห้องผ่าตัด (OR)',
+    'แผนกผู้ป่วยวิกฤต (ICU)',
+    'แผนกฉุกเฉินและอุบัติเหตุ (ER)',
+    'แผนกผู้ป่วยนอก (OPD)',
+    'แผนกรังสีวิทยา (X-Ray)',
+    'แผนกพัสดุและจัดซื้อ',
+    'แผนกซ่อมบำรุงและเครื่องมือแพทย์'
+  ],
+  accessory: [
+    'ตัวเครื่องหลัก (Main Unit)',
+    'สายไฟหลัก Power Cord & AC Adapter',
+    'หัวโพรบ Linear Probe',
+    'หัวโพรบ Convex Probe',
+    'สาย Patient Cable 10-Lead',
+    'แท่นชาร์จและแบตเตอรี่สำรอง',
+    'คู่มือการใช้งานภาษาไทย'
+  ],
+  unit: [
+    'เครื่อง',
+    'ชุด',
+    'ชิ้น',
+    'เส้น',
+    'ลูก',
+    'ม้วน',
+    'กล่อง',
+    'เล่ม',
+    'ใบ',
+    'อัน'
+  ],
+  location: [
+    'สำนักงาน AERON กรุงเทพฯ',
+    'คลังสินค้ากลาง AERON',
+    'สำนักงานเชียงใหม่'
+  ],
+  repair_symptom: [
+    'ชาร์จไฟไม่เข้า / แบตเตอรี่ไม่เก็บประจุ',
+    'หน้าจอไม่ติด / จอมืด',
+    'หัวโพรบภาพไม่ขึ้น / สัญญาณขาดหาย',
+    'สายไฟขาด / หัวต่อชำรุด',
+    'มอเตอร์ไม่หมุน / กำลังตก',
+    'ปุ่มกดไม่ตอบสนอง'
+  ],
+  payee: [
+    'บริษัท เมดิคอลไบโอ จำกัด',
+    'DHL Global Forwarding (Thailand)'
+  ],
+  forwarder: [
+    'DHL Express',
+    'DHL Global Forwarding',
+    'Kuehne+Nagel',
+    'FedEx',
+    'Kerry Express'
+  ]
+};
+
 function getAeronDictionary(category) {
   try {
     const raw = localStorage.getItem('aeron_autocomplete_dictionary');
     const dict = raw ? JSON.parse(raw) : {};
     if (category) {
-      return Array.isArray(dict[category]) ? dict[category] : [];
+      const list = Array.isArray(dict[category]) ? dict[category] : [];
+      if (list.length === 0 && DEFAULT_DICTIONARY_SEEDS[category]) {
+        return [...DEFAULT_DICTIONARY_SEEDS[category]];
+      }
+      return list;
     }
     return dict;
   } catch(e) {
-    return category ? [] : {};
+    return category ? (DEFAULT_DICTIONARY_SEEDS[category] || []) : {};
   }
+}
+
+let _dictDebounceTimer = null;
+function _triggerDebouncedCloudSave(dict) {
+  if (_dictDebounceTimer) clearTimeout(_dictDebounceTimer);
+  _dictDebounceTimer = setTimeout(() => {
+    if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
+      window.AeronCloudDB.save('dictionary', dict);
+    }
+  }, 500);
 }
 
 function saveAeronDictionaryItem(category, value) {
   if (!category || !value || typeof value !== 'string') return;
   const valClean = value.trim();
-  if (valClean.length < 2) return;
+  const minLen = category === 'unit' ? 1 : 2;
+  if (valClean.length < minLen) return;
 
   try {
     const raw = localStorage.getItem('aeron_autocomplete_dictionary');
     const dict = raw ? JSON.parse(raw) : {};
-    if (!Array.isArray(dict[category])) dict[category] = [];
+    if (!Array.isArray(dict[category])) {
+      dict[category] = DEFAULT_DICTIONARY_SEEDS[category] ? [...DEFAULT_DICTIONARY_SEEDS[category]] : [];
+    }
 
     const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
     if (!exists) {
@@ -1194,17 +1280,100 @@ function saveAeronDictionaryItem(category, value) {
       dict[category].sort((a, b) => a.localeCompare(b, 'th'));
       localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
 
-      if (window.AeronCloudDB && typeof window.AeronCloudDB.save === 'function') {
-        window.AeronCloudDB.save('dictionary', dict);
-      }
-
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { category, dict } }));
       }
+
+      _triggerDebouncedCloudSave(dict);
     }
   } catch(e) {
     console.warn('Error saving to dictionary:', e);
   }
+}
+
+function batchSaveAeronDictionary(categoryItemsMap) {
+  if (!categoryItemsMap || typeof categoryItemsMap !== 'object') return;
+  try {
+    const raw = localStorage.getItem('aeron_autocomplete_dictionary');
+    const dict = raw ? JSON.parse(raw) : {};
+    let hasChanges = false;
+
+    for (const category of Object.keys(categoryItemsMap)) {
+      const items = categoryItemsMap[category];
+      if (!items) continue;
+      const arr = Array.isArray(items) ? items : [items];
+      const minLen = category === 'unit' ? 1 : 2;
+
+      if (!Array.isArray(dict[category])) {
+        dict[category] = DEFAULT_DICTIONARY_SEEDS[category] ? [...DEFAULT_DICTIONARY_SEEDS[category]] : [];
+      }
+
+      for (const val of arr) {
+        if (!val || typeof val !== 'string') continue;
+        const valClean = val.trim();
+        if (valClean.length < minLen) continue;
+
+        const exists = dict[category].some(item => item.trim().toLowerCase() === valClean.toLowerCase());
+        if (!exists) {
+          dict[category].push(valClean);
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges) {
+        dict[category].sort((a, b) => a.localeCompare(b, 'th'));
+      }
+    }
+
+    if (hasChanges) {
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(dict));
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { dict } }));
+      }
+      _triggerDebouncedCloudSave(dict);
+    }
+  } catch(e) {
+    console.warn('Error batch saving to dictionary:', e);
+  }
+}
+
+// 🌐 Auto-Hydrate Central Dictionary from Cloud on Startup
+async function hydrateAeronDictionary() {
+  try {
+    const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
+    if (!fetcher) return;
+    const remoteDict = await fetcher('dictionary', null);
+    if (remoteDict && typeof remoteDict === 'object' && !Array.isArray(remoteDict)) {
+      const rawLocal = localStorage.getItem('aeron_autocomplete_dictionary');
+      const localDict = rawLocal ? JSON.parse(rawLocal) : {};
+      const merged = { ...DEFAULT_DICTIONARY_SEEDS, ...remoteDict };
+
+      for (const cat of Object.keys(localDict)) {
+        if (!Array.isArray(merged[cat])) merged[cat] = [];
+        const existingSet = new Set(merged[cat].map(x => String(x).trim().toLowerCase()));
+        for (const item of (localDict[cat] || [])) {
+          if (item && !existingSet.has(String(item).trim().toLowerCase())) {
+            merged[cat].push(String(item).trim());
+            existingSet.add(String(item).trim().toLowerCase());
+          }
+        }
+        merged[cat].sort((a, b) => a.localeCompare(b, 'th'));
+      }
+
+      localStorage.setItem('aeron_autocomplete_dictionary', JSON.stringify(merged));
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('aeron_dictionary_updated', { detail: { dict: merged } }));
+      }
+    }
+  } catch(e) {
+    console.warn('[Dictionary Hydration Warning]:', e.message);
+  }
+}
+
+// Initialize Hydration immediately & on window focus
+if (typeof window !== 'undefined') {
+  if (typeof setTimeout === 'function') setTimeout(hydrateAeronDictionary, 150);
+  if (typeof window.addEventListener === 'function') window.addEventListener('focus', hydrateAeronDictionary);
 }
 
 function findSimilarDictionaryName(input, category) {
@@ -1230,10 +1399,13 @@ function findSimilarDictionaryName(input, category) {
   return bestMatch;
 }
 
+window.DEFAULT_DICTIONARY_SEEDS = DEFAULT_DICTIONARY_SEEDS;
 window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;
 window.getAeronDictionary = getAeronDictionary;
 window.saveAeronDictionaryItem = saveAeronDictionaryItem;
+window.batchSaveAeronDictionary = batchSaveAeronDictionary;
+window.hydrateAeronDictionary = hydrateAeronDictionary;
 window.findSimilarDictionaryName = findSimilarDictionaryName;
 
 
@@ -3309,14 +3481,16 @@ function SidebarNavDrawer({ isOpen, onClose, activeTab, setActiveTab, currentUse
 // 🧠 Universal Smart Autocomplete Input with Interactive Dropdown & Fuzzy Similarity Warning
 
 function SmartSuggestInput({
-  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom'
+  category = 'hospital', // 'hospital' | 'doctor' | 'payee' | 'product' | 'title' | 'competitor' | 'forwarder' | 'origin' | 'brand' | 'repair_symptom' | 'accessory' | 'unit' | 'location' | 'department'
   value = '',
   onChange,
+  onSelect,
   onBlur,
   placeholder = '',
   className = '',
   required = false,
   disabled = false,
+  compact = false,
   id,
   name
 }) {
@@ -3382,6 +3556,9 @@ function SmartSuggestInput({
     if (onChange) {
       onChange({ target: { name: name || id, value: item } });
     }
+    if (onSelect) {
+      onSelect(item);
+    }
     setIsOpen(false);
     setSimilarMatch(null);
     if (window.saveAeronDictionaryItem) {
@@ -3390,7 +3567,8 @@ function SmartSuggestInput({
   };
 
   const handleInputBlur = (e) => {
-    if (value && value.trim().length >= 2 && window.saveAeronDictionaryItem) {
+    const minLen = category === 'unit' ? 1 : 2;
+    if (value && value.trim().length >= minLen && window.saveAeronDictionaryItem) {
       window.saveAeronDictionaryItem(category, value.trim());
     }
     if (onBlur) onBlur(e);
@@ -3400,9 +3578,16 @@ function SmartSuggestInput({
     if (onChange) {
       onChange({ target: { name: name || id, value: suggestedName } });
     }
+    if (onSelect) {
+      onSelect(suggestedName);
+    }
     setSimilarMatch(null);
     setIsOpen(false);
   };
+
+  const defaultInputClass = compact
+    ? "w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 px-2 text-slate-100 outline-none text-xs focus:border-emerald-500 font-medium pr-6"
+    : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition";
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -3420,7 +3605,7 @@ function SmartSuggestInput({
           required={required}
           disabled={disabled}
           autoComplete="off"
-          className={className ? `${className} pr-8` : "w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-8 transition"}
+          className={className ? `${className} ${compact ? 'pr-6' : 'pr-8'}` : defaultInputClass}
         />
 
         {/* Dropdown Toggle Button ⌄ */}
@@ -3432,10 +3617,10 @@ function SmartSuggestInput({
             setIsOpen(!isOpen);
             if (!isOpen && inputRef.current) inputRef.current.focus();
           }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors"
+          className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-300 p-1 transition-colors ${compact ? 'right-1 p-0.5' : 'right-2.5'}`}
           title="ดูตัวเลือกที่มีในระบบ"
         >
-          <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`transition-transform duration-200 ${compact ? 'w-3 h-3' : 'w-4 h-4'} ${isOpen ? 'rotate-180 text-amber-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -3443,7 +3628,7 @@ function SmartSuggestInput({
 
       {/* Fuzzy Similarity Alert Banner */}
       {similarMatch && (
-        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn">
+        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg px-2.5 py-1.5 shadow-sm animate-fadeIn z-[1060]">
           <div className="flex items-center gap-1.5 truncate">
             <span className="shrink-0 text-amber-400">💡</span>
             <span className="truncate">พบชื่อใกล้เคียงในระบบ: <strong className="text-amber-200 font-bold">"{similarMatch.item}"</strong></span>
@@ -3460,10 +3645,10 @@ function SmartSuggestInput({
 
       {/* Custom Interactive Suggestions Dropdown */}
       {isOpen && filteredSuggestions.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
+        <div className="absolute left-0 min-w-[180px] w-full top-full mt-1 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-[1050] divide-y divide-slate-800 animate-fadeIn">
           <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase bg-slate-950/60 flex items-center justify-between">
-            <span>ตัวเลือกที่มีในระบบ ({filteredSuggestions.length})</span>
-            <span className="text-[9px] text-amber-400 font-normal">คลิกเพื่อเลือกทันที</span>
+            <span>ตัวเลือกในระบบ ({filteredSuggestions.length})</span>
+            <span className="text-[9px] text-amber-400 font-normal">คลิกเลือก</span>
           </div>
           {filteredSuggestions.map((item, idx) => {
             const isExact = value && item.toLowerCase() === value.trim().toLowerCase();
@@ -7629,7 +7814,14 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: hosp ? [hosp] : [],
+        title: ttl ? [ttl] : [],
+        doctor: formData.decisionMakers ? formData.decisionMakers.split(',').map(d => d.trim()).filter(Boolean) : [],
+        competitor: formData.competitors ? formData.competitors.split(',').map(c => c.trim()).filter(Boolean) : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (hosp) window.saveAeronDictionaryItem('hospital', hosp);
       if (ttl) window.saveAeronDictionaryItem('title', ttl);
       if (formData.decisionMakers) {
@@ -9060,9 +9252,24 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     const validComponents = componentsList.filter(c => c.name && c.name.trim());
     const autoAccessoriesSummary = validComponents.map(c => `${c.name} (${c.qty} ${c.unit})`).join(', ');
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: [formData.name],
+        brand: formData.brand ? [formData.brand] : [],
+        accessory: validComponents.map(c => c.name),
+        unit: validComponents.map(c => c.unit).filter(Boolean),
+        location: validUnits.map(u => u.location).filter(Boolean)
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.name) window.saveAeronDictionaryItem('product', formData.name);
       if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
+      validComponents.forEach(c => {
+        if (c.name) window.saveAeronDictionaryItem('accessory', c.name);
+        if (c.unit) window.saveAeronDictionaryItem('unit', c.unit);
+      });
+      validUnits.forEach(u => {
+        if (u.location) window.saveAeronDictionaryItem('location', u.location);
+      });
     }
     onSave({
       ...formData,
@@ -9280,13 +9487,14 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                         {/* 2. ชื่อรายการชิ้นส่วน */}
                         <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="text"
+                          <SmartSuggestInput
+                            category="accessory"
+                            compact={true}
                             required
                             placeholder="เช่น สาย Patient Cable 10-Lead, ลีดดูดสูญญากาศ"
                             value={comp.name}
                             onChange={(e) => handleComponentChange(idx, 'name', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 px-2 text-slate-100 outline-none text-xs focus:border-emerald-500 font-medium"
+                            onSelect={(val) => handleComponentChange(idx, 'name', val)}
                           />
                         </td>
 
@@ -9324,14 +9532,14 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                         </td>
 
                         {/* 6. หน่วยนับ */}
-                        <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="text"
-                            list="units-datalist"
-                            placeholder="เครื่อง/เส้น/ลูก"
+                        <td className="p-1.5 px-2 border-r border-slate-800/80 w-24">
+                          <SmartSuggestInput
+                            category="unit"
+                            compact={true}
+                            placeholder="เครื่อง/ชิ้น"
                             value={comp.unit}
                             onChange={(e) => handleComponentChange(idx, 'unit', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 text-center text-slate-200 outline-none text-xs focus:border-emerald-500 font-medium"
+                            onSelect={(val) => handleComponentChange(idx, 'unit', val)}
                           />
                         </td>
 
@@ -9441,12 +9649,13 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                   <div className="space-y-1">
                     <label className="text-slate-300 font-semibold">📍 สถานที่ประจำการเครื่องขณะนี้</label>
-                    <input
-                      type="text"
+                    <SmartSuggestInput
+                      category="location"
                       placeholder="เช่น สำนักงาน AERON กรุงเทพฯ / โรงพยาบาลศิริราช (ยืมสาธิต)"
                       value={unit.location || ''}
                       onChange={(e) => handleUnitChange(idx, 'location', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none"
+                      onSelect={(val) => handleUnitChange(idx, 'location', val)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none text-xs"
                     />
                   </div>
                 </div>
@@ -9845,8 +10054,18 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
       alert('กรุณากรอกชื่อรุ่นสินค้าและอาการเสีย');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: formData.productName ? [formData.productName] : [],
+        accessory: formData.repairedItems ? [formData.repairedItems] : [],
+        repair_symptom: formData.issueDescription ? [formData.issueDescription] : [],
+        hospital: formData.lastHospital ? [formData.lastHospital] : [],
+        doctor: formData.lastUser ? [formData.lastUser] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.repairedItems) window.saveAeronDictionaryItem('accessory', formData.repairedItems);
+      if (formData.issueDescription) window.saveAeronDictionaryItem('repair_symptom', formData.issueDescription);
       if (formData.lastHospital) window.saveAeronDictionaryItem('hospital', formData.lastHospital);
       if (formData.lastUser) window.saveAeronDictionaryItem('doctor', formData.lastUser);
     }
@@ -9922,8 +10141,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชิ้นส่วน หรือ อุปกรณ์ในเซ็ต ที่ส่งซ่อม <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="accessory"
               required
               placeholder="เช่น ตัวเครื่องหลัก, หัวโพรบ Linear Probe, สาย Lead 10 เส้น, แท่นชาร์จ..."
               value={formData.repairedItems}
@@ -9934,14 +10153,14 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">อาการเสีย / สิ่งที่ชำรุด <span className="text-rose-400">*</span></label>
-            <textarea
-              rows="2"
+            <SmartSuggestInput
+              category="repair_symptom"
               required
-              placeholder="อธิบายอาการเสียโดยละเอียด เช่น ชาร์จไฟไม่เข้า, หน้าจอไม่ติด, สายขาด..."
+              placeholder="อธิบายอาการเสีย เช่น ชาร์จไฟไม่เข้า, หน้าจอไม่ติด, สายขาด..."
               value={formData.issueDescription}
               onChange={(e) => setFormData({ ...formData, issueDescription: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-rose-500"
-            ></textarea>
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -10133,7 +10352,13 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
       alert('กรุณากรอกชื่อสินค้าและชื่อบริษัทผู้ผลิต');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: formData.productName ? [formData.productName] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        forwarder: formData.shippingCompany ? [formData.shippingCompany] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
       if (formData.shippingCompany) window.saveAeronDictionaryItem('forwarder', formData.shippingCompany);
@@ -10865,8 +11090,18 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่อรุ่นสินค้า');
       return;
     }
-    if (window.saveAeronDictionaryItem && formData.hospitalName) {
-      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: [formData.hospitalName],
+        department: formData.department ? [formData.department] : [],
+        product: [formData.productName],
+        brand: formData.brand ? [formData.brand] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.department) window.saveAeronDictionaryItem('department', formData.department);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
     }
     onSave({
       ...formData,
@@ -10941,8 +11176,8 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">แผนกที่ติดตั้ง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="department"
                 placeholder="เช่น แผนกห้องผ่าตัด (OR)"
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
@@ -10967,9 +11202,10 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
+                placeholder="เช่น Bojin 5600"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
@@ -10978,8 +11214,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ยี่ห้อ (Brand)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="brand"
+                placeholder="เช่น Bojin, AERON MEDICAL"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
@@ -12821,9 +13058,16 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
       alert('กรุณากรอกชื่อสินค้าและบริษัทผู้ผลิต');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        brand: formData.brand ? [formData.brand] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        product: formData.productName ? [formData.productName] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
     onSave({
       ...formData,
@@ -15364,9 +15608,16 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       alert('กรุณากรอกเลขที่ PO');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: formData.hospitalName ? [formData.hospitalName] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        product: formData.productName ? [formData.productName] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
     onSave(formData);
   };
@@ -15454,10 +15705,10 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้าที่สั่งซื้อ</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
-                placeholder="เช่น AERON Cardio 12L-AI"
+                placeholder="เช่น AERON Cardio 12L-AI, Bojin 5600"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
@@ -17655,7 +17906,13 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        payee: formData.payee ? [formData.payee] : [],
+        title: formData.title ? [formData.title] : [],
+        hospital: formData.hospital_name ? [formData.hospital_name] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.payee) window.saveAeronDictionaryItem('payee', formData.payee);
       if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
       if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);
@@ -20876,7 +21133,13 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        payee: formData.payee ? [formData.payee] : [],
+        hospital: formData.hospital_name ? [formData.hospital_name] : [],
+        title: formData.title ? [formData.title] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       window.saveAeronDictionaryItem('payee', formData.payee);
       window.saveAeronDictionaryItem('hospital', formData.hospital_name);
       window.saveAeronDictionaryItem('title', formData.title);

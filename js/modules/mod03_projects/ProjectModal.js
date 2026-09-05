@@ -79,7 +79,14 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: hosp ? [hosp] : [],
+        title: ttl ? [ttl] : [],
+        doctor: formData.decisionMakers ? formData.decisionMakers.split(',').map(d => d.trim()).filter(Boolean) : [],
+        competitor: formData.competitors ? formData.competitors.split(',').map(c => c.trim()).filter(Boolean) : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (hosp) window.saveAeronDictionaryItem('hospital', hosp);
       if (ttl) window.saveAeronDictionaryItem('title', ttl);
       if (formData.decisionMakers) {

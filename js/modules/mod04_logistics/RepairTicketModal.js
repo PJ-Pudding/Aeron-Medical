@@ -47,8 +47,18 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
       alert('กรุณากรอกชื่อรุ่นสินค้าและอาการเสีย');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: formData.productName ? [formData.productName] : [],
+        accessory: formData.repairedItems ? [formData.repairedItems] : [],
+        repair_symptom: formData.issueDescription ? [formData.issueDescription] : [],
+        hospital: formData.lastHospital ? [formData.lastHospital] : [],
+        doctor: formData.lastUser ? [formData.lastUser] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.repairedItems) window.saveAeronDictionaryItem('accessory', formData.repairedItems);
+      if (formData.issueDescription) window.saveAeronDictionaryItem('repair_symptom', formData.issueDescription);
       if (formData.lastHospital) window.saveAeronDictionaryItem('hospital', formData.lastHospital);
       if (formData.lastUser) window.saveAeronDictionaryItem('doctor', formData.lastUser);
     }
@@ -124,8 +134,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">ชิ้นส่วน หรือ อุปกรณ์ในเซ็ต ที่ส่งซ่อม <span className="text-rose-400">*</span></label>
-            <input
-              type="text"
+            <SmartSuggestInput
+              category="accessory"
               required
               placeholder="เช่น ตัวเครื่องหลัก, หัวโพรบ Linear Probe, สาย Lead 10 เส้น, แท่นชาร์จ..."
               value={formData.repairedItems}
@@ -136,14 +146,14 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
 
           <div className="space-y-1">
             <label className="font-semibold text-slate-300">อาการเสีย / สิ่งที่ชำรุด <span className="text-rose-400">*</span></label>
-            <textarea
-              rows="2"
+            <SmartSuggestInput
+              category="repair_symptom"
               required
-              placeholder="อธิบายอาการเสียโดยละเอียด เช่น ชาร์จไฟไม่เข้า, หน้าจอไม่ติด, สายขาด..."
+              placeholder="อธิบายอาการเสีย เช่น ชาร์จไฟไม่เข้า, หน้าจอไม่ติด, สายขาด..."
               value={formData.issueDescription}
               onChange={(e) => setFormData({ ...formData, issueDescription: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-rose-500"
-            ></textarea>
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

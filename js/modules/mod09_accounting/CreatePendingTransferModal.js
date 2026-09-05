@@ -63,7 +63,13 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       return;
     }
 
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        payee: formData.payee ? [formData.payee] : [],
+        title: formData.title ? [formData.title] : [],
+        hospital: formData.hospital_name ? [formData.hospital_name] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.payee) window.saveAeronDictionaryItem('payee', formData.payee);
       if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
       if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);

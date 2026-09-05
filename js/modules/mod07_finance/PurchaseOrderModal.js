@@ -81,9 +81,16 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       alert('กรุณากรอกเลขที่ PO');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: formData.hospitalName ? [formData.hospitalName] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        product: formData.productName ? [formData.productName] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
     onSave(formData);
   };
@@ -171,10 +178,10 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้าที่สั่งซื้อ</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
-                placeholder="เช่น AERON Cardio 12L-AI"
+                placeholder="เช่น AERON Cardio 12L-AI, Bojin 5600"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"

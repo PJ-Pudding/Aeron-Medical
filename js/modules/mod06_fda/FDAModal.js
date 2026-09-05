@@ -55,9 +55,16 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
       alert('กรุณากรอกชื่อสินค้าและบริษัทผู้ผลิต');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        brand: formData.brand ? [formData.brand] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        product: formData.productName ? [formData.productName] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
     onSave({
       ...formData,

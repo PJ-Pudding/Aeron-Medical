@@ -54,7 +54,13 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
       alert('กรุณากรอกชื่อสินค้าและชื่อบริษัทผู้ผลิต');
       return;
     }
-    if (window.saveAeronDictionaryItem) {
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        product: formData.productName ? [formData.productName] : [],
+        payee: formData.vendorName ? [formData.vendorName] : [],
+        forwarder: formData.shippingCompany ? [formData.shippingCompany] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
       if (formData.shippingCompany) window.saveAeronDictionaryItem('forwarder', formData.shippingCompany);

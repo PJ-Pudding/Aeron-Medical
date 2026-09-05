@@ -56,8 +56,18 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
       alert('กรุณากรอกชื่อโรงพยาบาลและชื่อรุ่นสินค้า');
       return;
     }
-    if (window.saveAeronDictionaryItem && formData.hospitalName) {
-      window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+    if (window.batchSaveAeronDictionary) {
+      window.batchSaveAeronDictionary({
+        hospital: [formData.hospitalName],
+        department: formData.department ? [formData.department] : [],
+        product: [formData.productName],
+        brand: formData.brand ? [formData.brand] : []
+      });
+    } else if (window.saveAeronDictionaryItem) {
+      if (formData.hospitalName) window.saveAeronDictionaryItem('hospital', formData.hospitalName);
+      if (formData.department) window.saveAeronDictionaryItem('department', formData.department);
+      if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
+      if (formData.brand) window.saveAeronDictionaryItem('brand', formData.brand);
     }
     onSave({
       ...formData,
@@ -132,8 +142,8 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">แผนกที่ติดตั้ง</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="department"
                 placeholder="เช่น แผนกห้องผ่าตัด (OR)"
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
@@ -158,9 +168,10 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">รุ่นสินค้า <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="product"
                 required
+                placeholder="เช่น Bojin 5600"
                 value={formData.productName}
                 onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
@@ -169,8 +180,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ยี่ห้อ (Brand)</label>
-              <input
-                type="text"
+              <SmartSuggestInput
+                category="brand"
+                placeholder="เช่น Bojin, AERON MEDICAL"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
