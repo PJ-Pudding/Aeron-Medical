@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "rep-101",
+    "ticketNumber": "REP-2026-001",
+    "productCategory": "ระบบเครื่องอัลตราซาวด์ (Ultrasound)",
+    "productName": "AERON EchoVision 3D Pro",
+    "sn": "AERON-DEMO-US-02",
+    "repairedItems": "หัวโพรบความถี่สูง (Linear Probe) + สายสัญญาณตัวหลัก",
+    "issueDescription": "หัวโพรบตรวจไม่พบสัญญาณภาพ และพอร์ตเชื่อมต่อมีคราบออกไซด์",
+    "lastHospital": "โรงพยาบาลศิริราช (แผนกสูตินรีเวช)",
+    "lastUser": "พญ.สมศรี / พยาบาล CCU",
+    "salesPerson": "สมหญิง ใจดี",
+    "repairVendor": "AERON Service Center (กรุงเทพฯ)",
+    "sentDate": "2026-07-10",
+    "returnedDate": "2026-07-28",
+    "repairCost": 45000,
+    "shippingCost": 2500,
+    "category": "สินค้า Demo",
+    "status": "ส่งซ่อมอยู่",
+    "location": "ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)"
+  },
+  {
+    "id": "rep-102",
+    "ticketNumber": "REP-2026-002",
+    "productCategory": "เครื่องตรวจคลื่นหัวใจ (ECG/EKG)",
+    "productName": "AERON Cardio 12L-AI",
+    "sn": "AERON-DEMO-ECG-03",
+    "repairedItems": "ชุดแผงวงจรหลัก Power Board + สาย Lead 10 เส้น",
+    "issueDescription": "เครื่องชาร์จไฟไม่เข้า และหน้าจอแสดงผลวูบเป็นระยะ",
+    "lastHospital": "โรงพยาบาลตำรวจ",
+    "lastUser": "พ.ต.อ.นพ.ธนวัฒน์ / พยาบาล ER",
+    "salesPerson": "สุชาติ มุ่งมั่น",
+    "repairVendor": "Nihon Kohden Japan (ส่งเคลมต่างประเทศ)",
+    "sentDate": "2026-06-20",
+    "returnedDate": "2026-07-15",
+    "repairCost": 0,
+    "shippingCost": 8500,
+    "category": "สินค้าอยู่ในประกันของ บริษัท",
+    "status": "ซ่อมเสร็จแล้ว",
+    "location": "คลังสินค้าส่วนกลาง AERON (พร้อมส่งคืน)"
+  }
+]

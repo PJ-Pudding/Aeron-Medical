@@ -57,7 +57,9 @@ const ALLOWED_TABLES = new Set([
   'sold_products',
   'attendance_logs',
   'accounting_audit',
-  'users'
+  'users',
+  'daily_transactions',
+  'dictionary'
 ]);
 
 function isValidTableName(tableName) {
@@ -114,11 +116,12 @@ function fetchFromSupabaseCloud(tableName) {
       }
     };
     const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', chunk => { body += chunk; });
+      const chunks = [];
+      res.on('data', chunk => { chunks.push(chunk); });
       res.on('end', () => {
         try {
           if (res.statusCode >= 200 && res.statusCode < 300) {
+            const body = Buffer.concat(chunks).toString('utf8');
             const arr = JSON.parse(body);
             if (arr && arr.length > 0 && arr[0].data) {
               resolve(arr[0].data);
@@ -170,21 +173,25 @@ const server = http.createServer(async (req, res) => {
 
   // API Auth Handler: Login Route
   if (req.method === 'POST' && pathname === 'api/v1/auth/login') {
-    let body = '';
+    const chunks = [];
+    let receivedBytes = 0;
     let sizeExceeded = false;
     req.on('data', chunk => {
       if (sizeExceeded) return;
-      body += chunk;
-      if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) {
+      receivedBytes += chunk.length;
+      if (receivedBytes > MAX_PAYLOAD_BYTES) {
         sizeExceeded = true;
         res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Payload Too Large: Maximum size is 5MB' }));
         req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
     req.on('end', () => {
       if (sizeExceeded) return;
       try {
+        const body = Buffer.concat(chunks).toString('utf8');
         const payload = JSON.parse(body || '{}');
         const role = payload.role || 'OWNER';
         const userPayload = {
@@ -315,17 +322,20 @@ const server = http.createServer(async (req, res) => {
 
   // 🛡️ API Handler for saving DB with Sanitization & Size Limit
   if (req.method === 'POST' && pathname === 'api/save-db') {
-    let body = '';
+    const chunks = [];
+    let receivedBytes = 0;
     let sizeExceeded = false;
     req.on('data', chunk => {
       if (sizeExceeded) return;
-      body += chunk;
-      if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) {
+      receivedBytes += chunk.length;
+      if (receivedBytes > MAX_PAYLOAD_BYTES) {
         sizeExceeded = true;
         res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Payload Too Large: Maximum allowed size is 5MB' }));
         req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
 
     req.on('end', () => {
@@ -340,6 +350,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        const body = Buffer.concat(chunks).toString('utf8');
         if (body) {
           // 1. Save to local disk safely
           const targetPath = path.join(ROOT_DIR, 'db', `${tableName}.json`);

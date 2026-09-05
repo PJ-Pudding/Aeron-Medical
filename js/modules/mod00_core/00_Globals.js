@@ -93,20 +93,31 @@ const _cp1252Map = {
 
 function decodeMojibakeString(str) {
   if (!str || typeof str !== 'string') return str;
-  if (!str.includes('à')) return str;
-  const bytes = [];
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    if (code in _cp1252Map) bytes.push(_cp1252Map[code]);
-    else if (code <= 0xFF) bytes.push(code);
-    else return str;
+  let s = str;
+  if (s.includes('à')) {
+    const bytes = [];
+    let canDecode = true;
+    for (let i = 0; i < s.length; i++) {
+      const code = s.charCodeAt(i);
+      if (code in _cp1252Map) bytes.push(_cp1252Map[code]);
+      else if (code <= 0xFF) bytes.push(code);
+      else {
+        canDecode = false;
+        break;
+      }
+    }
+    if (canDecode) {
+      try {
+        const uint8 = new Uint8Array(bytes);
+        const decoded = new TextDecoder('utf-8').decode(uint8);
+        if (/[\u0E00-\u0E7F]/.test(decoded)) s = decoded;
+      } catch(e) {}
+    }
   }
-  try {
-    const uint8 = new Uint8Array(bytes);
-    const decoded = new TextDecoder('utf-8').decode(uint8);
-    if (/[\u0E00-\u0E7F]/.test(decoded)) return decoded;
-  } catch(e) {}
-  return str;
+  if (s.includes('\uFFFD')) {
+    s = s.replace(/\uFFFD+/g, '');
+  }
+  return s;
 }
 
 function sanitizeThaiData(val) {

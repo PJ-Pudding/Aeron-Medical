@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "AUD-202608-001",
+    "user_id": "USR-ADMIN-01",
+    "user_name": "แอดมิน สมหญิง",
+    "action": "FREEZE_MONTH",
+    "timestamp": "2026-06-01T00:00:00Z",
+    "before_data": null,
+    "after_data": {
+      "frozen_month": "2026-05"
+    }
+  }
+]
