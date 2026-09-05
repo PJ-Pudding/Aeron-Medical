@@ -3,7 +3,7 @@
 function PettyCashModal({ isOpen, onClose, onSave }) {
   const [pettyAccounts, setPettyAccounts] = useState([]);
   const [newEmpName, setNewEmpName] = useState('');
-  const [newLimit, setNewLimit] = useState(20000);
+  const [newLimit, setNewLimit] = useState('');
 
   // Initial Load from localStorage
   useEffect(() => {
@@ -34,14 +34,14 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
     const newAcc = {
       id: 'pc-' + Date.now(),
       empName: empClean,
-      limit: Number(newLimit) || 0,
+      limit: parseAeronNumber(newLimit),
       name: `เงินสดสำรองจ่าย - ${empClean} (Petty Cash)`
     };
 
     const updated = [...pettyAccounts, newAcc];
     setPettyAccounts(updated);
     setNewEmpName('');
-    setNewLimit(20000);
+    setNewLimit('');
   };
 
   const handleDeletePettyAccount = (id) => {
@@ -104,11 +104,10 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
 
               <div>
                 <label className="block text-slate-400 mb-1">วงเงิน/ยอดตั้งสำรอง (บาท)</label>
-                <input
-                  type="number"
-                  placeholder="20000"
+                <AeronNumberInput
+                  placeholder="20,000"
                   value={newLimit}
-                  onChange={(e) => setNewLimit(e.target.value)}
+                  onChange={(val) => setNewLimit(val)}
                   className="w-full bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl p-2.5 outline-none focus:border-amber-400"
                 />
               </div>

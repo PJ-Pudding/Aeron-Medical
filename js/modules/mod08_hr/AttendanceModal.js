@@ -1,24 +1,25 @@
 // MODULE: mod08_hr/AttendanceModal.js
 
 function AttendanceModal({ members = [], onSave, onClose }) {
-  const [employeeName, setEmployeeName] = useState(() => members.length > 0 ? members[0].name : '');
+  const [employeeName, setEmployeeName] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [type, setType] = useState('⏰ มาสาย');
-  const [lateMinutes, setLateMinutes] = useState(15);
-  const [fineAmount, setFineAmount] = useState(150);
+  const [type, setType] = useState('');
+  const [lateMinutes, setLateMinutes] = useState('');
+  const [fineAmount, setFineAmount] = useState('');
   const [note, setNote] = useState('');
 
   // Auto calculate fine amount when type or minutes change
   useEffect(() => {
+    if (!type) return;
     if (type === '⏰ มาสาย') {
       const mins = Number(lateMinutes) || 0;
-      setFineAmount(mins * 10); // 10 THB per minute late
+      setFineAmount(mins > 0 ? mins * 10 : ''); // 10 THB per minute late
     } else if (type === '🚫 ขาดงาน') {
       setLateMinutes(0);
       setFineAmount(500); // 500 THB fine for absence
     } else if (type === '⚠️ ออกก่อนเวลา') {
-      const mins = Number(lateMinutes) || 0;
-      setFineAmount(mins * 10);
+      const mins = parseAeronNumber(lateMinutes);
+      setFineAmount(mins > 0 ? mins * 10 : '');
     }
   }, [type, lateMinutes]);
 
@@ -30,8 +31,8 @@ function AttendanceModal({ members = [], onSave, onClose }) {
       date,
       employeeName,
       type,
-      lateMinutes: Number(lateMinutes) || 0,
-      fineAmount: Number(fineAmount) || 0,
+      lateMinutes: parseAeronNumber(lateMinutes),
+      fineAmount: parseAeronNumber(fineAmount),
       note: note || (type === '⏰ มาสาย' ? `มาสาย ${lateMinutes} นาที` : 'ขาดงานโดยไม่แจ้งล่วงหน้า'),
       createdAt: new Date().toISOString()
     };
@@ -81,6 +82,7 @@ function AttendanceModal({ members = [], onSave, onClose }) {
                 onChange={(e) => setEmployeeName(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-300 outline-none focus:border-indigo-500 font-bold"
               >
+                <option value="">-- เลือกพนักงาน --</option>
                 {members.map(m => (
                   <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
                 ))}
@@ -95,6 +97,7 @@ function AttendanceModal({ members = [], onSave, onClose }) {
               onChange={(e) => setType(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-rose-400 outline-none focus:border-rose-500 font-extrabold"
             >
+              <option value="">-- เลือกประเภทรายการ --</option>
               <option value="⏰ มาสาย">⏰ มาสาย (Tardiness) - หัก 10 บาท/นาที</option>
               <option value="🚫 ขาดงาน">🚫 ขาดงาน (Absence) - หักค่าปรับ 500 บาท/ครั้ง</option>
               <option value="⚠️ ออกก่อนเวลา">⚠️ ออกก่อนเวลา (Early Leave)</option>
@@ -105,26 +108,25 @@ function AttendanceModal({ members = [], onSave, onClose }) {
             {type !== '🚫 ขาดงาน' && (
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">จำนวนนาทีที่สาย</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
+                <AeronNumberInput
+                  placeholder="เช่น 15"
+                  allowDecimals={false}
                   value={lateMinutes}
                   onChange={(e) => setLateMinutes(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-400 font-bold font-mono outline-none focus:border-amber-500"
+                  unit="นาที"
                 />
               </div>
             )}
 
             <div className={type === '🚫 ขาดงาน' ? 'col-span-2 space-y-1' : 'space-y-1'}>
               <label className="font-semibold text-slate-300">ยอดหักเงินค่าปรับ (บาท)</label>
-              <input
-                type="number"
-                min="0"
-                required
+              <AeronNumberInput
+                placeholder="เช่น 150"
                 value={fineAmount}
                 onChange={(e) => setFineAmount(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-rose-400 font-extrabold font-mono outline-none focus:border-rose-500"
+                unit="บาท"
               />
             </div>
           </div>

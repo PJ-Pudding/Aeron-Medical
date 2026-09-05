@@ -7,22 +7,22 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
     const firstSN = firstProd.demoSerialNumbers ? firstProd.demoSerialNumbers[0] : '';
     return {
       ticketNumber: `REP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      productCategory: firstProd.category || window.PRODUCT_CATEGORIES[0],
-      productName: firstProd.name || '',
-      sn: firstSN || '',
-      repairedItems: 'ตัวเครื่องหลัก และ อุปกรณ์มาตรฐาน',
+      productCategory: '',
+      productName: '',
+      sn: '',
+      repairedItems: '',
       issueDescription: '',
       lastHospital: '',
       lastUser: '',
-      salesPerson: members[0] ? members[0].name : '',
-      repairVendor: 'AERON Service Center (กรุงเทพฯ)',
+      salesPerson: '',
+      repairVendor: '',
       sentDate: new Date().toISOString().split('T')[0],
       returnedDate: '',
-      repairCost: 0,
-      shippingCost: 0,
-      category: window.REPAIR_CATEGORIES[0],
-      status: window.REPAIR_STATUSES[0],
-      location: 'ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)'
+      repairCost: '',
+      shippingCost: '',
+      category: '',
+      status: '',
+      location: ''
     };
   });
 
@@ -64,8 +64,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
     }
     onSave({
       ...formData,
-      repairCost: Number(formData.repairCost) || 0,
-      shippingCost: Number(formData.shippingCost) || 0
+      repairCost: parseAeronNumber(formData.repairCost),
+      shippingCost: parseAeronNumber(formData.shippingCost)
     });
   };
 
@@ -100,6 +100,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
               >
+                <option value="">-- เลือกประเภทการซ่อม --</option>
                 {window.REPAIR_CATEGORIES.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -186,6 +187,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกเซลส์ที่รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -242,21 +244,23 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าใช้จ่ายในการซ่อม (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.repairCost}
                 onChange={(e) => setFormData({ ...formData, repairCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าขนส่ง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.shippingCost}
                 onChange={(e) => setFormData({ ...formData, shippingCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
@@ -267,6 +271,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-900 border border-amber-500/50 rounded-lg p-2 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกสถานะการส่งซ่อม --</option>
                 {window.REPAIR_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}

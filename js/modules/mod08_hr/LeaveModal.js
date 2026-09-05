@@ -3,9 +3,9 @@
 function LeaveModal({ members = [], currentUser, onSave, onClose }) {
   const [employeeName, setEmployeeName] = useState(() => {
     if (currentUser && currentUser.name) return currentUser.name;
-    return members.length > 0 ? members[0].name : '';
+    return '';
   });
-  const [leaveType, setLeaveType] = useState('🤒 ลาป่วย (Sick Leave)');
+  const [leaveType, setLeaveType] = useState('');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [totalDays, setTotalDays] = useState(1);
@@ -36,7 +36,7 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
       leaveType,
       startDate,
       endDate,
-      totalDays: Number(totalDays) || 1,
+      totalDays: parseAeronNumber(totalDays) || 1,
       reason,
       status: autoApprove ? '✅ อนุมัติแล้ว' : '⏳ รออนุมัติ',
       approvedBy: autoApprove ? (currentUser?.name || 'หัวหน้างาน') : '',
@@ -74,8 +74,9 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
             <select
               value={employeeName}
               onChange={(e) => setEmployeeName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 outline-none focus:border-indigo-500 font-medium"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 outline-none focus:border-indigo-500 font-bold"
             >
+              <option value="">-- เลือกพนักงาน --</option>
               {members.map(m => (
                 <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
               ))}
@@ -89,6 +90,7 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
               onChange={(e) => setLeaveType(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-emerald-300 outline-none focus:border-emerald-500 font-bold"
             >
+              <option value="">-- เลือกประเภทการลา --</option>
               <option value="🤒 ลาป่วย (Sick Leave)">🤒 ลาป่วย (Sick Leave) - สิทธิ์ 30 วัน/ปี</option>
               <option value="🌴 ลากิจ (Personal Leave)">🌴 ลากิจ (Personal Leave) - สิทธิ์ 6 วัน/ปี</option>
               <option value="🏖️ ลาพักร้อน (Vacation Leave)">🏖️ ลาพักร้อน (Vacation Leave) - สิทธิ์ 6 วัน/ปี</option>
@@ -123,14 +125,13 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">จำนวนวันลาทั้งหมด</label>
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
+              <AeronNumberInput
                 required
+                placeholder="1"
                 value={totalDays}
                 onChange={(e) => setTotalDays(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-emerald-400 font-bold font-mono outline-none focus:border-emerald-500"
+                unit="วัน"
               />
             </div>
 

@@ -8,26 +8,26 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
 
     return {
       shipmentNumber: `SHP-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      poNumber: firstPO.poNumber || `PO-${delivYr}-101`,
-      poId: firstPO.id || '',
-      productName: firstPO.productName || (products[0] ? products[0].name : ''),
-      productCategory: firstPO.productCategory || (products[0] ? products[0].category : ''),
-      quantity: firstPO.quantity || 1,
-      vendorName: firstPO.vendorName || 'Mindray Medical Singapore',
-      vendorCountry: firstPO.vendorCountry || 'สิงคโปร์',
-      hospitalDestination: firstPO.hospitalName || 'โรงพยาบาลศิริราช',
-      shippingCompany: 'DHL Global Forwarding',
-      trackingNumber: `AWB-${Math.floor(Math.random() * 89999999) + 10000000}`,
-      cbm: 2.5,
-      grossWeight: 150.0,
-      transportType: window.TRANSPORT_TYPES[0],
-      shippingCost: 35000,
-      dutyTaxes: 12000,
-      customsBroker: 'V-Cargo Logistics (Thailand)',
+      poNumber: '',
+      poId: '',
+      productName: '',
+      productCategory: '',
+      quantity: '',
+      vendorName: '',
+      vendorCountry: '',
+      hospitalDestination: '',
+      shippingCompany: '',
+      trackingNumber: '',
+      cbm: '',
+      grossWeight: '',
+      transportType: '',
+      shippingCost: '',
+      dutyTaxes: '',
+      customsBroker: '',
       paymentDate: shipment?.paymentDate || '',
       etd: new Date().toISOString().split('T')[0],
       eta: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
-      status: window.SHIPMENT_STATUSES[0],
+      status: '',
       notes: ''
     };
   });
@@ -67,10 +67,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
     }
     onSave({
       ...formData,
-      cbm: Number(formData.cbm) || 0,
-      grossWeight: Number(formData.grossWeight) || 0,
-      shippingCost: Number(formData.shippingCost) || 0,
-      dutyTaxes: Number(formData.dutyTaxes) || 0
+      cbm: parseAeronNumber(formData.cbm),
+      grossWeight: parseAeronNumber(formData.grossWeight),
+      shippingCost: parseAeronNumber(formData.shippingCost),
+      dutyTaxes: parseAeronNumber(formData.dutyTaxes)
     });
   };
 
@@ -171,6 +171,7 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
                 onChange={(e) => setFormData({ ...formData, transportType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold"
               >
+                <option value="">-- เลือกวิธีขนส่ง --</option>
                 {window.TRANSPORT_TYPES.map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -181,43 +182,45 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">ปริมาตร (CBM)</label>
-              <input
-                type="number"
-                step="0.1"
+              <AeronNumberInput
+                placeholder="0.0"
                 value={formData.cbm}
                 onChange={(e) => setFormData({ ...formData, cbm: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="CBM"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">น้ำหนักรวม (kg)</label>
-              <input
-                type="number"
-                step="0.5"
+              <AeronNumberInput
+                placeholder="0.0"
                 value={formData.grossWeight}
                 onChange={(e) => setFormData({ ...formData, grossWeight: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none"
+                unit="kg"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าขนส่ง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.shippingCost}
                 onChange={(e) => setFormData({ ...formData, shippingCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ภาษีศุลกากร (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.dutyTaxes}
                 onChange={(e) => setFormData({ ...formData, dutyTaxes: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -280,6 +283,7 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg p-2 text-cyan-300 font-bold outline-none focus:border-cyan-400 text-xs"
               >
+                <option value="">-- เลือกสถานะนำเข้า --</option>
                 {window.SHIPMENT_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}

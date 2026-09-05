@@ -3,23 +3,15 @@
 function CostSheetModal({ calc, projects = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (calc) return { ...calc };
-    const firstProj = projects[0] || {};
-    let parsedDf = 0;
-    let dfMissing = true;
-    if (firstProj.dfAmount) {
-      dfMissing = false;
-      const numStr = String(firstProj.dfAmount).replace(/[^0-9.]/g, '');
-      parsedDf = Number(numStr) || 0;
-    }
     return {
-      projectId: firstProj.id || '',
-      projectName: firstProj.hospitalName ? `${firstProj.hospitalName} - ${firstProj.title}` : '',
+      projectId: '',
+      projectName: '',
       date: new Date().toISOString().split('T')[0],
-      sellingPriceInVat: firstProj.budget || 4500000,
-      costInVat: 3240000,
+      sellingPriceInVat: '',
+      costInVat: '',
       dfType: 'amount',
-      dfValue: parsedDf,
-      dfMissing: dfMissing,
+      dfValue: '',
+      dfMissing: false,
       salesCommPercent: 2.0,
       interestPercent: 7.0,
       taxPercent: 20.0,
@@ -89,6 +81,7 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                 onChange={(e) => handleProjectSelect(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 font-semibold outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกโครงการ (ถ้ามี) --</option>
                 {(projects || []).map(p => (
                   <option key={p.id} value={p.id}>
                     🏥 {p.hospitalName} - {p.title} (โดย {p.assignee})
@@ -128,11 +121,11 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                   </td>
                   <td className="p-3 text-center border-r border-slate-800 text-slate-500">-</td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       required
+                      placeholder="0"
                       value={formData.sellingPriceInVat}
-                      onChange={(e) => setFormData({ ...formData, sellingPriceInVat: Number(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, sellingPriceInVat: e.target.value })}
                       className="w-full max-w-[200px] bg-slate-900 border border-emerald-500/50 text-emerald-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>
@@ -156,12 +149,11 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                   </td>
                   <td className="p-3 text-center border-r border-slate-800 text-slate-500">-</td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       required
                       placeholder="ใส่ราคาต้นทุนรวม VAT"
                       value={formData.costInVat}
-                      onChange={(e) => setFormData({ ...formData, costInVat: Number(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, costInVat: e.target.value })}
                       className="w-full max-w-[200px] bg-slate-900 border border-amber-500/50 text-amber-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>
@@ -205,10 +197,10 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                     </div>
                   </td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
+                      placeholder="0"
                       value={formData.dfType === 'amount' ? formData.dfValue : Math.round(computed.dfAmount)}
-                      onChange={(e) => setFormData({ ...formData, dfType: 'amount', dfValue: Number(e.target.value), dfMissing: false })}
+                      onChange={(e) => setFormData({ ...formData, dfType: 'amount', dfValue: e.target.value, dfMissing: false })}
                       className="w-full max-w-[200px] bg-slate-900 border border-purple-500/50 text-purple-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>

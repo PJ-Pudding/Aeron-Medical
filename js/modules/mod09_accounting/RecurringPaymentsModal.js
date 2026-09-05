@@ -2,10 +2,10 @@
 
 function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTemplate, onGenerateDrafts, onClose }) {
   const [newTitle, setNewTitle] = useState('');
-  const [newExpenseType, setNewExpenseType] = useState('ค่าเช่า');
+  const [newExpenseType, setNewExpenseType] = useState('');
   const [newAccountType, setNewAccountType] = useState('บริษัท KBANK');
-  const [newAmount, setNewAmount] = useState(0);
-  const [newWht, setNewWht] = useState(0);
+  const [newAmount, setNewAmount] = useState('');
+  const [newWht, setNewWht] = useState('');
   const [newPayee, setNewPayee] = useState('');
   const [newDueDay, setNewDueDay] = useState(28);
 
@@ -21,8 +21,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
       title: newTitle,
       expense_type: newExpenseType,
       account_type: newAccountType,
-      amount: Number(newAmount) || 0,
-      withholding_tax: Number(newWht) || 0,
+      amount: parseAeronNumber(newAmount),
+      withholding_tax: parseAeronNumber(newWht),
       payee: newPayee,
       due_day_of_month: Number(newDueDay) || 28,
       is_active: true
@@ -34,8 +34,9 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
     }
     onSaveTemplate(tData);
     setNewTitle('');
-    setNewAmount(0);
-    setNewWht(0);
+    setNewExpenseType('');
+    setNewAmount('');
+    setNewWht('');
     setNewPayee('');
   };
 
@@ -143,6 +144,7 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
                 onChange={(e) => setNewExpenseType(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกหมวดหมู่ค่าใช้จ่าย --</option>
                 <option value="ค่าเช่า">ค่าเช่า</option>
                 <option value="ค่าทำบัญชี">ค่าทำบัญชี</option>
                 <option value="ค่าใช้จ่ายออฟฟิศ">ค่าใช้จ่ายออฟฟิศ</option>
@@ -154,12 +156,11 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
           <div className="grid grid-cols-3 gap-2.5">
             <div>
               <label className="text-[11px] text-slate-400">จำนวนเงิน (บาท) *</label>
-              <input
-                type="number"
+              <AeronNumberInput
                 required
-                min="0"
+                placeholder="0.00"
                 value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
+                onChange={(val) => setNewAmount(val)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono outline-none"
               />
             </div>

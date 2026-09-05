@@ -1418,6 +1418,28 @@ function findSimilarDictionaryName(input, category) {
   return bestMatch;
 }
 
+function parseAeronNumber(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+function formatAeronNumber(val, decimals) {
+  if (val === null || val === undefined || val === '') return '';
+  const num = typeof val === 'number' ? val : parseAeronNumber(val);
+  if (isNaN(num)) return '';
+  if (typeof decimals === 'number') {
+    return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+  const parts = String(val).replace(/,/g, '').split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
+window.parseAeronNumber = parseAeronNumber;
+window.formatAeronNumber = formatAeronNumber;
 window.DEFAULT_DICTIONARY_SEEDS = DEFAULT_DICTIONARY_SEEDS;
 window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;
@@ -1426,6 +1448,198 @@ window.saveAeronDictionaryItem = saveAeronDictionaryItem;
 window.batchSaveAeronDictionary = batchSaveAeronDictionary;
 window.hydrateAeronDictionary = hydrateAeronDictionary;
 window.findSimilarDictionaryName = findSimilarDictionaryName;
+
+
+// --- Module File: js/modules/mod00_core/AeronNumberInput.js ---
+// MODULE: mod00_core/AeronNumberInput.js
+
+/**
+ * 🔢 AeronNumberInput
+ * Component สำหรับใส่ลูกน้ำ (Thousands Separator) อัตโนมัติทุกช่องตัวเลขแบบเรียลไทม์
+ * - กรองเฉพาะตัวเลข (และจุดทศนิยม 1 จุด)
+ * - จัดรูปแบบลูกน้ำคั่นหลักพัน เช่น 1,000,000 หรือ 1,500.50
+ * - รักษาระดับ Cursor Position ไม่ให้กระโดดไปท้ายสุดขณะพิมพ์แก้ไขตรงกลาง
+ * - ส่งค่า Unformatted Numeric String กลับไปยัง onChange เพื่อไม่ให้การคำนวณติด NaN
+ */
+function AeronNumberInput({
+  value,
+  onChange,
+  onBlur,
+  onFocus,
+  placeholder = "0",
+  className = "",
+  required = false,
+  disabled = false,
+  name,
+  id,
+  allowDecimals = true,
+  autoSelectOnFocus = false,
+  min,
+  max,
+  unit = ""
+}) {
+  const inputRef = useRef(null);
+
+  const formatWithCommas = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    const s = String(val).replace(/,/g, '');
+    if (s === '') return '';
+    const parts = s.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (parts.length > 1 && allowDecimals) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+    return parts[0];
+  };
+
+  const [displayValue, setDisplayValue] = useState(() => formatWithCommas(value));
+
+  // Sync with prop changes when parent updates state
+  useEffect(() => {
+    const formatted = formatWithCommas(value);
+    if (formatted !== displayValue) {
+      setDisplayValue(formatted);
+    }
+  }, [value]);
+
+  const handleInputChange = (e) => {
+    const rawInput = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+
+    // Count how many valid digits/dots were before the cursor
+    const textBeforeCursor = rawInput.substring(0, cursorPos);
+    const validCharsBefore = allowDecimals
+      ? textBeforeCursor.replace(/[^0-9.]/g, '')
+      : textBeforeCursor.replace(/[^0-9]/g, '');
+    const digitsBeforeCount = validCharsBefore.length;
+
+    // Clean total input
+    let cleaned = allowDecimals
+      ? rawInput.replace(/[^0-9.]/g, '')
+      : rawInput.replace(/[^0-9]/g, '');
+
+    // Allow at most 1 decimal point
+    if (allowDecimals && cleaned.indexOf('.') !== -1) {
+      const firstDot = cleaned.indexOf('.');
+      cleaned = cleaned.substring(0, firstDot + 1) + cleaned.substring(firstDot + 1).replace(/\./g, '');
+    }
+
+    if (cleaned === '') {
+      setDisplayValue('');
+      if (onChange) {
+        onChange({
+          target: {
+            name: name || id,
+            id: id || name,
+            value: '',
+            rawValue: 0
+          }
+        });
+      }
+      return;
+    }
+
+    // Format new display value
+    const parts = cleaned.split('.');
+    const formattedInt = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const formatted = parts.length > 1 && allowDecimals
+      ? `${formattedInt}.${parts.slice(1).join('')}`
+      : formattedInt;
+
+    setDisplayValue(formatted);
+
+    // Calculate new cursor position in formatted string
+    let newCursorPos = formatted.length;
+    if (digitsBeforeCount === 0) {
+      newCursorPos = 0;
+    } else {
+      let counted = 0;
+      for (let i = 0; i < formatted.length; i++) {
+        if (/[0-9.]/.test(formatted[i])) {
+          counted++;
+          if (counted === digitsBeforeCount) {
+            newCursorPos = i + 1;
+            break;
+          }
+        }
+      }
+    }
+
+    // Restore cursor position asynchronously after DOM update
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    });
+
+    // Fire onChange with clean numeric string (or float)
+    if (onChange) {
+      onChange({
+        target: {
+          name: name || id,
+          id: id || name,
+          value: cleaned,
+          rawValue: cleaned === '' ? 0 : Number(cleaned)
+        }
+      });
+    }
+  };
+
+  const handleBlur = (e) => {
+    // If user left a trailing dot e.g. "1,500.", remove it on blur
+    if (displayValue.endsWith('.')) {
+      const cleanEnd = displayValue.slice(0, -1);
+      setDisplayValue(cleanEnd);
+      if (onChange) {
+        const rawClean = cleanEnd.replace(/,/g, '');
+        onChange({
+          target: {
+            name: name || id,
+            id: id || name,
+            value: rawClean,
+            rawValue: Number(rawClean) || 0
+          }
+        });
+      }
+    }
+    if (onBlur) onBlur(e);
+  };
+
+  const handleFocus = (e) => {
+    if (autoSelectOnFocus && e.target) {
+      e.target.select();
+    }
+    if (onFocus) onFocus(e);
+  };
+
+  return (
+    <div className="relative w-full flex items-center">
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode={allowDecimals ? "decimal" : "numeric"}
+        id={id}
+        name={name}
+        value={displayValue}
+        onChange={handleInputChange}
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+        autoComplete="off"
+        className={className}
+      />
+      {unit && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+          {unit}
+        </span>
+      )}
+    </div>
+  );
+}
+
+window.AeronNumberInput = AeronNumberInput;
 
 
 // --- Module File: js/modules/mod00_core/AppModalsContainer.js ---
@@ -7823,33 +8037,43 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
-    clientType: 'รัฐบาล',
+    clientType: '',
     title: '',
     details: '',
-    assignee: defaultMember ? defaultMember.name : (currentUser ? currentUser.name : ''),
-    memberId: defaultMember ? defaultMember.id : (currentUser ? currentUser.memberId : ''),
+    assignee: '',
+    memberId: '',
     created_by: currentUser ? currentUser.name : '',
     created_by_role: currentUser ? currentUser.role : 'SALES',
-    productId: products[0] ? products[0].id : '',
-    productName: products[0] ? products[0].name : '',
-    productCategory: products[0] ? products[0].category : '',
-    productBrand: products[0] ? products[0].brand : 'AERON MEDICAL',
-    quantity: 1,
+    productId: '',
+    productName: '',
+    productCategory: '',
+    productBrand: '',
+    quantity: '',
     budget: '',
-    budgetType: 'งบลงทุน',
-    budgetTrend: 'ขาขึ้น',
+    budgetType: '',
+    budgetTrend: '',
     procurementDate: '',
-    demoStatus: 'ยังไม่ได้เข้าเดโม่',
+    demoStatus: '',
     demoStartDate: '',
     demoEndDate: '',
     decisionMakers: '',
     dfAmount: '',
     competitors: '',
     winProbability: 50,
-    status: stages[0].id
+    status: (stages && stages[0]) ? stages[0].id : ''
   });
 
   const handleProductSelect = (productId) => {
+    if (!productId) {
+      setFormData(prev => ({
+        ...prev,
+        productId: '',
+        productName: '',
+        productCategory: '',
+        productBrand: ''
+      }));
+      return;
+    }
     const selected = products.find(p => p.id === productId);
     if (selected) {
       setFormData(prev => ({
@@ -7857,7 +8081,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
         productId: selected.id,
         productName: selected.name,
         productCategory: selected.category,
-        productBrand: selected.brand || 'AERON MEDICAL'
+        productBrand: selected.brand || ''
       }));
     }
   };
@@ -7866,8 +8090,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
     e.preventDefault();
     const hosp = (formData.hospitalName || '').trim();
     const ttl = (formData.title || '').trim();
-    const rawBudget = String(formData.budget || '').replace(/,/g, '').trim();
-    const numBudget = Number(rawBudget) || 0;
+    const numBudget = parseAeronNumber(formData.budget);
 
     if (!hosp) {
       alert('กรุณากรอกชื่อโรงพยาบาล / หน่วยงาน');
@@ -7915,7 +8138,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       created_by: formData.created_by || currentUser?.name || currentUser?.username || 'User',
       created_by_role: formData.created_by_role || currentUser?.role || 'SALES',
       budget: numBudget,
-      quantity: Number(formData.quantity) || 1,
+      quantity: parseAeronNumber(formData.quantity) || 1,
       winProbability: Number(formData.winProbability) || 50
     });
   };
@@ -7953,6 +8176,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, clientType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกประเภทลูกค้า --</option>
                 <option value="รัฐบาล">🏛️ รัฐบาล</option>
                 <option value="เอกชน">🏢 เอกชน</option>
               </select>
@@ -7985,6 +8209,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                   onChange={(e) => handleProductSelect(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 outline-none focus:border-emerald-500"
                 >
+                  <option value="">-- เลือกรุ่นสินค้า --</option>
                   {(products || []).map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.brand || 'AERON'}) - {formatCurrency(p.price)}
@@ -7995,12 +8220,13 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
               <div className="space-y-1">
                 <label className="text-slate-300">จำนวนที่จัดซื้อ (ชุด)</label>
-                <input
-                  type="number"
-                  min="1"
+                <AeronNumberInput
+                  placeholder="1"
+                  allowDecimals={false}
                   value={formData.quantity}
                   onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 font-mono text-center outline-none focus:border-emerald-500"
+                  unit="ชุด"
                 />
               </div>
             </div>
@@ -8009,16 +8235,13 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">งบประมาณรวม (บาท) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <AeronNumberInput
                 required
-                placeholder="เช่น 2,500,000 หรือ 4500000"
+                placeholder="เช่น 2,500,000"
                 value={formData.budget}
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[^0-9,]/g, '');
-                  setFormData({ ...formData, budget: cleaned });
-                }}
+                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-emerald-500"
+                unit="บาท"
               />
             </div>
 
@@ -8029,6 +8252,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกประเภทงบประมาณ --</option>
                 {window.BUDGET_TYPES.map(b => (
                   <option key={b} value={b}>{b}</option>
                 ))}
@@ -8050,6 +8274,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-medium outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกผู้รับผิดชอบ --</option>
                 {effectiveMembers.map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -8065,6 +8290,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกขั้นตอนการติดตาม --</option>
                 {stages.map(s => (
                   <option key={s.id} value={s.id}>{s.title}</option>
                 ))}
@@ -8101,12 +8327,12 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ค่า DF (Doctor Fee / ดำเนินงาน)</label>
-              <input
-                type="text"
-                placeholder="เช่น 150,000 บาท"
+              <AeronNumberInput
+                placeholder="เช่น 150,000"
                 value={formData.dfAmount}
                 onChange={(e) => setFormData({ ...formData, dfAmount: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500 font-mono"
+                unit="บาท"
               />
             </div>
           </div>
@@ -8123,6 +8349,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                   onChange={(e) => setFormData({ ...formData, demoStatus: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 outline-none focus:border-emerald-500"
                 >
+                  <option value="">-- เลือกสถานะเดโม่ --</option>
                   <option value="ยังไม่ได้เข้าเดโม่">ยังไม่ได้เข้าเดโม่</option>
                   <option value="นัดหมายแล้ว">นัดหมายแล้ว</option>
                   <option value="กำลังเดโม่">กำลังเดโม่</option>
@@ -9198,33 +9425,21 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     if (product) {
       return {
         id: product.id,
-        category: product.category || activeCats[0] || '',
+        category: product.category || '',
         name: product.name || '',
-        brand: product.brand || 'AERON MEDICAL',
+        brand: product.brand || '',
         price: product.price || '',
         description: product.description || ''
       };
     }
     return {
-      category: activeCats[0] || '',
+      category: '',
       name: '',
-      brand: 'AERON MEDICAL',
+      brand: '',
       price: '',
       description: ''
     };
   });
-
-  // Dynamic category sync when categories prop loads from cloud
-  useEffect(() => {
-    if (!product && categories && categories.length > 0) {
-      setFormData(prev => {
-        if (!categories.includes(prev.category)) {
-          return { ...prev, category: categories[0] };
-        }
-        return prev;
-      });
-    }
-  }, [categories, product]);
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
   
@@ -9341,7 +9556,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     }
     onSave({
       ...formData,
-      price: Number(formData.price) || 0,
+      price: parseAeronNumber(formData.price),
       accessoriesList: validComponents,
       masterChecklistItems: validComponents.map(c => ({
         id: c.id,
@@ -9349,7 +9564,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
         itemNo: c.itemNo || '',
         partNo: c.itemNo || '',
         serialNo: c.serialNo || '',
-        qty: Number(c.qty) || 1,
+        qty: parseAeronNumber(c.qty) || 1,
         unit: c.unit || 'ชิ้น',
         note: c.note || '',
         condition: 'สมบูรณ์'
@@ -9445,6 +9660,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none focus:border-indigo-500"
                   >
+                    <option value="">-- เลือกหมวดหมู่สินค้า --</option>
                     {(categories || window.PRODUCT_CATEGORIES || []).map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -9456,7 +9672,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                 <label className="font-semibold text-slate-300">แบรนด์/ผู้ผลิต</label>
                 <SmartSuggestInput
                   category="brand"
-                  placeholder="เช่น AERON MEDICAL"
+                  placeholder="เช่น AERON MEDICAL, Bojin, Mindray"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none"
@@ -9479,12 +9695,12 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">ราคาขายประมาณการ (บาท THB)</label>
-                <input
-                  type="number"
-                  placeholder="เช่น 900000"
+                <AeronNumberInput
+                  placeholder="เช่น 900,000"
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none font-mono font-bold text-amber-300"
+                  unit="THB"
                 />
               </div>
             </div>
@@ -9590,11 +9806,9 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                         {/* 5. จำนวน */}
                         <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="number"
-                            min="1"
+                          <AeronNumberInput
                             value={comp.qty}
-                            onChange={(e) => handleComponentChange(idx, 'qty', e.target.value)}
+                            onChange={(val) => handleComponentChange(idx, 'qty', val)}
                             className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 text-center font-mono font-bold text-amber-300 outline-none text-xs focus:border-emerald-500"
                           />
                         </td>
@@ -9704,10 +9918,11 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                     <div className="space-y-1">
                       <label className="text-slate-300 font-semibold">สถานะเครื่องเดโม่</label>
                       <select
-                        value={unit.status || 'พร้อมใช้งาน'}
+                        value={unit.status || ''}
                         onChange={(e) => handleUnitChange(idx, 'status', e.target.value)}
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none font-semibold"
                       >
+                        <option value="">-- เลือกสถานะ --</option>
                         <option value="พร้อมใช้งาน">✅ พร้อมใช้งาน</option>
                         <option value="ส่งซ่อม">🔧 ส่งซ่อม</option>
                         <option value="เสีย">❌ เสีย</option>
@@ -10082,22 +10297,22 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
     const firstSN = firstProd.demoSerialNumbers ? firstProd.demoSerialNumbers[0] : '';
     return {
       ticketNumber: `REP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      productCategory: firstProd.category || window.PRODUCT_CATEGORIES[0],
-      productName: firstProd.name || '',
-      sn: firstSN || '',
-      repairedItems: 'ตัวเครื่องหลัก และ อุปกรณ์มาตรฐาน',
+      productCategory: '',
+      productName: '',
+      sn: '',
+      repairedItems: '',
       issueDescription: '',
       lastHospital: '',
       lastUser: '',
-      salesPerson: members[0] ? members[0].name : '',
-      repairVendor: 'AERON Service Center (กรุงเทพฯ)',
+      salesPerson: '',
+      repairVendor: '',
       sentDate: new Date().toISOString().split('T')[0],
       returnedDate: '',
-      repairCost: 0,
-      shippingCost: 0,
-      category: window.REPAIR_CATEGORIES[0],
-      status: window.REPAIR_STATUSES[0],
-      location: 'ศูนย์ซ่อม AERON Service Center (กรุงเทพฯ)'
+      repairCost: '',
+      shippingCost: '',
+      category: '',
+      status: '',
+      location: ''
     };
   });
 
@@ -10139,8 +10354,8 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
     }
     onSave({
       ...formData,
-      repairCost: Number(formData.repairCost) || 0,
-      shippingCost: Number(formData.shippingCost) || 0
+      repairCost: parseAeronNumber(formData.repairCost),
+      shippingCost: parseAeronNumber(formData.shippingCost)
     });
   };
 
@@ -10175,6 +10390,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-indigo-300 font-semibold outline-none"
               >
+                <option value="">-- เลือกประเภทการซ่อม --</option>
                 {window.REPAIR_CATEGORIES.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -10261,6 +10477,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกเซลส์ที่รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -10317,21 +10534,23 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าใช้จ่ายในการซ่อม (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.repairCost}
                 onChange={(e) => setFormData({ ...formData, repairCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าขนส่ง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.shippingCost}
                 onChange={(e) => setFormData({ ...formData, shippingCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
@@ -10342,6 +10561,7 @@ function RepairTicketModal({ ticket, products = [], members = [], onSave, onClos
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-900 border border-amber-500/50 rounded-lg p-2 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกสถานะการส่งซ่อม --</option>
                 {window.REPAIR_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -10374,26 +10594,26 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
 
     return {
       shipmentNumber: `SHP-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      poNumber: firstPO.poNumber || `PO-${delivYr}-101`,
-      poId: firstPO.id || '',
-      productName: firstPO.productName || (products[0] ? products[0].name : ''),
-      productCategory: firstPO.productCategory || (products[0] ? products[0].category : ''),
-      quantity: firstPO.quantity || 1,
-      vendorName: firstPO.vendorName || 'Mindray Medical Singapore',
-      vendorCountry: firstPO.vendorCountry || 'สิงคโปร์',
-      hospitalDestination: firstPO.hospitalName || 'โรงพยาบาลศิริราช',
-      shippingCompany: 'DHL Global Forwarding',
-      trackingNumber: `AWB-${Math.floor(Math.random() * 89999999) + 10000000}`,
-      cbm: 2.5,
-      grossWeight: 150.0,
-      transportType: window.TRANSPORT_TYPES[0],
-      shippingCost: 35000,
-      dutyTaxes: 12000,
-      customsBroker: 'V-Cargo Logistics (Thailand)',
+      poNumber: '',
+      poId: '',
+      productName: '',
+      productCategory: '',
+      quantity: '',
+      vendorName: '',
+      vendorCountry: '',
+      hospitalDestination: '',
+      shippingCompany: '',
+      trackingNumber: '',
+      cbm: '',
+      grossWeight: '',
+      transportType: '',
+      shippingCost: '',
+      dutyTaxes: '',
+      customsBroker: '',
       paymentDate: shipment?.paymentDate || '',
       etd: new Date().toISOString().split('T')[0],
       eta: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
-      status: window.SHIPMENT_STATUSES[0],
+      status: '',
       notes: ''
     };
   });
@@ -10433,10 +10653,10 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
     }
     onSave({
       ...formData,
-      cbm: Number(formData.cbm) || 0,
-      grossWeight: Number(formData.grossWeight) || 0,
-      shippingCost: Number(formData.shippingCost) || 0,
-      dutyTaxes: Number(formData.dutyTaxes) || 0
+      cbm: parseAeronNumber(formData.cbm),
+      grossWeight: parseAeronNumber(formData.grossWeight),
+      shippingCost: parseAeronNumber(formData.shippingCost),
+      dutyTaxes: parseAeronNumber(formData.dutyTaxes)
     });
   };
 
@@ -10537,6 +10757,7 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
                 onChange={(e) => setFormData({ ...formData, transportType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold"
               >
+                <option value="">-- เลือกวิธีขนส่ง --</option>
                 {window.TRANSPORT_TYPES.map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -10547,43 +10768,45 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">ปริมาตร (CBM)</label>
-              <input
-                type="number"
-                step="0.1"
+              <AeronNumberInput
+                placeholder="0.0"
                 value={formData.cbm}
                 onChange={(e) => setFormData({ ...formData, cbm: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="CBM"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">น้ำหนักรวม (kg)</label>
-              <input
-                type="number"
-                step="0.5"
+              <AeronNumberInput
+                placeholder="0.0"
                 value={formData.grossWeight}
                 onChange={(e) => setFormData({ ...formData, grossWeight: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none"
+                unit="kg"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่าขนส่ง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.shippingCost}
                 onChange={(e) => setFormData({ ...formData, shippingCost: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ภาษีศุลกากร (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.dutyTaxes}
                 onChange={(e) => setFormData({ ...formData, dutyTaxes: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -10646,6 +10869,7 @@ function ShipmentModal({ shipment, purchaseOrders = [], products = [], onSave, o
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-900 border border-cyan-500/50 rounded-lg p-2 text-cyan-300 font-bold outline-none focus:border-cyan-400 text-xs"
               >
+                <option value="">-- เลือกสถานะนำเข้า --</option>
                 {window.SHIPMENT_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -11111,27 +11335,27 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
     return {
       assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
-      projectId: wonProj.id || '',
-      hospitalName: wonProj.hospitalName || '',
-      department: 'แผนกห้องผ่าตัด / CCU',
-      productName: wonProj.productName || 'เครื่องมือแพทย์ AERON',
-      brand: wonProj.productBrand || 'AERON MEDICAL',
-      productCategory: wonProj.productCategory || 'อุปกรณ์แพทย์',
-      serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
-      freebies: 'กระดาษบันทึกมาตรฐาน 10 ม้วน, สายสัญญาณสำรอง, รถเข็นสแตนเลส',
-      salesPerson: wonProj.assignee || (members[0] ? members[0].name : ''),
-      contactPerson: wonProj.decisionMakers || '',
+      contractNumber: '',
+      projectId: '',
+      hospitalName: '',
+      department: '',
+      productName: '',
+      brand: '',
+      productCategory: '',
+      serialNumber: '',
+      freebies: '',
+      salesPerson: '',
+      contactPerson: '',
       deliveryDate: delivDate,
-      projectValue: wonProj.budget || 1000000,
-      dfAmount: wonProj.dfAmount || '100,000 บาท',
-      bidGuaranteeAmount: Math.round((wonProj.budget || 1000000) * 0.05),
-      bidGuaranteeRefundDate: `${delivYr}-12-15`,
+      projectValue: '',
+      dfAmount: '',
+      bidGuaranteeAmount: '',
+      bidGuaranteeRefundDate: '',
       warrantyYears: 1,
-      warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
-      nextPmDate: `${delivYr}-12-15`,
-      pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
-      pmStatus: '⏳ ถึงกำหนดทำ PM',
+      warrantyExpiryDate: '',
+      nextPmDate: '',
+      pmFrequency: '',
+      pmStatus: '',
       status: 'รับมอบเรียบร้อย'
     };
   });
@@ -11173,8 +11397,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
     }
     onSave({
       ...formData,
-      projectValue: Number(formData.projectValue) || 0,
-      bidGuaranteeAmount: Number(formData.bidGuaranteeAmount) || 0
+      projectValue: parseAeronNumber(formData.projectValue),
+      dfAmount: parseAeronNumber(formData.dfAmount),
+      bidGuaranteeAmount: parseAeronNumber(formData.bidGuaranteeAmount)
     });
   };
 
@@ -11260,6 +11485,7 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกเซลส์ผู้รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -11295,6 +11521,7 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
               <label className="font-semibold text-slate-300">หมายเลข Serial Number</label>
               <input
                 type="text"
+                placeholder="เช่น SN-AERON-..."
                 value={formData.serialNumber}
                 onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none"
@@ -11326,21 +11553,23 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">มูลค่างาน (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 1,000,000"
                 value={formData.projectValue}
                 onChange={(e) => setFormData({ ...formData, projectValue: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่า DF (Doctor Fee)</label>
-              <input
-                type="text"
+              <AeronNumberInput
+                placeholder="เช่น 100,000"
                 value={formData.dfAmount}
                 onChange={(e) => setFormData({ ...formData, dfAmount: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-semibold outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-semibold font-mono outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -11348,11 +11577,12 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">จำนวนเงินค้ำประกันซอง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 50,000"
                 value={formData.bidGuaranteeAmount}
                 onChange={(e) => setFormData({ ...formData, bidGuaranteeAmount: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
@@ -11805,14 +12035,14 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
     id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',
     hospitalName: prefill?.hospitalName || '',
-    productId: prefill?.productId || (products[0] ? products[0].id : ''),
+    productId: prefill?.productId || '',
     demoSerial: prefill?.demoSerial || '',
-    salesPerson: prefill?.salesPerson || (members[0] ? members[0].name : ''),
+    salesPerson: prefill?.salesPerson || '',
     startDate: prefill?.startDate || new Date().toISOString().split('T')[0],
     endDate: prefill?.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     status: prefill?.status || 'อนุมัติคิว',
     expenseAmount: prefill?.expenseAmount || prefill?.demoCost || '',
-    outcomeStatus: prefill?.outcomeStatus || 'กำลังทดสอบ / รอผล',
+    outcomeStatus: prefill?.outcomeStatus || '',
     note: prefill?.note || ''
   });
 
@@ -11860,6 +12090,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
     const prod = products.find(p => p.id === formData.productId);
     onSave({
       ...formData,
+      expenseAmount: parseAeronNumber(formData.expenseAmount),
       productName: prod ? prod.name : 'เครื่องมือแพทย์ AERON',
       productCategory: prod ? prod.category : 'อุปกรณ์แพทย์'
     });
@@ -11905,6 +12136,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
               onChange={(e) => setFormData({ ...formData, productId: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-bold"
             >
+              <option value="">-- เลือกรุ่นเครื่องสาธิต --</option>
               {(products || []).map(p => (
                 <option key={p.id} value={p.id}>
                   📦 {p.name} (มี {p.demoUnitsAvailable || 1} เครื่อง)
@@ -11951,6 +12183,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500"
               >
+                <option value="">-- เลือกเซลส์ผู้รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>👤 {m.name}</option>
                 ))}
@@ -11979,12 +12212,12 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">💸 ค่าใช้จ่ายเดโม่ (บาท THB)</label>
-              <input
-                type="number"
-                placeholder="เช่น 1500 (ค่าน้ำมัน/ขนส่ง)"
+              <AeronNumberInput
+                placeholder="เช่น 1,500"
                 value={formData.expenseAmount}
                 onChange={(e) => setFormData({ ...formData, expenseAmount: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-purple-500"
+                unit="บาท"
               />
             </div>
 
@@ -11995,6 +12228,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
                 onChange={(e) => setFormData({ ...formData, outcomeStatus: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-semibold"
               >
+                <option value="">-- เลือกผลลัพธ์การเดโม่ --</option>
                 <option value="กำลังทดสอบ / รอผล">⏳ กำลังทดสอบ / รอผล</option>
                 <option value="ชนะประมูล / ปิดการขายสำเร็จ">🏆 ชนะประมูล / ปิดการขายสำเร็จ</option>
                 <option value="แพ้ประมูล / ปิดไม่สำเร็จ">❌ แพ้ประมูล / ปิดไม่สำเร็จ</option>
@@ -13080,19 +13314,19 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
     return {
       registrationNumber: `FDA-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
       fdaLicenseNo: '',
-      productName: firstProd.name || '',
-      brand: firstProd.brand || 'AERON MEDICAL',
-      vendorName: firstProd.manufacturer || 'Mindray Medical Singapore',
-      deviceClass: 'Class 1',
-      targetDays: 30,
-      agencyName: 'Pharmatech FDA Consulting Co., Ltd.',
-      raSpecialist: members[0] ? members[0].name : 'ภก. วิศรุต ธรรมรักษ์',
-      costTHB: 50000,
-      submissionType: 'ยื่นขอใหม่',
+      productName: '',
+      brand: '',
+      vendorName: '',
+      deviceClass: '',
+      targetDays: '',
+      agencyName: '',
+      raSpecialist: '',
+      costTHB: '',
+      submissionType: '',
       paymentDate: new Date().toISOString().split('T')[0],
       approvalDate: '',
       expiryDate: '',
-      status: window.FDA_STATUSES[0],
+      status: '',
       notes: ''
     };
   });
@@ -13139,8 +13373,8 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
     }
     onSave({
       ...formData,
-      costTHB: Number(formData.costTHB) || 0,
-      targetDays: Number(formData.targetDays) || 30
+      costTHB: parseAeronNumber(formData.costTHB),
+      targetDays: parseAeronNumber(formData.targetDays) || 30
     });
   };
 
@@ -13188,6 +13422,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => handleProductSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
               >
+                <option value="">-- เลือกรุ่นสินค้าในแคตตาล็อก --</option>
                 {(products || []).map(p => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
@@ -13226,6 +13461,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => handleClassSelect(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-bold outline-none"
               >
+                <option value="">-- เลือกระดับความเสี่ยง อย. --</option>
                 {window.FDA_CLASSES.map(c => (
                   <option key={c.code} value={c.code}>{c.label}</option>
                 ))}
@@ -13234,11 +13470,13 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">จำนวนวันทำการเกณฑ์ SLA อย.</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 30"
+                allowDecimals={false}
                 value={formData.targetDays}
                 onChange={(e) => setFormData({ ...formData, targetDays: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-mono font-bold outline-none"
+                unit="วัน"
               />
             </div>
           </div>
@@ -13268,11 +13506,12 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ราคาค่าจด อย. (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 50,000"
                 value={formData.costTHB}
                 onChange={(e) => setFormData({ ...formData, costTHB: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-emerald-400 font-mono font-bold outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -13318,6 +13557,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกสถานะคำขอ --</option>
                 {window.FDA_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -13331,6 +13571,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => setFormData({ ...formData, submissionType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกประเภทการยื่น --</option>
                 <option value="ยื่นขอใหม่">ยื่นขอใหม่ (New Filing)</option>
                 <option value="ยื่นขอต่ออายุ">ยื่นขอต่ออายุ (Renewal)</option>
                 <option value="ขอแก้ไขรายการ">ขอแก้ไขรายการ (Amendment)</option>
@@ -14068,12 +14309,12 @@ function CashForecastView({
 
   // Handlers for cell editing
   const handleCollectionChange = (monthKey, val) => {
-    const num = val === '' ? 0 : Number(val);
+    const num = val === '' ? 0 : parseAeronNumber(val);
     setCustomHospitalCollections(prev => ({ ...prev, [monthKey]: num }));
   };
 
   const handleExpenseChange = (monthKey, val) => {
-    const num = val === '' ? 0 : Number(val);
+    const num = val === '' ? 0 : parseAeronNumber(val);
     setCustomProjectedExpenses(prev => ({ ...prev, [monthKey]: num }));
   };
 
@@ -14514,11 +14755,10 @@ function CashForecastView({
                 </td>
                 {forecastMatrix.map(m => (
                   <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       placeholder="0"
                       value={customHospitalCollections[m.key] !== undefined && customHospitalCollections[m.key] !== 0 ? customHospitalCollections[m.key] : ''}
-                      onChange={(e) => handleCollectionChange(m.key, e.target.value)}
+                      onChange={(val) => handleCollectionChange(m.key, val)}
                       className="w-full bg-slate-950/90 border border-emerald-500/40 hover:border-emerald-400 focus:border-emerald-300 text-emerald-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-emerald-400"
                     />
                   </td>
@@ -14601,11 +14841,10 @@ function CashForecastView({
                 </td>
                 {forecastMatrix.map(m => (
                   <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       placeholder="0"
                       value={customProjectedExpenses[m.key] !== undefined && customProjectedExpenses[m.key] !== 0 ? customProjectedExpenses[m.key] : ''}
-                      onChange={(e) => handleExpenseChange(m.key, e.target.value)}
+                      onChange={(val) => handleExpenseChange(m.key, val)}
                       className="w-full bg-slate-950/90 border border-rose-500/40 hover:border-rose-400 focus:border-rose-300 text-rose-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-rose-400"
                     />
                   </td>
@@ -15225,23 +15464,15 @@ function CostCalculationView({ costCalculations = [], projects = [], members = [
 function CostSheetModal({ calc, projects = [], onSave, onClose }) {
   const [formData, setFormData] = useState(() => {
     if (calc) return { ...calc };
-    const firstProj = projects[0] || {};
-    let parsedDf = 0;
-    let dfMissing = true;
-    if (firstProj.dfAmount) {
-      dfMissing = false;
-      const numStr = String(firstProj.dfAmount).replace(/[^0-9.]/g, '');
-      parsedDf = Number(numStr) || 0;
-    }
     return {
-      projectId: firstProj.id || '',
-      projectName: firstProj.hospitalName ? `${firstProj.hospitalName} - ${firstProj.title}` : '',
+      projectId: '',
+      projectName: '',
       date: new Date().toISOString().split('T')[0],
-      sellingPriceInVat: firstProj.budget || 4500000,
-      costInVat: 3240000,
+      sellingPriceInVat: '',
+      costInVat: '',
       dfType: 'amount',
-      dfValue: parsedDf,
-      dfMissing: dfMissing,
+      dfValue: '',
+      dfMissing: false,
       salesCommPercent: 2.0,
       interestPercent: 7.0,
       taxPercent: 20.0,
@@ -15311,6 +15542,7 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                 onChange={(e) => handleProjectSelect(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 font-semibold outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกโครงการ (ถ้ามี) --</option>
                 {(projects || []).map(p => (
                   <option key={p.id} value={p.id}>
                     🏥 {p.hospitalName} - {p.title} (โดย {p.assignee})
@@ -15350,11 +15582,11 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                   </td>
                   <td className="p-3 text-center border-r border-slate-800 text-slate-500">-</td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       required
+                      placeholder="0"
                       value={formData.sellingPriceInVat}
-                      onChange={(e) => setFormData({ ...formData, sellingPriceInVat: Number(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, sellingPriceInVat: e.target.value })}
                       className="w-full max-w-[200px] bg-slate-900 border border-emerald-500/50 text-emerald-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>
@@ -15378,12 +15610,11 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                   </td>
                   <td className="p-3 text-center border-r border-slate-800 text-slate-500">-</td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       required
                       placeholder="ใส่ราคาต้นทุนรวม VAT"
                       value={formData.costInVat}
-                      onChange={(e) => setFormData({ ...formData, costInVat: Number(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, costInVat: e.target.value })}
                       className="w-full max-w-[200px] bg-slate-900 border border-amber-500/50 text-amber-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>
@@ -15427,10 +15658,10 @@ function CostSheetModal({ calc, projects = [], onSave, onClose }) {
                     </div>
                   </td>
                   <td className="p-3 text-right">
-                    <input
-                      type="number"
+                    <AeronNumberInput
+                      placeholder="0"
                       value={formData.dfType === 'amount' ? formData.dfValue : Math.round(computed.dfAmount)}
-                      onChange={(e) => setFormData({ ...formData, dfType: 'amount', dfValue: Number(e.target.value), dfMissing: false })}
+                      onChange={(e) => setFormData({ ...formData, dfType: 'amount', dfValue: e.target.value, dfMissing: false })}
                       className="w-full max-w-[200px] bg-slate-900 border border-purple-500/50 text-purple-300 font-bold p-1.5 rounded-lg text-right outline-none font-mono"
                     />
                   </td>
@@ -15603,22 +15834,22 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
     return {
       poNumber: `PO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
       year: new Date().getFullYear(),
-      projectId: firstProj.id || '',
-      hospitalName: firstProj.hospitalName || '',
-      vendorId: window.VENDOR_LIST[0].id,
-      vendorName: window.VENDOR_LIST[0].name,
-      vendorCountry: window.VENDOR_LIST[0].country,
-      currency: window.VENDOR_LIST[0].currency || 'THB',
-      productId: firstProj.productId || (products[0] ? products[0].id : ''),
-      productName: firstProj.productName || (products[0] ? products[0].name : ''),
-      quantity: firstProj.quantity || 1,
-      unitPrice: 100000,
-      totalAmountFX: 100000,
+      projectId: '',
+      hospitalName: '',
+      vendorId: '',
+      vendorName: '',
+      vendorCountry: '',
+      currency: 'THB',
+      productId: '',
+      productName: '',
+      quantity: '',
+      unitPrice: '',
+      totalAmountFX: '',
       exchangeRate: 1,
-      totalAmountTHB: firstProj.budget || 100000,
+      totalAmountTHB: '',
       poDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
-      status: 'ร่าง PO',
+      status: '',
       note: ''
     };
   });
@@ -15662,9 +15893,9 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
   const updateCalc = (field, val) => {
     const newForm = { ...formData, [field]: val };
-    const qty = Number(newForm.quantity) || 1;
-    const price = Number(newForm.unitPrice) || 0;
-    const rate = Number(newForm.exchangeRate) || 1;
+    const qty = parseAeronNumber(newForm.quantity) || 1;
+    const price = parseAeronNumber(newForm.unitPrice);
+    const rate = parseAeronNumber(newForm.exchangeRate) || 1;
     newForm.totalAmountFX = qty * price;
     newForm.totalAmountTHB = qty * price * rate;
     setFormData(newForm);
@@ -15687,7 +15918,14 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
-    onSave(formData);
+    onSave({
+      ...formData,
+      quantity: parseAeronNumber(formData.quantity) || 1,
+      unitPrice: parseAeronNumber(formData.unitPrice),
+      exchangeRate: parseAeronNumber(formData.exchangeRate) || 1,
+      totalAmountFX: parseAeronNumber(formData.totalAmountFX),
+      totalAmountTHB: parseAeronNumber(formData.totalAmountTHB)
+    });
   };
 
   return (
@@ -15763,6 +16001,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                 onChange={(e) => handleVendorSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-semibold text-amber-300 outline-none"
               >
+                <option value="">-- เลือก Vendor / ผู้จัดจำหน่าย --</option>
                 {window.VENDOR_LIST.map(v => (
                   <option key={v.id} value={v.id}>{v.name} ({v.country})</option>
                 ))}
@@ -15785,9 +16024,9 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">จำนวนสั่งซื้อ</label>
-              <input
-                type="number"
-                min="1"
+              <AeronNumberInput
+                placeholder="1"
+                allowDecimals={false}
                 value={formData.quantity}
                 onChange={(e) => updateCalc('quantity', Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono text-center outline-none"
@@ -15798,8 +16037,8 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ราคาต่อหน่วย (Foreign FX)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.unitPrice}
                 onChange={(e) => updateCalc('unitPrice', Number(e.target.value))}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none"
@@ -15819,9 +16058,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                   <option value="EUR">EUR (€)</option>
                   <option value="JPY">JPY (¥)</option>
                 </select>
-                <input
-                  type="number"
-                  step="0.01"
+                <AeronNumberInput
                   placeholder="Rate"
                   value={formData.exchangeRate}
                   onChange={(e) => updateCalc('exchangeRate', Number(e.target.value))}
@@ -15832,11 +16069,12 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">มูลค่ารวม (บาท THB)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.totalAmountTHB}
                 onChange={(e) => setFormData({ ...formData, totalAmountTHB: Number(e.target.value) })}
                 className="w-full bg-slate-900 border border-amber-500/50 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="฿"
               />
             </div>
           </div>
@@ -15869,6 +16107,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold text-indigo-300"
               >
+                <option value="">-- เลือกสถานะ PO --</option>
                 {window.PO_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -16562,24 +16801,25 @@ function PurchaseOrderView({ purchaseOrders = [], projects = [], products = [], 
 // MODULE: mod08_hr/AttendanceModal.js
 
 function AttendanceModal({ members = [], onSave, onClose }) {
-  const [employeeName, setEmployeeName] = useState(() => members.length > 0 ? members[0].name : '');
+  const [employeeName, setEmployeeName] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [type, setType] = useState('⏰ มาสาย');
-  const [lateMinutes, setLateMinutes] = useState(15);
-  const [fineAmount, setFineAmount] = useState(150);
+  const [type, setType] = useState('');
+  const [lateMinutes, setLateMinutes] = useState('');
+  const [fineAmount, setFineAmount] = useState('');
   const [note, setNote] = useState('');
 
   // Auto calculate fine amount when type or minutes change
   useEffect(() => {
+    if (!type) return;
     if (type === '⏰ มาสาย') {
       const mins = Number(lateMinutes) || 0;
-      setFineAmount(mins * 10); // 10 THB per minute late
+      setFineAmount(mins > 0 ? mins * 10 : ''); // 10 THB per minute late
     } else if (type === '🚫 ขาดงาน') {
       setLateMinutes(0);
       setFineAmount(500); // 500 THB fine for absence
     } else if (type === '⚠️ ออกก่อนเวลา') {
-      const mins = Number(lateMinutes) || 0;
-      setFineAmount(mins * 10);
+      const mins = parseAeronNumber(lateMinutes);
+      setFineAmount(mins > 0 ? mins * 10 : '');
     }
   }, [type, lateMinutes]);
 
@@ -16591,8 +16831,8 @@ function AttendanceModal({ members = [], onSave, onClose }) {
       date,
       employeeName,
       type,
-      lateMinutes: Number(lateMinutes) || 0,
-      fineAmount: Number(fineAmount) || 0,
+      lateMinutes: parseAeronNumber(lateMinutes),
+      fineAmount: parseAeronNumber(fineAmount),
       note: note || (type === '⏰ มาสาย' ? `มาสาย ${lateMinutes} นาที` : 'ขาดงานโดยไม่แจ้งล่วงหน้า'),
       createdAt: new Date().toISOString()
     };
@@ -16642,6 +16882,7 @@ function AttendanceModal({ members = [], onSave, onClose }) {
                 onChange={(e) => setEmployeeName(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-300 outline-none focus:border-indigo-500 font-bold"
               >
+                <option value="">-- เลือกพนักงาน --</option>
                 {members.map(m => (
                   <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
                 ))}
@@ -16656,6 +16897,7 @@ function AttendanceModal({ members = [], onSave, onClose }) {
               onChange={(e) => setType(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-rose-400 outline-none focus:border-rose-500 font-extrabold"
             >
+              <option value="">-- เลือกประเภทรายการ --</option>
               <option value="⏰ มาสาย">⏰ มาสาย (Tardiness) - หัก 10 บาท/นาที</option>
               <option value="🚫 ขาดงาน">🚫 ขาดงาน (Absence) - หักค่าปรับ 500 บาท/ครั้ง</option>
               <option value="⚠️ ออกก่อนเวลา">⚠️ ออกก่อนเวลา (Early Leave)</option>
@@ -16666,26 +16908,25 @@ function AttendanceModal({ members = [], onSave, onClose }) {
             {type !== '🚫 ขาดงาน' && (
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">จำนวนนาทีที่สาย</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
+                <AeronNumberInput
+                  placeholder="เช่น 15"
+                  allowDecimals={false}
                   value={lateMinutes}
                   onChange={(e) => setLateMinutes(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-400 font-bold font-mono outline-none focus:border-amber-500"
+                  unit="นาที"
                 />
               </div>
             )}
 
             <div className={type === '🚫 ขาดงาน' ? 'col-span-2 space-y-1' : 'space-y-1'}>
               <label className="font-semibold text-slate-300">ยอดหักเงินค่าปรับ (บาท)</label>
-              <input
-                type="number"
-                min="0"
-                required
+              <AeronNumberInput
+                placeholder="เช่น 150"
                 value={fineAmount}
                 onChange={(e) => setFineAmount(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-rose-400 font-extrabold font-mono outline-none focus:border-rose-500"
+                unit="บาท"
               />
             </div>
           </div>
@@ -17055,9 +17296,9 @@ function LeaveAttendanceView({ leaveRequests = [], attendanceLogs = [], members 
 function LeaveModal({ members = [], currentUser, onSave, onClose }) {
   const [employeeName, setEmployeeName] = useState(() => {
     if (currentUser && currentUser.name) return currentUser.name;
-    return members.length > 0 ? members[0].name : '';
+    return '';
   });
-  const [leaveType, setLeaveType] = useState('🤒 ลาป่วย (Sick Leave)');
+  const [leaveType, setLeaveType] = useState('');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [totalDays, setTotalDays] = useState(1);
@@ -17088,7 +17329,7 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
       leaveType,
       startDate,
       endDate,
-      totalDays: Number(totalDays) || 1,
+      totalDays: parseAeronNumber(totalDays) || 1,
       reason,
       status: autoApprove ? '✅ อนุมัติแล้ว' : '⏳ รออนุมัติ',
       approvedBy: autoApprove ? (currentUser?.name || 'หัวหน้างาน') : '',
@@ -17126,8 +17367,9 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
             <select
               value={employeeName}
               onChange={(e) => setEmployeeName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 outline-none focus:border-indigo-500 font-medium"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 outline-none focus:border-indigo-500 font-bold"
             >
+              <option value="">-- เลือกพนักงาน --</option>
               {members.map(m => (
                 <option key={m.id} value={m.name}>{m.name} ({m.role})</option>
               ))}
@@ -17141,6 +17383,7 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
               onChange={(e) => setLeaveType(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-emerald-300 outline-none focus:border-emerald-500 font-bold"
             >
+              <option value="">-- เลือกประเภทการลา --</option>
               <option value="🤒 ลาป่วย (Sick Leave)">🤒 ลาป่วย (Sick Leave) - สิทธิ์ 30 วัน/ปี</option>
               <option value="🌴 ลากิจ (Personal Leave)">🌴 ลากิจ (Personal Leave) - สิทธิ์ 6 วัน/ปี</option>
               <option value="🏖️ ลาพักร้อน (Vacation Leave)">🏖️ ลาพักร้อน (Vacation Leave) - สิทธิ์ 6 วัน/ปี</option>
@@ -17175,14 +17418,13 @@ function LeaveModal({ members = [], currentUser, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">จำนวนวันลาทั้งหมด</label>
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
+              <AeronNumberInput
                 required
+                placeholder="1"
                 value={totalDays}
                 onChange={(e) => setTotalDays(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-emerald-400 font-bold font-mono outline-none focus:border-emerald-500"
+                unit="วัน"
               />
             </div>
 
@@ -17916,12 +18158,12 @@ function CreatePendingTransferModal({ onSave, onClose }) {
     id: `TXN-DRAFT-${Date.now()}-${Math.floor(Math.random() * 900) + 100}`,
     date: new Date().toISOString().split('T')[0],
     title: '',
-    expense_type: 'ค่าเช่า Rent',
-    account_type: 'บริษัท KBANK',
-    amount: 0,
-    withholding_tax: 0,
-    social_security: 0,
-    loan_for_employee: 0,
+    expense_type: '',
+    account_type: '',
+    amount: '',
+    withholding_tax: '',
+    social_security: '',
+    loan_for_employee: '',
     net_transfer: 0,
     payee: '',
     transaction_type: 'รายจ่าย',
@@ -17941,10 +18183,10 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
   // Auto-calculate net_transfer
   useEffect(() => {
-    const amt = Number(formData.amount) || 0;
-    const wht = Number(formData.withholding_tax) || 0;
-    const soc = Number(formData.social_security) || 0;
-    const loan = Number(formData.loan_for_employee) || 0;
+    const amt = parseAeronNumber(formData.amount);
+    const wht = parseAeronNumber(formData.withholding_tax);
+    const soc = parseAeronNumber(formData.social_security);
+    const loan = parseAeronNumber(formData.loan_for_employee);
     
     const computedNet = formData.transaction_type === 'รายรับ'
       ? Math.max(0, amt - wht)
@@ -17958,7 +18200,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
   };
 
   const handleApplyTaxRate = (ratePercent) => {
-    const amt = Number(formData.amount) || 0;
+    const amt = parseAeronNumber(formData.amount);
     const calculatedTax = (amt * ratePercent) / 100;
     setFormData(prev => ({ ...prev, withholding_tax: Math.round(calculatedTax * 100) / 100 }));
   };
@@ -17985,7 +18227,14 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
       if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);
     }
-    onSave({ ...formData, updated_at: new Date().toISOString() });
+    onSave({
+      ...formData,
+      amount: parseAeronNumber(formData.amount),
+      withholding_tax: parseAeronNumber(formData.withholding_tax),
+      social_security: parseAeronNumber(formData.social_security),
+      loan_for_employee: parseAeronNumber(formData.loan_for_employee),
+      updated_at: new Date().toISOString()
+    });
   };
 
   return (
@@ -18068,6 +18317,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                 onChange={(e) => handleChange('expense_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-300 font-bold outline-none focus:border-amber-500"
               >
+                <option value="">-- เลือกประเภทค่าใช้จ่าย --</option>
                 <optgroup label="🏢 ค่าใช้จ่ายสำนักงานใหญ่ (Expenses H/O)">
                   <option value="ค่าเช่า Rent">ค่าเช่า Rent</option>
                   <option value="ค่าใช้จ่ายออฟฟิศ Office Supplies">ค่าใช้จ่ายออฟฟิศ Office Supplies</option>
@@ -18112,6 +18362,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                 onChange={(e) => handleChange('account_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 font-medium outline-none"
               >
+                <option value="">-- เลือกช่องทาง/บัญชีชำระเงิน --</option>
                 {(window.getCompanyAccounts ? window.getCompanyAccounts() : ['Aeron Kbank ออมทรัพย์', 'Aeron Kbank กระแสรายวัน', 'Aeron Kbank ฝากประจำ', 'Aeron SCB ออมทรัพย์', 'Aeron SCB กระแสรายวัน']).map(acc => (
                   <option key={acc} value={acc}>{acc}</option>
                 ))}
@@ -18140,13 +18391,11 @@ function CreatePendingTransferModal({ onSave, onClose }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">จำนวนเงินรวม (บาท) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
                   required
+                  placeholder="0.00"
                   value={formData.amount}
-                  onChange={(e) => handleChange('amount', e.target.value)}
+                  onChange={(val) => handleChange('amount', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono font-bold text-white outline-none"
                 />
               </div>
@@ -18171,36 +18420,30 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                     </button>
                   </div>
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.withholding_tax}
-                  onChange={(e) => handleChange('withholding_tax', e.target.value)}
+                  onChange={(val) => handleChange('withholding_tax', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-rose-300 outline-none"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">ประกันสังคม (ถ้ามี)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.social_security}
-                  onChange={(e) => handleChange('social_security', e.target.value)}
+                  onChange={(val) => handleChange('social_security', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-indigo-300 outline-none"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">หักยืม/เงินกู้พนักงาน</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.loan_for_employee}
-                  onChange={(e) => handleChange('loan_for_employee', e.target.value)}
+                  onChange={(val) => handleChange('loan_for_employee', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-amber-300 outline-none"
                 />
               </div>
@@ -20739,7 +20982,7 @@ function PendingTransfersView({ transactions = [], currentUser, onSaveTxn, onDel
 function PettyCashModal({ isOpen, onClose, onSave }) {
   const [pettyAccounts, setPettyAccounts] = useState([]);
   const [newEmpName, setNewEmpName] = useState('');
-  const [newLimit, setNewLimit] = useState(20000);
+  const [newLimit, setNewLimit] = useState('');
 
   // Initial Load from localStorage
   useEffect(() => {
@@ -20770,14 +21013,14 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
     const newAcc = {
       id: 'pc-' + Date.now(),
       empName: empClean,
-      limit: Number(newLimit) || 0,
+      limit: parseAeronNumber(newLimit),
       name: `เงินสดสำรองจ่าย - ${empClean} (Petty Cash)`
     };
 
     const updated = [...pettyAccounts, newAcc];
     setPettyAccounts(updated);
     setNewEmpName('');
-    setNewLimit(20000);
+    setNewLimit('');
   };
 
   const handleDeletePettyAccount = (id) => {
@@ -20840,11 +21083,10 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
 
               <div>
                 <label className="block text-slate-400 mb-1">วงเงิน/ยอดตั้งสำรอง (บาท)</label>
-                <input
-                  type="number"
-                  placeholder="20000"
+                <AeronNumberInput
+                  placeholder="20,000"
                   value={newLimit}
-                  onChange={(e) => setNewLimit(e.target.value)}
+                  onChange={(val) => setNewLimit(val)}
                   className="w-full bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl p-2.5 outline-none focus:border-amber-400"
                 />
               </div>
@@ -20926,10 +21168,10 @@ function PettyCashModal({ isOpen, onClose, onSave }) {
 
 function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTemplate, onGenerateDrafts, onClose }) {
   const [newTitle, setNewTitle] = useState('');
-  const [newExpenseType, setNewExpenseType] = useState('ค่าเช่า');
+  const [newExpenseType, setNewExpenseType] = useState('');
   const [newAccountType, setNewAccountType] = useState('บริษัท KBANK');
-  const [newAmount, setNewAmount] = useState(0);
-  const [newWht, setNewWht] = useState(0);
+  const [newAmount, setNewAmount] = useState('');
+  const [newWht, setNewWht] = useState('');
   const [newPayee, setNewPayee] = useState('');
   const [newDueDay, setNewDueDay] = useState(28);
 
@@ -20945,8 +21187,8 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
       title: newTitle,
       expense_type: newExpenseType,
       account_type: newAccountType,
-      amount: Number(newAmount) || 0,
-      withholding_tax: Number(newWht) || 0,
+      amount: parseAeronNumber(newAmount),
+      withholding_tax: parseAeronNumber(newWht),
       payee: newPayee,
       due_day_of_month: Number(newDueDay) || 28,
       is_active: true
@@ -20958,8 +21200,9 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
     }
     onSaveTemplate(tData);
     setNewTitle('');
-    setNewAmount(0);
-    setNewWht(0);
+    setNewExpenseType('');
+    setNewAmount('');
+    setNewWht('');
     setNewPayee('');
   };
 
@@ -21067,6 +21310,7 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
                 onChange={(e) => setNewExpenseType(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกหมวดหมู่ค่าใช้จ่าย --</option>
                 <option value="ค่าเช่า">ค่าเช่า</option>
                 <option value="ค่าทำบัญชี">ค่าทำบัญชี</option>
                 <option value="ค่าใช้จ่ายออฟฟิศ">ค่าใช้จ่ายออฟฟิศ</option>
@@ -21078,12 +21322,11 @@ function RecurringPaymentsModal({ templates = [], onSaveTemplate, onDeleteTempla
           <div className="grid grid-cols-3 gap-2.5">
             <div>
               <label className="text-[11px] text-slate-400">จำนวนเงิน (บาท) *</label>
-              <input
-                type="number"
+              <AeronNumberInput
                 required
-                min="0"
+                placeholder="0.00"
                 value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
+                onChange={(val) => setNewAmount(val)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono outline-none"
               />
             </div>
@@ -21138,12 +21381,12 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       id: `TXN-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 900) + 100)}`,
       date: new Date().toISOString().split('T')[0],
       title: '',
-      expense_type: 'ค่าใช้จ่ายทั่วไป',
-      account_type: 'บริษัท KBANK',
-      amount: 0,
-      withholding_tax: 0,
-      social_security: 0,
-      loan_for_employee: 0,
+      expense_type: '',
+      account_type: '',
+      amount: '',
+      withholding_tax: '',
+      social_security: '',
+      loan_for_employee: '',
       net_transfer: 0,
       payee: '',
       transaction_type: 'รายจ่าย',
@@ -21162,10 +21405,11 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
   // Auto-calculate net_transfer when amounts or taxes change
   useEffect(() => {
-    const amt = Number(formData.amount) || 0;
-    const wht = Number(formData.withholding_tax) || 0;
-    const soc = Number(formData.social_security) || 0;
-    const loan = Number(formData.loan_for_employee) || 0;
+    const parseNum = window.parseAeronNumber || ((v) => Number(String(v || '').replace(/,/g, '')) || 0);
+    const amt = parseNum(formData.amount);
+    const wht = parseNum(formData.withholding_tax);
+    const soc = parseNum(formData.social_security);
+    const loan = parseNum(formData.loan_for_employee);
     
     // For income (รายรับ): Net = amount - withholding_tax
     // For expense (รายจ่าย): Net = amount - withholding_tax - social_security - loan_for_employee
@@ -21182,7 +21426,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
   // Auto WHT Calculator Preset
   const handleApplyTaxRate = (ratePercent) => {
-    const amt = Number(formData.amount) || 0;
+    const parseNum = window.parseAeronNumber || ((v) => Number(String(v || '').replace(/,/g, '')) || 0);
+    const amt = parseNum(formData.amount);
     const calculatedTax = (amt * ratePercent) / 100;
     setFormData(prev => ({ ...prev, withholding_tax: Math.round(calculatedTax * 100) / 100 }));
   };
@@ -21212,7 +21457,15 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
       window.saveAeronDictionaryItem('hospital', formData.hospital_name);
       window.saveAeronDictionaryItem('title', formData.title);
     }
-    onSave({ ...formData, updated_at: new Date().toISOString() });
+    onSave({
+      ...formData,
+      amount: parseAeronNumber(formData.amount),
+      withholding_tax: parseAeronNumber(formData.withholding_tax),
+      social_security: parseAeronNumber(formData.social_security),
+      loan_for_employee: parseAeronNumber(formData.loan_for_employee),
+      net_transfer: parseAeronNumber(formData.net_transfer),
+      updated_at: new Date().toISOString()
+    });
   };
 
   return (
@@ -21289,6 +21542,7 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
                 onChange={(e) => handleChange('expense_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-300 font-bold outline-none focus:border-indigo-500"
               >
+                <option value="">-- เลือกหมวดหมู่รายรับ/รายจ่าย --</option>
                 <optgroup label="📦 ต้นทุนขาย (COGS 33%)">
                   <option value="ค่าซื้อสินค้า Material Expense">ค่าซื้อสินค้า Material Expense</option>
                   <option value="ค่าขนส่งสินค้า Transportation Expense">ค่าขนส่งสินค้า Transportation Expense</option>
@@ -21337,6 +21591,7 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
                 onChange={(e) => handleChange('account_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 font-medium outline-none focus:border-indigo-500"
               >
+                <option value="">-- เลือกบัญชีชำระเงิน --</option>
                 {(window.getCompanyAccounts ? window.getCompanyAccounts() : ['Aeron Kbank ออมทรัพย์', 'Aeron Kbank กระแสรายวัน', 'Aeron Kbank ฝากประจำ', 'Aeron SCB ออมทรัพย์', 'Aeron SCB กระแสรายวัน']).map(acc => (
                   <option key={acc} value={acc}>{acc}</option>
                 ))}
@@ -21365,11 +21620,9 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">จำนวนเงินรวม (บาท)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
                   required
+                  placeholder="0.00"
                   value={formData.amount}
                   onChange={(e) => handleChange('amount', e.target.value)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono font-bold text-white outline-none focus:border-indigo-500"
@@ -21396,10 +21649,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
                     </button>
                   </div>
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.withholding_tax}
                   onChange={(e) => handleChange('withholding_tax', e.target.value)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-rose-300 outline-none focus:border-indigo-500"
@@ -21408,10 +21659,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">ประกันสังคม (ถ้ามี)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.social_security}
                   onChange={(e) => handleChange('social_security', e.target.value)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-indigo-300 outline-none focus:border-indigo-500"
@@ -21420,10 +21669,8 @@ function TransactionModal({ editingTxn, frozenMonths = [], onSave, onClose }) {
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">หักยืม/เงินกู้พนักงาน</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.loan_for_employee}
                   onChange={(e) => handleChange('loan_for_employee', e.target.value)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-amber-300 outline-none focus:border-indigo-500"

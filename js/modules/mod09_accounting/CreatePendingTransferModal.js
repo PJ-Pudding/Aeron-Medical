@@ -5,12 +5,12 @@ function CreatePendingTransferModal({ onSave, onClose }) {
     id: `TXN-DRAFT-${Date.now()}-${Math.floor(Math.random() * 900) + 100}`,
     date: new Date().toISOString().split('T')[0],
     title: '',
-    expense_type: 'ค่าเช่า Rent',
-    account_type: 'บริษัท KBANK',
-    amount: 0,
-    withholding_tax: 0,
-    social_security: 0,
-    loan_for_employee: 0,
+    expense_type: '',
+    account_type: '',
+    amount: '',
+    withholding_tax: '',
+    social_security: '',
+    loan_for_employee: '',
     net_transfer: 0,
     payee: '',
     transaction_type: 'รายจ่าย',
@@ -30,10 +30,10 @@ function CreatePendingTransferModal({ onSave, onClose }) {
 
   // Auto-calculate net_transfer
   useEffect(() => {
-    const amt = Number(formData.amount) || 0;
-    const wht = Number(formData.withholding_tax) || 0;
-    const soc = Number(formData.social_security) || 0;
-    const loan = Number(formData.loan_for_employee) || 0;
+    const amt = parseAeronNumber(formData.amount);
+    const wht = parseAeronNumber(formData.withholding_tax);
+    const soc = parseAeronNumber(formData.social_security);
+    const loan = parseAeronNumber(formData.loan_for_employee);
     
     const computedNet = formData.transaction_type === 'รายรับ'
       ? Math.max(0, amt - wht)
@@ -47,7 +47,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
   };
 
   const handleApplyTaxRate = (ratePercent) => {
-    const amt = Number(formData.amount) || 0;
+    const amt = parseAeronNumber(formData.amount);
     const calculatedTax = (amt * ratePercent) / 100;
     setFormData(prev => ({ ...prev, withholding_tax: Math.round(calculatedTax * 100) / 100 }));
   };
@@ -74,7 +74,14 @@ function CreatePendingTransferModal({ onSave, onClose }) {
       if (formData.title) window.saveAeronDictionaryItem('title', formData.title);
       if (formData.hospital_name) window.saveAeronDictionaryItem('hospital', formData.hospital_name);
     }
-    onSave({ ...formData, updated_at: new Date().toISOString() });
+    onSave({
+      ...formData,
+      amount: parseAeronNumber(formData.amount),
+      withholding_tax: parseAeronNumber(formData.withholding_tax),
+      social_security: parseAeronNumber(formData.social_security),
+      loan_for_employee: parseAeronNumber(formData.loan_for_employee),
+      updated_at: new Date().toISOString()
+    });
   };
 
   return (
@@ -157,6 +164,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                 onChange={(e) => handleChange('expense_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-amber-300 font-bold outline-none focus:border-amber-500"
               >
+                <option value="">-- เลือกประเภทค่าใช้จ่าย --</option>
                 <optgroup label="🏢 ค่าใช้จ่ายสำนักงานใหญ่ (Expenses H/O)">
                   <option value="ค่าเช่า Rent">ค่าเช่า Rent</option>
                   <option value="ค่าใช้จ่ายออฟฟิศ Office Supplies">ค่าใช้จ่ายออฟฟิศ Office Supplies</option>
@@ -201,6 +209,7 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                 onChange={(e) => handleChange('account_type', e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 font-medium outline-none"
               >
+                <option value="">-- เลือกช่องทาง/บัญชีชำระเงิน --</option>
                 {(window.getCompanyAccounts ? window.getCompanyAccounts() : ['Aeron Kbank ออมทรัพย์', 'Aeron Kbank กระแสรายวัน', 'Aeron Kbank ฝากประจำ', 'Aeron SCB ออมทรัพย์', 'Aeron SCB กระแสรายวัน']).map(acc => (
                   <option key={acc} value={acc}>{acc}</option>
                 ))}
@@ -229,13 +238,11 @@ function CreatePendingTransferModal({ onSave, onClose }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">จำนวนเงินรวม (บาท) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
                   required
+                  placeholder="0.00"
                   value={formData.amount}
-                  onChange={(e) => handleChange('amount', e.target.value)}
+                  onChange={(val) => handleChange('amount', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono font-bold text-white outline-none"
                 />
               </div>
@@ -260,36 +267,30 @@ function CreatePendingTransferModal({ onSave, onClose }) {
                     </button>
                   </div>
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.withholding_tax}
-                  onChange={(e) => handleChange('withholding_tax', e.target.value)}
+                  onChange={(val) => handleChange('withholding_tax', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-rose-300 outline-none"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">ประกันสังคม (ถ้ามี)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.social_security}
-                  onChange={(e) => handleChange('social_security', e.target.value)}
+                  onChange={(val) => handleChange('social_security', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-indigo-300 outline-none"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[11px] text-slate-400">หักยืม/เงินกู้พนักงาน</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <AeronNumberInput
+                  placeholder="0.00"
                   value={formData.loan_for_employee}
-                  onChange={(e) => handleChange('loan_for_employee', e.target.value)}
+                  onChange={(val) => handleChange('loan_for_employee', val)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 font-mono text-amber-300 outline-none"
                 />
               </div>

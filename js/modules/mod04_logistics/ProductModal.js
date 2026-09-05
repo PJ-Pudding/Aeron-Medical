@@ -9,33 +9,21 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     if (product) {
       return {
         id: product.id,
-        category: product.category || activeCats[0] || '',
+        category: product.category || '',
         name: product.name || '',
-        brand: product.brand || 'AERON MEDICAL',
+        brand: product.brand || '',
         price: product.price || '',
         description: product.description || ''
       };
     }
     return {
-      category: activeCats[0] || '',
+      category: '',
       name: '',
-      brand: 'AERON MEDICAL',
+      brand: '',
       price: '',
       description: ''
     };
   });
-
-  // Dynamic category sync when categories prop loads from cloud
-  useEffect(() => {
-    if (!product && categories && categories.length > 0) {
-      setFormData(prev => {
-        if (!categories.includes(prev.category)) {
-          return { ...prev, category: categories[0] };
-        }
-        return prev;
-      });
-    }
-  }, [categories, product]);
 
   // 📊 Excel-style Product Components & Accessories Breakdown Table State
   
@@ -152,7 +140,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
     }
     onSave({
       ...formData,
-      price: Number(formData.price) || 0,
+      price: parseAeronNumber(formData.price),
       accessoriesList: validComponents,
       masterChecklistItems: validComponents.map(c => ({
         id: c.id,
@@ -160,7 +148,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
         itemNo: c.itemNo || '',
         partNo: c.itemNo || '',
         serialNo: c.serialNo || '',
-        qty: Number(c.qty) || 1,
+        qty: parseAeronNumber(c.qty) || 1,
         unit: c.unit || 'ชิ้น',
         note: c.note || '',
         condition: 'สมบูรณ์'
@@ -256,6 +244,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none focus:border-indigo-500"
                   >
+                    <option value="">-- เลือกหมวดหมู่สินค้า --</option>
                     {(categories || window.PRODUCT_CATEGORIES || []).map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -267,7 +256,7 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                 <label className="font-semibold text-slate-300">แบรนด์/ผู้ผลิต</label>
                 <SmartSuggestInput
                   category="brand"
-                  placeholder="เช่น AERON MEDICAL"
+                  placeholder="เช่น AERON MEDICAL, Bojin, Mindray"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none"
@@ -290,12 +279,12 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300">ราคาขายประมาณการ (บาท THB)</label>
-                <input
-                  type="number"
-                  placeholder="เช่น 900000"
+                <AeronNumberInput
+                  placeholder="เช่น 900,000"
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 outline-none font-mono font-bold text-amber-300"
+                  unit="THB"
                 />
               </div>
             </div>
@@ -401,11 +390,9 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
 
                         {/* 5. จำนวน */}
                         <td className="p-1.5 px-2 border-r border-slate-800/80">
-                          <input
-                            type="number"
-                            min="1"
+                          <AeronNumberInput
                             value={comp.qty}
-                            onChange={(e) => handleComponentChange(idx, 'qty', e.target.value)}
+                            onChange={(val) => handleComponentChange(idx, 'qty', val)}
                             className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-1.5 text-center font-mono font-bold text-amber-300 outline-none text-xs focus:border-emerald-500"
                           />
                         </td>
@@ -515,10 +502,11 @@ function ProductModal({ product, onSave, onClose, categories = (window.PRODUCT_C
                     <div className="space-y-1">
                       <label className="text-slate-300 font-semibold">สถานะเครื่องเดโม่</label>
                       <select
-                        value={unit.status || 'พร้อมใช้งาน'}
+                        value={unit.status || ''}
                         onChange={(e) => handleUnitChange(idx, 'status', e.target.value)}
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-slate-100 outline-none font-semibold"
                       >
+                        <option value="">-- เลือกสถานะ --</option>
                         <option value="พร้อมใช้งาน">✅ พร้อมใช้งาน</option>
                         <option value="ส่งซ่อม">🔧 ส่งซ่อม</option>
                         <option value="เสีย">❌ เสีย</option>

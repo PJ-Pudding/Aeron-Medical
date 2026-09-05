@@ -9,27 +9,27 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
     return {
       assetNumber: `AST-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      contractNumber: `PO-HOSP-${delivYr}/${Math.floor(Math.random() * 80) + 10}`,
-      projectId: wonProj.id || '',
-      hospitalName: wonProj.hospitalName || '',
-      department: 'แผนกห้องผ่าตัด / CCU',
-      productName: wonProj.productName || 'เครื่องมือแพทย์ AERON',
-      brand: wonProj.productBrand || 'AERON MEDICAL',
-      productCategory: wonProj.productCategory || 'อุปกรณ์แพทย์',
-      serialNumber: `SN-AERON-${Math.floor(Math.random() * 899999) + 100000}`,
-      freebies: 'กระดาษบันทึกมาตรฐาน 10 ม้วน, สายสัญญาณสำรอง, รถเข็นสแตนเลส',
-      salesPerson: wonProj.assignee || (members[0] ? members[0].name : ''),
-      contactPerson: wonProj.decisionMakers || '',
+      contractNumber: '',
+      projectId: '',
+      hospitalName: '',
+      department: '',
+      productName: '',
+      brand: '',
+      productCategory: '',
+      serialNumber: '',
+      freebies: '',
+      salesPerson: '',
+      contactPerson: '',
       deliveryDate: delivDate,
-      projectValue: wonProj.budget || 1000000,
-      dfAmount: wonProj.dfAmount || '100,000 บาท',
-      bidGuaranteeAmount: Math.round((wonProj.budget || 1000000) * 0.05),
-      bidGuaranteeRefundDate: `${delivYr}-12-15`,
+      projectValue: '',
+      dfAmount: '',
+      bidGuaranteeAmount: '',
+      bidGuaranteeRefundDate: '',
       warrantyYears: 1,
-      warrantyExpiryDate: `${delivYr + 1}-${delivDate.substring(5)}`,
-      nextPmDate: `${delivYr}-12-15`,
-      pmFrequency: 'ทุก 6 เดือน (ปีละ 2 ครั้ง)',
-      pmStatus: '⏳ ถึงกำหนดทำ PM',
+      warrantyExpiryDate: '',
+      nextPmDate: '',
+      pmFrequency: '',
+      pmStatus: '',
       status: 'รับมอบเรียบร้อย'
     };
   });
@@ -71,8 +71,9 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
     }
     onSave({
       ...formData,
-      projectValue: Number(formData.projectValue) || 0,
-      bidGuaranteeAmount: Number(formData.bidGuaranteeAmount) || 0
+      projectValue: parseAeronNumber(formData.projectValue),
+      dfAmount: parseAeronNumber(formData.dfAmount),
+      bidGuaranteeAmount: parseAeronNumber(formData.bidGuaranteeAmount)
     });
   };
 
@@ -158,6 +159,7 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกเซลส์ผู้รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -193,6 +195,7 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
               <label className="font-semibold text-slate-300">หมายเลข Serial Number</label>
               <input
                 type="text"
+                placeholder="เช่น SN-AERON-..."
                 value={formData.serialNumber}
                 onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none"
@@ -224,21 +227,23 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">มูลค่างาน (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 1,000,000"
                 value={formData.projectValue}
                 onChange={(e) => setFormData({ ...formData, projectValue: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ค่า DF (Doctor Fee)</label>
-              <input
-                type="text"
+              <AeronNumberInput
+                placeholder="เช่น 100,000"
                 value={formData.dfAmount}
                 onChange={(e) => setFormData({ ...formData, dfAmount: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-semibold outline-none"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-purple-300 font-semibold font-mono outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -246,11 +251,12 @@ function SoldProductModal({ asset, projects = [], members = [], onSave, onClose 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">จำนวนเงินค้ำประกันซอง (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 50,000"
                 value={formData.bidGuaranteeAmount}
                 onChange={(e) => setFormData({ ...formData, bidGuaranteeAmount: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="บาท"
               />
             </div>
 

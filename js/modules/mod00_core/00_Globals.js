@@ -1412,6 +1412,28 @@ function findSimilarDictionaryName(input, category) {
   return bestMatch;
 }
 
+function parseAeronNumber(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+function formatAeronNumber(val, decimals) {
+  if (val === null || val === undefined || val === '') return '';
+  const num = typeof val === 'number' ? val : parseAeronNumber(val);
+  if (isNaN(num)) return '';
+  if (typeof decimals === 'number') {
+    return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+  const parts = String(val).replace(/,/g, '').split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
+window.parseAeronNumber = parseAeronNumber;
+window.formatAeronNumber = formatAeronNumber;
 window.DEFAULT_DICTIONARY_SEEDS = DEFAULT_DICTIONARY_SEEDS;
 window.normalizeThaiPrefixes = normalizeThaiPrefixes;
 window.stringSimilarity = stringSimilarity;

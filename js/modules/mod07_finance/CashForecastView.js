@@ -71,12 +71,12 @@ function CashForecastView({
 
   // Handlers for cell editing
   const handleCollectionChange = (monthKey, val) => {
-    const num = val === '' ? 0 : Number(val);
+    const num = val === '' ? 0 : parseAeronNumber(val);
     setCustomHospitalCollections(prev => ({ ...prev, [monthKey]: num }));
   };
 
   const handleExpenseChange = (monthKey, val) => {
-    const num = val === '' ? 0 : Number(val);
+    const num = val === '' ? 0 : parseAeronNumber(val);
     setCustomProjectedExpenses(prev => ({ ...prev, [monthKey]: num }));
   };
 
@@ -517,11 +517,10 @@ function CashForecastView({
                 </td>
                 {forecastMatrix.map(m => (
                   <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       placeholder="0"
                       value={customHospitalCollections[m.key] !== undefined && customHospitalCollections[m.key] !== 0 ? customHospitalCollections[m.key] : ''}
-                      onChange={(e) => handleCollectionChange(m.key, e.target.value)}
+                      onChange={(val) => handleCollectionChange(m.key, val)}
                       className="w-full bg-slate-950/90 border border-emerald-500/40 hover:border-emerald-400 focus:border-emerald-300 text-emerald-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-emerald-400"
                     />
                   </td>
@@ -604,11 +603,10 @@ function CashForecastView({
                 </td>
                 {forecastMatrix.map(m => (
                   <td key={m.key} className="p-1.5 border-r border-slate-800/40 text-center">
-                    <input
-                      type="number"
+                    <AeronNumberInput
                       placeholder="0"
                       value={customProjectedExpenses[m.key] !== undefined && customProjectedExpenses[m.key] !== 0 ? customProjectedExpenses[m.key] : ''}
-                      onChange={(e) => handleExpenseChange(m.key, e.target.value)}
+                      onChange={(val) => handleExpenseChange(m.key, val)}
                       className="w-full bg-slate-950/90 border border-rose-500/40 hover:border-rose-400 focus:border-rose-300 text-rose-300 text-right font-mono font-bold text-xs px-2 py-1.5 rounded-lg outline-none transition-all shadow-inner focus:ring-1 focus:ring-rose-400"
                     />
                   </td>

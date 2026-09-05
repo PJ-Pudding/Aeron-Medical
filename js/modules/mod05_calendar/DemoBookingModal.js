@@ -5,14 +5,14 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
     id: prefill?.id || undefined,
     projectId: prefill?.projectId || '',
     hospitalName: prefill?.hospitalName || '',
-    productId: prefill?.productId || (products[0] ? products[0].id : ''),
+    productId: prefill?.productId || '',
     demoSerial: prefill?.demoSerial || '',
-    salesPerson: prefill?.salesPerson || (members[0] ? members[0].name : ''),
+    salesPerson: prefill?.salesPerson || '',
     startDate: prefill?.startDate || new Date().toISOString().split('T')[0],
     endDate: prefill?.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     status: prefill?.status || 'อนุมัติคิว',
     expenseAmount: prefill?.expenseAmount || prefill?.demoCost || '',
-    outcomeStatus: prefill?.outcomeStatus || 'กำลังทดสอบ / รอผล',
+    outcomeStatus: prefill?.outcomeStatus || '',
     note: prefill?.note || ''
   });
 
@@ -60,6 +60,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
     const prod = products.find(p => p.id === formData.productId);
     onSave({
       ...formData,
+      expenseAmount: parseAeronNumber(formData.expenseAmount),
       productName: prod ? prod.name : 'เครื่องมือแพทย์ AERON',
       productCategory: prod ? prod.category : 'อุปกรณ์แพทย์'
     });
@@ -105,6 +106,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
               onChange={(e) => setFormData({ ...formData, productId: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-bold"
             >
+              <option value="">-- เลือกรุ่นเครื่องสาธิต --</option>
               {(products || []).map(p => (
                 <option key={p.id} value={p.id}>
                   📦 {p.name} (มี {p.demoUnitsAvailable || 1} เครื่อง)
@@ -151,6 +153,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
                 onChange={(e) => setFormData({ ...formData, salesPerson: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500"
               >
+                <option value="">-- เลือกเซลส์ผู้รับผิดชอบ --</option>
                 {(members || []).map(m => (
                   <option key={m.id} value={m.name}>👤 {m.name}</option>
                 ))}
@@ -179,12 +182,12 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">💸 ค่าใช้จ่ายเดโม่ (บาท THB)</label>
-              <input
-                type="number"
-                placeholder="เช่น 1500 (ค่าน้ำมัน/ขนส่ง)"
+              <AeronNumberInput
+                placeholder="เช่น 1,500"
                 value={formData.expenseAmount}
                 onChange={(e) => setFormData({ ...formData, expenseAmount: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-purple-500"
+                unit="บาท"
               />
             </div>
 
@@ -195,6 +198,7 @@ function DemoBookingModal({ prefill, projects = [], products = [], members = [],
                 onChange={(e) => setFormData({ ...formData, outcomeStatus: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-purple-500 font-semibold"
               >
+                <option value="">-- เลือกผลลัพธ์การเดโม่ --</option>
                 <option value="กำลังทดสอบ / รอผล">⏳ กำลังทดสอบ / รอผล</option>
                 <option value="ชนะประมูล / ปิดการขายสำเร็จ">🏆 ชนะประมูล / ปิดการขายสำเร็จ</option>
                 <option value="แพ้ประมูล / ปิดไม่สำเร็จ">❌ แพ้ประมูล / ปิดไม่สำเร็จ</option>

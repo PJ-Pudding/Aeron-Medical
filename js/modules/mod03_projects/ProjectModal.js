@@ -20,33 +20,43 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
   const [formData, setFormData] = useState(project || {
     hospitalName: '',
-    clientType: 'รัฐบาล',
+    clientType: '',
     title: '',
     details: '',
-    assignee: defaultMember ? defaultMember.name : (currentUser ? currentUser.name : ''),
-    memberId: defaultMember ? defaultMember.id : (currentUser ? currentUser.memberId : ''),
+    assignee: '',
+    memberId: '',
     created_by: currentUser ? currentUser.name : '',
     created_by_role: currentUser ? currentUser.role : 'SALES',
-    productId: products[0] ? products[0].id : '',
-    productName: products[0] ? products[0].name : '',
-    productCategory: products[0] ? products[0].category : '',
-    productBrand: products[0] ? products[0].brand : 'AERON MEDICAL',
-    quantity: 1,
+    productId: '',
+    productName: '',
+    productCategory: '',
+    productBrand: '',
+    quantity: '',
     budget: '',
-    budgetType: 'งบลงทุน',
-    budgetTrend: 'ขาขึ้น',
+    budgetType: '',
+    budgetTrend: '',
     procurementDate: '',
-    demoStatus: 'ยังไม่ได้เข้าเดโม่',
+    demoStatus: '',
     demoStartDate: '',
     demoEndDate: '',
     decisionMakers: '',
     dfAmount: '',
     competitors: '',
     winProbability: 50,
-    status: stages[0].id
+    status: (stages && stages[0]) ? stages[0].id : ''
   });
 
   const handleProductSelect = (productId) => {
+    if (!productId) {
+      setFormData(prev => ({
+        ...prev,
+        productId: '',
+        productName: '',
+        productCategory: '',
+        productBrand: ''
+      }));
+      return;
+    }
     const selected = products.find(p => p.id === productId);
     if (selected) {
       setFormData(prev => ({
@@ -54,7 +64,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
         productId: selected.id,
         productName: selected.name,
         productCategory: selected.category,
-        productBrand: selected.brand || 'AERON MEDICAL'
+        productBrand: selected.brand || ''
       }));
     }
   };
@@ -63,8 +73,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
     e.preventDefault();
     const hosp = (formData.hospitalName || '').trim();
     const ttl = (formData.title || '').trim();
-    const rawBudget = String(formData.budget || '').replace(/,/g, '').trim();
-    const numBudget = Number(rawBudget) || 0;
+    const numBudget = parseAeronNumber(formData.budget);
 
     if (!hosp) {
       alert('กรุณากรอกชื่อโรงพยาบาล / หน่วยงาน');
@@ -112,7 +121,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
       created_by: formData.created_by || currentUser?.name || currentUser?.username || 'User',
       created_by_role: formData.created_by_role || currentUser?.role || 'SALES',
       budget: numBudget,
-      quantity: Number(formData.quantity) || 1,
+      quantity: parseAeronNumber(formData.quantity) || 1,
       winProbability: Number(formData.winProbability) || 50
     });
   };
@@ -150,6 +159,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, clientType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกประเภทลูกค้า --</option>
                 <option value="รัฐบาล">🏛️ รัฐบาล</option>
                 <option value="เอกชน">🏢 เอกชน</option>
               </select>
@@ -182,6 +192,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                   onChange={(e) => handleProductSelect(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 outline-none focus:border-emerald-500"
                 >
+                  <option value="">-- เลือกรุ่นสินค้า --</option>
                   {(products || []).map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.brand || 'AERON'}) - {formatCurrency(p.price)}
@@ -192,12 +203,13 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
               <div className="space-y-1">
                 <label className="text-slate-300">จำนวนที่จัดซื้อ (ชุด)</label>
-                <input
-                  type="number"
-                  min="1"
+                <AeronNumberInput
+                  placeholder="1"
+                  allowDecimals={false}
                   value={formData.quantity}
                   onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 font-mono text-center outline-none focus:border-emerald-500"
+                  unit="ชุด"
                 />
               </div>
             </div>
@@ -206,16 +218,13 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">งบประมาณรวม (บาท) <span className="text-rose-400">*</span></label>
-              <input
-                type="text"
+              <AeronNumberInput
                 required
-                placeholder="เช่น 2,500,000 หรือ 4500000"
+                placeholder="เช่น 2,500,000"
                 value={formData.budget}
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[^0-9,]/g, '');
-                  setFormData({ ...formData, budget: cleaned });
-                }}
+                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold outline-none focus:border-emerald-500"
+                unit="บาท"
               />
             </div>
 
@@ -226,6 +235,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกประเภทงบประมาณ --</option>
                 {window.BUDGET_TYPES.map(b => (
                   <option key={b} value={b}>{b}</option>
                 ))}
@@ -247,6 +257,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-medium outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกผู้รับผิดชอบ --</option>
                 {effectiveMembers.map(m => (
                   <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
@@ -262,6 +273,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
               >
+                <option value="">-- เลือกขั้นตอนการติดตาม --</option>
                 {stages.map(s => (
                   <option key={s.id} value={s.id}>{s.title}</option>
                 ))}
@@ -298,12 +310,12 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ค่า DF (Doctor Fee / ดำเนินงาน)</label>
-              <input
-                type="text"
-                placeholder="เช่น 150,000 บาท"
+              <AeronNumberInput
+                placeholder="เช่น 150,000"
                 value={formData.dfAmount}
                 onChange={(e) => setFormData({ ...formData, dfAmount: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none focus:border-emerald-500 font-mono"
+                unit="บาท"
               />
             </div>
           </div>
@@ -320,6 +332,7 @@ function ProjectModal({ project, members = [], stages = window.STAGES || [], pro
                   onChange={(e) => setFormData({ ...formData, demoStatus: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-100 outline-none focus:border-emerald-500"
                 >
+                  <option value="">-- เลือกสถานะเดโม่ --</option>
                   <option value="ยังไม่ได้เข้าเดโม่">ยังไม่ได้เข้าเดโม่</option>
                   <option value="นัดหมายแล้ว">นัดหมายแล้ว</option>
                   <option value="กำลังเดโม่">กำลังเดโม่</option>

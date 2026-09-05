@@ -9,19 +9,19 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
     return {
       registrationNumber: `FDA-${delivYr}-${String(Math.floor(Math.random() * 900) + 100)}`,
       fdaLicenseNo: '',
-      productName: firstProd.name || '',
-      brand: firstProd.brand || 'AERON MEDICAL',
-      vendorName: firstProd.manufacturer || 'Mindray Medical Singapore',
-      deviceClass: 'Class 1',
-      targetDays: 30,
-      agencyName: 'Pharmatech FDA Consulting Co., Ltd.',
-      raSpecialist: members[0] ? members[0].name : 'ภก. วิศรุต ธรรมรักษ์',
-      costTHB: 50000,
-      submissionType: 'ยื่นขอใหม่',
+      productName: '',
+      brand: '',
+      vendorName: '',
+      deviceClass: '',
+      targetDays: '',
+      agencyName: '',
+      raSpecialist: '',
+      costTHB: '',
+      submissionType: '',
       paymentDate: new Date().toISOString().split('T')[0],
       approvalDate: '',
       expiryDate: '',
-      status: window.FDA_STATUSES[0],
+      status: '',
       notes: ''
     };
   });
@@ -68,8 +68,8 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
     }
     onSave({
       ...formData,
-      costTHB: Number(formData.costTHB) || 0,
-      targetDays: Number(formData.targetDays) || 30
+      costTHB: parseAeronNumber(formData.costTHB),
+      targetDays: parseAeronNumber(formData.targetDays) || 30
     });
   };
 
@@ -117,6 +117,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => handleProductSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none"
               >
+                <option value="">-- เลือกรุ่นสินค้าในแคตตาล็อก --</option>
                 {(products || []).map(p => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
@@ -155,6 +156,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => handleClassSelect(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-bold outline-none"
               >
+                <option value="">-- เลือกระดับความเสี่ยง อย. --</option>
                 {window.FDA_CLASSES.map(c => (
                   <option key={c.code} value={c.code}>{c.label}</option>
                 ))}
@@ -163,11 +165,13 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="text-amber-400 font-semibold">จำนวนวันทำการเกณฑ์ SLA อย.</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 30"
+                allowDecimals={false}
                 value={formData.targetDays}
                 onChange={(e) => setFormData({ ...formData, targetDays: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-amber-300 font-mono font-bold outline-none"
+                unit="วัน"
               />
             </div>
           </div>
@@ -197,11 +201,12 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">ราคาค่าจด อย. (บาท)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="เช่น 50,000"
                 value={formData.costTHB}
                 onChange={(e) => setFormData({ ...formData, costTHB: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-emerald-400 font-mono font-bold outline-none"
+                unit="บาท"
               />
             </div>
           </div>
@@ -247,6 +252,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold outline-none"
               >
+                <option value="">-- เลือกสถานะคำขอ --</option>
                 {window.FDA_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -260,6 +266,7 @@ function FDAModal({ fda, products = [], members = [], onSave, onClose }) {
                 onChange={(e) => setFormData({ ...formData, submissionType: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none"
               >
+                <option value="">-- เลือกประเภทการยื่น --</option>
                 <option value="ยื่นขอใหม่">ยื่นขอใหม่ (New Filing)</option>
                 <option value="ยื่นขอต่ออายุ">ยื่นขอต่ออายุ (Renewal)</option>
                 <option value="ขอแก้ไขรายการ">ขอแก้ไขรายการ (Amendment)</option>

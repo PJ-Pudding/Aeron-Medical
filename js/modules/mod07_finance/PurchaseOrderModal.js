@@ -8,22 +8,22 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
     return {
       poNumber: `PO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
       year: new Date().getFullYear(),
-      projectId: firstProj.id || '',
-      hospitalName: firstProj.hospitalName || '',
-      vendorId: window.VENDOR_LIST[0].id,
-      vendorName: window.VENDOR_LIST[0].name,
-      vendorCountry: window.VENDOR_LIST[0].country,
-      currency: window.VENDOR_LIST[0].currency || 'THB',
-      productId: firstProj.productId || (products[0] ? products[0].id : ''),
-      productName: firstProj.productName || (products[0] ? products[0].name : ''),
-      quantity: firstProj.quantity || 1,
-      unitPrice: 100000,
-      totalAmountFX: 100000,
+      projectId: '',
+      hospitalName: '',
+      vendorId: '',
+      vendorName: '',
+      vendorCountry: '',
+      currency: 'THB',
+      productId: '',
+      productName: '',
+      quantity: '',
+      unitPrice: '',
+      totalAmountFX: '',
       exchangeRate: 1,
-      totalAmountTHB: firstProj.budget || 100000,
+      totalAmountTHB: '',
       poDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
-      status: 'ร่าง PO',
+      status: '',
       note: ''
     };
   });
@@ -67,9 +67,9 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
   const updateCalc = (field, val) => {
     const newForm = { ...formData, [field]: val };
-    const qty = Number(newForm.quantity) || 1;
-    const price = Number(newForm.unitPrice) || 0;
-    const rate = Number(newForm.exchangeRate) || 1;
+    const qty = parseAeronNumber(newForm.quantity) || 1;
+    const price = parseAeronNumber(newForm.unitPrice);
+    const rate = parseAeronNumber(newForm.exchangeRate) || 1;
     newForm.totalAmountFX = qty * price;
     newForm.totalAmountTHB = qty * price * rate;
     setFormData(newForm);
@@ -92,7 +92,14 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
       if (formData.vendorName) window.saveAeronDictionaryItem('payee', formData.vendorName);
       if (formData.productName) window.saveAeronDictionaryItem('product', formData.productName);
     }
-    onSave(formData);
+    onSave({
+      ...formData,
+      quantity: parseAeronNumber(formData.quantity) || 1,
+      unitPrice: parseAeronNumber(formData.unitPrice),
+      exchangeRate: parseAeronNumber(formData.exchangeRate) || 1,
+      totalAmountFX: parseAeronNumber(formData.totalAmountFX),
+      totalAmountTHB: parseAeronNumber(formData.totalAmountTHB)
+    });
   };
 
   return (
@@ -168,6 +175,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                 onChange={(e) => handleVendorSelect(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-semibold text-amber-300 outline-none"
               >
+                <option value="">-- เลือก Vendor / ผู้จัดจำหน่าย --</option>
                 {window.VENDOR_LIST.map(v => (
                   <option key={v.id} value={v.id}>{v.name} ({v.country})</option>
                 ))}
@@ -190,9 +198,9 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="font-semibold text-slate-300">จำนวนสั่งซื้อ</label>
-              <input
-                type="number"
-                min="1"
+              <AeronNumberInput
+                placeholder="1"
+                allowDecimals={false}
                 value={formData.quantity}
                 onChange={(e) => updateCalc('quantity', Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 font-mono text-center outline-none"
@@ -203,8 +211,8 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
           <div className="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">ราคาต่อหน่วย (Foreign FX)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.unitPrice}
                 onChange={(e) => updateCalc('unitPrice', Number(e.target.value))}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono outline-none"
@@ -224,9 +232,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                   <option value="EUR">EUR (€)</option>
                   <option value="JPY">JPY (¥)</option>
                 </select>
-                <input
-                  type="number"
-                  step="0.01"
+                <AeronNumberInput
                   placeholder="Rate"
                   value={formData.exchangeRate}
                   onChange={(e) => updateCalc('exchangeRate', Number(e.target.value))}
@@ -237,11 +243,12 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
 
             <div className="space-y-1">
               <label className="text-slate-400 font-semibold">มูลค่ารวม (บาท THB)</label>
-              <input
-                type="number"
+              <AeronNumberInput
+                placeholder="0"
                 value={formData.totalAmountTHB}
                 onChange={(e) => setFormData({ ...formData, totalAmountTHB: Number(e.target.value) })}
                 className="w-full bg-slate-900 border border-amber-500/50 rounded-lg p-2 text-amber-300 font-bold font-mono outline-none"
+                unit="฿"
               />
             </div>
           </div>
@@ -274,6 +281,7 @@ function PurchaseOrderModal({ po, projects = [], products = [], onSave, onClose 
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100 outline-none font-semibold text-indigo-300"
               >
+                <option value="">-- เลือกสถานะ PO --</option>
                 {window.PO_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
