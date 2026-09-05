@@ -68,7 +68,7 @@ const _TABLE_LS_MAP = {
 
 // 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
 (function purgeLegacyMockData() {
-  const PURGE_KEY = 'aeron_purge_v6';
+  const PURGE_KEY = 'aeron_purge_v7';
   try {
     if (localStorage.getItem(PURGE_KEY) !== 'true') {
       const keysToPurge = [
@@ -180,9 +180,47 @@ window.sanitizeThaiData = sanitizeThaiData;
 // ไม่มี merge ซ้ำซ้อนอีกต่อไป
 window.mergeAeronDatasets = null; // Deprecated: removed to prevent ghost data resurrection
 
+// 🛡️ Client-Side Anti-Resurrection Quarantine Filter
+const LEGACY_MOCK_IDS = new Set([
+  'prod-101', 'prod-102', 'prod-103', 'prod-104', 'prod-105', 'prod-1788420592050',
+  'proj-101', 'proj-102', 'proj-103', 'proj-104', 'proj-105', 'proj-106', 'proj-107', 'proj-108', 'proj-109', 'proj-110',
+  'bk-101', 'bk-102', 'bk-103', 'bk-104', 'bk-105',
+  'po-101', 'po-102', 'po-103',
+  'shp-101', 'shp-102',
+  'sold-101', 'sold-102',
+  'rep-101', 'rep-102',
+  'fda-101', 'fda-102', 'fda-103',
+  'pc-1', 'pc-2'
+]);
+
+const LEGACY_MOCK_CATEGORIES = new Set([
+  'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
+  'เครื่องช่วยหายใจ (Ventilator)',
+  'เครื่องมือแพทย์อื่นๆ',
+  'Power drill (ปืน,สว่าน เจาะกระดูก)'
+]);
+
+function filterQuarantineData(tableName, data) {
+  if (!data) return data;
+  if (tableName === 'product_categories' && Array.isArray(data)) {
+    return data.filter(cat => !LEGACY_MOCK_CATEGORIES.has(cat));
+  }
+  if (Array.isArray(data)) {
+    return data.filter(item => {
+      if (!item) return false;
+      if (item.id && LEGACY_MOCK_IDS.has(String(item.id))) return false;
+      if (item.name === '222222222' || item.title === '222222222') return false;
+      return true;
+    });
+  }
+  return data;
+}
+window.filterQuarantineData = filterQuarantineData;
+
 window.AeronCloudDB = {
   async save(tableName, data) {
     if (!tableName) return;
+    const cleanData = filterQuarantineData(tableName, data);
     const base = getAeronGatewayUrl();
 
     // Mark mutation lock & in-flight status immediately
@@ -192,7 +230,7 @@ window.AeronCloudDB = {
     // 1. Mirror to local browser storage immediately (compact JSON)
     try {
       const lsKey = _TABLE_LS_MAP[tableName];
-      if (lsKey) localStorage.setItem(lsKey, JSON.stringify(data));
+      if (lsKey) localStorage.setItem(lsKey, JSON.stringify(cleanData));
       localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
     } catch(e) {
       console.warn('[AeronCloudDB LocalStorage Warning]:', e.message);
@@ -203,7 +241,7 @@ window.AeronCloudDB = {
       await fetch(base + '/api/save-db?table=' + tableName, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(cleanData)
       });
     } catch (err) {
       console.warn('[AeronCloudDB Save Warning]:', err.message);
@@ -221,7 +259,7 @@ window.AeronCloudDB = {
         const lsKey = _TABLE_LS_MAP[tableName];
         if (lsKey) {
           const cached = localStorage.getItem(lsKey);
-          if (cached !== null) return JSON.parse(cached);
+          if (cached !== null) return filterQuarantineData(tableName, JSON.parse(cached));
         }
       } catch(e) {}
       return fallbackVal;
@@ -234,7 +272,7 @@ window.AeronCloudDB = {
       if (res.ok) {
         const data = await res.json();
         if (data !== undefined && data !== null) {
-          const cleanData = sanitizeThaiData(data);
+          const cleanData = filterQuarantineData(tableName, sanitizeThaiData(data));
           // 🛡️ Server-Authoritative: ใช้ค่าจาก Server ตรงๆ ไม่ merge กับ localStorage
           // อัปเดต localStorage เป็น offline cache เท่านั้น
           try {
@@ -256,7 +294,7 @@ window.AeronCloudDB = {
       const lsKey = _TABLE_LS_MAP[tableName];
       if (lsKey) {
         const cached = localStorage.getItem(lsKey);
-        if (cached !== null) return sanitizeThaiData(JSON.parse(cached));
+        if (cached !== null) return filterQuarantineData(tableName, sanitizeThaiData(JSON.parse(cached)));
       }
     } catch(e) {}
 

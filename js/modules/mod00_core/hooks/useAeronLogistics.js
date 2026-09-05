@@ -12,9 +12,14 @@ function useAeronLogistics({ setActiveView }) {
       const saved = localStorage.getItem('aeron_product_categories');
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const filterFn = window.filterQuarantineData;
+          return filterFn ? filterFn('product_categories', parsed) : parsed;
+        }
       }
-      return (window.PRODUCT_CATEGORIES && Array.isArray(window.PRODUCT_CATEGORIES)) ? window.PRODUCT_CATEGORIES : [];
+      const initial = (window.PRODUCT_CATEGORIES && Array.isArray(window.PRODUCT_CATEGORIES)) ? window.PRODUCT_CATEGORIES : [];
+      const filterFn = window.filterQuarantineData;
+      return filterFn ? filterFn('product_categories', initial) : initial;
     } catch(e) {
       return [];
     }
@@ -30,9 +35,11 @@ function useAeronLogistics({ setActiveView }) {
   }, [productCategories]);
 
   const handleUpdateCategories = useCallback((updatedList) => {
-    setProductCategories(updatedList);
+    const filterFn = window.filterQuarantineData;
+    const cleanList = filterFn ? filterFn('product_categories', updatedList) : updatedList;
+    setProductCategories(cleanList);
     if (typeof window.syncToDB === 'function') {
-      window.syncToDB('product_categories', updatedList);
+      window.syncToDB('product_categories', cleanList);
     }
   }, []);
 
@@ -42,9 +49,14 @@ function useAeronLogistics({ setActiveView }) {
       const saved = localStorage.getItem('aeron_products');
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const filterFn = window.filterQuarantineData;
+          return filterFn ? filterFn('products', parsed) : parsed;
+        }
       }
-      return (window.CENTRAL_PRODUCT_CATALOG && Array.isArray(window.CENTRAL_PRODUCT_CATALOG)) ? window.CENTRAL_PRODUCT_CATALOG : [];
+      const initial = (window.CENTRAL_PRODUCT_CATALOG && Array.isArray(window.CENTRAL_PRODUCT_CATALOG)) ? window.CENTRAL_PRODUCT_CATALOG : [];
+      const filterFn = window.filterQuarantineData;
+      return filterFn ? filterFn('products', initial) : initial;
     } catch (e) {
       return [];
     }

@@ -68,6 +68,55 @@ function isValidTableName(tableName) {
   return /^[a-zA-Z0-9_]+$/.test(cleanName) && ALLOWED_TABLES.has(cleanName);
 }
 
+// 🛡️ Server-Side Anti-Resurrection Quarantine Filter
+// Strips legacy mock demo items so no stale browser tab can ever write them back to disk or cloud
+const LEGACY_MOCK_IDS = new Set([
+  // Products
+  'prod-101', 'prod-102', 'prod-103', 'prod-104', 'prod-105', 'prod-1788420592050',
+  // Projects
+  'proj-101', 'proj-102', 'proj-103', 'proj-104', 'proj-105', 'proj-106', 'proj-107', 'proj-108', 'proj-109', 'proj-110',
+  // Bookings
+  'bk-101', 'bk-102', 'bk-103', 'bk-104', 'bk-105',
+  // POs
+  'po-101', 'po-102', 'po-103',
+  // Shipments
+  'shp-101', 'shp-102',
+  // Sold products
+  'sold-101', 'sold-102',
+  // Repairs
+  'rep-101', 'rep-102',
+  // FDA
+  'fda-101', 'fda-102', 'fda-103',
+  // Petty cash
+  'pc-1', 'pc-2'
+]);
+
+const LEGACY_MOCK_CATEGORIES = new Set([
+  'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
+  'เครื่องช่วยหายใจ (Ventilator)',
+  'เครื่องมือแพทย์อื่นๆ',
+  'Power drill (ปืน,สว่าน เจาะกระดูก)'
+]);
+
+function filterQuarantineData(tableName, data) {
+  if (!data) return data;
+
+  if (tableName === 'product_categories' && Array.isArray(data)) {
+    return data.filter(cat => !LEGACY_MOCK_CATEGORIES.has(cat));
+  }
+
+  if (Array.isArray(data)) {
+    return data.filter(item => {
+      if (!item) return false;
+      if (item.id && LEGACY_MOCK_IDS.has(String(item.id))) return false;
+      if (item.name === '222222222' || item.title === '222222222') return false;
+      return true;
+    });
+  }
+
+  return data;
+}
+
 function syncToSupabaseCloud(tableName, jsonData) {
   if (!SUPABASE_HOST || !SUPABASE_KEY || !isValidTableName(tableName)) return;
 
@@ -220,18 +269,28 @@ const server = http.createServer(async (req, res) => {
       try {
         const cloudData = await fetchFromSupabaseCloud(tableName);
         if (cloudData) {
+          const cleanCloudData = filterQuarantineData(tableName, cloudData);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'X-Data-Source': 'SupabaseCloud' });
-          res.end(JSON.stringify(cloudData));
+          res.end(JSON.stringify(cleanCloudData));
           return;
         }
       } catch (e) {}
 
       const localPath = path.join(ROOT_DIR, 'db', `${tableName}.json`);
       if (fs.existsSync(localPath)) {
-        const data = fs.readFileSync(localPath, 'utf8');
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'X-Data-Source': 'LocalFile' });
-        res.end(data);
-        return;
+        try {
+          const data = fs.readFileSync(localPath, 'utf8');
+          const parsed = JSON.parse(data);
+          const cleanData = filterQuarantineData(tableName, parsed);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'X-Data-Source': 'LocalFile' });
+          res.end(JSON.stringify(cleanData));
+          return;
+        } catch (e) {
+          const data = fs.readFileSync(localPath, 'utf8');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'X-Data-Source': 'LocalFile' });
+          res.end(data);
+          return;
+        }
       }
     }
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -352,14 +411,22 @@ const server = http.createServer(async (req, res) => {
 
         const body = Buffer.concat(chunks).toString('utf8');
         if (body) {
+          let cleanData = null;
+          try {
+            const parsed = JSON.parse(body);
+            cleanData = filterQuarantineData(tableName, parsed);
+          } catch (pe) {}
+
+          const finalBody = cleanData !== null ? JSON.stringify(cleanData, null, 2) : body;
+
           // 1. Save to local disk safely
           const targetPath = path.join(ROOT_DIR, 'db', `${tableName}.json`);
-          fs.writeFileSync(targetPath, body, 'utf8');
+          fs.writeFileSync(targetPath, finalBody, 'utf8');
 
           // 2. Real-time Sync to Supabase Cloud DB
           try {
-            const parsed = JSON.parse(body);
-            syncToSupabaseCloud(tableName, parsed);
+            const dataToSync = cleanData !== null ? cleanData : JSON.parse(body);
+            syncToSupabaseCloud(tableName, dataToSync);
           } catch (pe) {}
 
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
