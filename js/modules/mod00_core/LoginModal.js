@@ -59,9 +59,10 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
 
     setTimeout(() => {
       if (foundUser) {
-        if (foundUser.password && foundUser.password !== password && password !== '123456') {
+        const expectedPassword = foundUser.password || '123456';
+        if (password !== expectedPassword) {
           setLoading(false);
-          setErrorMsg('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง (รหัสเริ่มต้น: 123456)');
+          setErrorMsg('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
           return;
         }
 
@@ -204,6 +205,7 @@ function LoginModal({ onLoginSuccess, onClose, isSwitching = false }) {
                     </button>
                   </div>
                   <input
+                    id="login-password-input"
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
