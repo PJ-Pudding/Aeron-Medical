@@ -25,11 +25,13 @@ function useAeronAccounting({ setShipments }) {
   const [purchaseOrders, setPurchaseOrders] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_purchase_orders');
-      return saved ? JSON.parse(saved) : window.INITIAL_PURCHASE_ORDERS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_purchase_orders:', e);
-      return window.INITIAL_PURCHASE_ORDERS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('purchase_orders', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals
@@ -68,13 +70,15 @@ function useAeronAccounting({ setShipments }) {
         // 2. Purchase Orders (Server-Authoritative SSoT)
         const remotePOs = await fetcher('purchase_orders', null);
         if (isMounted && Array.isArray(remotePOs)) {
+          const filterFn = window.filterQuarantineData;
+          const cleanPOs = filterFn ? filterFn('purchase_orders', remotePOs) : remotePOs;
           setPurchaseOrders(prev => {
             if (window.isAeronMutating && window.isAeronMutating('purchase_orders')) return prev;
-            if (JSON.stringify(prev) === JSON.stringify(remotePOs)) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(cleanPOs)) return prev;
             try {
-              localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
+              localStorage.setItem('aeron_purchase_orders', JSON.stringify(cleanPOs));
             } catch(e) {}
-            return remotePOs;
+            return cleanPOs;
           });
         }
       } catch (e) {

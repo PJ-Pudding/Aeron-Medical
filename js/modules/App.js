@@ -27,6 +27,7 @@ function App() {
     isFDAModalOpen, setIsFDAModalOpen,
     editingFDA, setEditingFDA,
     handleSaveProduct,
+    handleDeleteProduct,
     handleSaveSoldAsset,
     handleDeleteSoldAsset,
     handleSaveShipment,
@@ -529,7 +530,9 @@ function App() {
         'aeron_fda_registrations',
         'aeron_leave_requests',
         'aeron_attendance_logs',
-        'aeron_cost_calculations'
+        'aeron_cost_calculations',
+        'aeron_messenger_trips',
+        'aeron_petty_cash_accounts'
       ];
       keysToClear.forEach(k => {
         try { localStorage.removeItem(k); } catch(e) {}
@@ -559,6 +562,8 @@ function App() {
         window.syncToDB('leave_requests', window.INITIAL_LEAVE_REQUESTS || []);
         window.syncToDB('attendance_logs', window.INITIAL_ATTENDANCE_LOGS || []);
         window.syncToDB('cost_calculations', window.INITIAL_COST_CALCULATIONS || []);
+        window.syncToDB('messenger_trips', window.INITIAL_MESSENGER_TRIPS || []);
+        window.syncToDB('petty_cash_accounts', []);
       }
     }
   };
@@ -728,15 +733,7 @@ function App() {
                   demoBookings={demoBookings}
                   onOpenNewProduct={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
                   onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true); }}
-                  onDeleteProduct={(id) => {
-                    setProducts(prev => {
-                      const updated = prev.filter(p => p.id !== id);
-                      if (typeof window.syncToDB === 'function') {
-                        window.syncToDB('products', updated);
-                      }
-                      return updated;
-                    });
-                  }}
+                  onDeleteProduct={handleDeleteProduct}
                   onOpenRepairModal={handleOpenRepairFromCatalog}
                 />
               )}

@@ -10,22 +10,26 @@ function useAeronHR({ currentUser }) {
   const [leaveRequests, setLeaveRequests] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_leave_requests');
-      return saved ? JSON.parse(saved) : window.INITIAL_LEAVE_REQUESTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_leave_requests:', e);
-      return window.INITIAL_LEAVE_REQUESTS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('leave_requests', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 2. Attendance Logs State
   const [attendanceLogs, setAttendanceLogs] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_attendance_logs');
-      return saved ? JSON.parse(saved) : window.INITIAL_ATTENDANCE_LOGS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_attendance_logs:', e);
-      return window.INITIAL_ATTENDANCE_LOGS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('attendance_logs', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals
@@ -42,18 +46,20 @@ function useAeronHR({ currentUser }) {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
+        const filterFn = window.filterQuarantineData;
 
         // 1. Leave Requests (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('leave_requests')) {
           const remoteLeaves = await fetcher('leave_requests', null);
           if (isMounted && Array.isArray(remoteLeaves)) {
+            const cleanLeaves = filterFn ? filterFn('leave_requests', remoteLeaves) : remoteLeaves;
             setLeaveRequests(prev => {
               if (window.isAeronMutating && window.isAeronMutating('leave_requests')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteLeaves)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanLeaves)) return prev;
               try {
-                localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+                localStorage.setItem('aeron_leave_requests', JSON.stringify(cleanLeaves));
               } catch(e) {}
-              return remoteLeaves;
+              return cleanLeaves;
             });
           }
         }
@@ -62,13 +68,14 @@ function useAeronHR({ currentUser }) {
         if (!window.isAeronMutating || !window.isAeronMutating('attendance_logs')) {
           const remoteAttendance = await fetcher('attendance_logs', null);
           if (isMounted && Array.isArray(remoteAttendance)) {
+            const cleanAttendance = filterFn ? filterFn('attendance_logs', remoteAttendance) : remoteAttendance;
             setAttendanceLogs(prev => {
               if (window.isAeronMutating && window.isAeronMutating('attendance_logs')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteAttendance)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanAttendance)) return prev;
               try {
-                localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+                localStorage.setItem('aeron_attendance_logs', JSON.stringify(cleanAttendance));
               } catch(e) {}
-              return remoteAttendance;
+              return cleanAttendance;
             });
           }
         }

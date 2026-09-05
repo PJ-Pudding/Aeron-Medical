@@ -89,7 +89,14 @@ const LEGACY_MOCK_IDS = new Set([
   // FDA
   'fda-101', 'fda-102', 'fda-103',
   // Petty cash
-  'pc-1', 'pc-2'
+  'pc-1', 'pc-2',
+  // Messenger
+  'MSG-2026-101', 'MSG-2026-102', 'MSG-2026-103', 'msg-101', 'msg-102', 'msg-103',
+  // HR & Attendance
+  'leave-101', 'leave-102', 'leave-103',
+  'att-101', 'att-102', 'att-103',
+  // Cost calculations
+  'calc-101', 'calc-102', 'calc-103'
 ]);
 
 const LEGACY_MOCK_NAMES = new Set([

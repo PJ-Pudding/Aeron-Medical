@@ -197,7 +197,11 @@ const LEGACY_MOCK_IDS = new Set([
   'sold-101', 'sold-102',
   'rep-101', 'rep-102',
   'fda-101', 'fda-102', 'fda-103',
-  'pc-1', 'pc-2'
+  'pc-1', 'pc-2',
+  'MSG-2026-101', 'MSG-2026-102', 'MSG-2026-103', 'msg-101', 'msg-102', 'msg-103',
+  'leave-101', 'leave-102', 'leave-103',
+  'att-101', 'att-102', 'att-103',
+  'calc-101', 'calc-102', 'calc-103'
 ]);
 
 const LEGACY_MOCK_NAMES = new Set([
@@ -248,7 +252,15 @@ window.filterQuarantineData = filterQuarantineData;
       { key: 'aeron_sold_products', table: 'sold_products' },
       { key: 'aeron_repair_tickets', table: 'repair_tickets' },
       { key: 'aeron_fda_registrations', table: 'fda_registrations' },
-      { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' }
+      { key: 'aeron_cost_calculations', table: 'cost_calculations' },
+      { key: 'aeron_leave_requests', table: 'leave_requests' },
+      { key: 'aeron_attendance_logs', table: 'attendance_logs' },
+      { key: 'aeron_messenger_trips', table: 'messenger_trips' },
+      { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' },
+      { key: 'aeron_forecast_hospital_collections', table: 'forecast_hospital_collections' },
+      { key: 'aeron_forecast_projected_expenses', table: 'forecast_projected_expenses' },
+      { key: 'aeron_accounting_frozen_months', table: 'accounting_frozen_months' },
+      { key: 'aeron_accounting_recurring', table: 'accounting_recurring' }
     ];
     for (const item of keysToCheck) {
       const raw = localStorage.getItem(item.key);
@@ -4065,11 +4077,13 @@ function useAeronAccounting({ setShipments }) {
   const [purchaseOrders, setPurchaseOrders] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_purchase_orders');
-      return saved ? JSON.parse(saved) : window.INITIAL_PURCHASE_ORDERS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_purchase_orders:', e);
-      return window.INITIAL_PURCHASE_ORDERS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('purchase_orders', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals
@@ -4108,13 +4122,15 @@ function useAeronAccounting({ setShipments }) {
         // 2. Purchase Orders (Server-Authoritative SSoT)
         const remotePOs = await fetcher('purchase_orders', null);
         if (isMounted && Array.isArray(remotePOs)) {
+          const filterFn = window.filterQuarantineData;
+          const cleanPOs = filterFn ? filterFn('purchase_orders', remotePOs) : remotePOs;
           setPurchaseOrders(prev => {
             if (window.isAeronMutating && window.isAeronMutating('purchase_orders')) return prev;
-            if (JSON.stringify(prev) === JSON.stringify(remotePOs)) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(cleanPOs)) return prev;
             try {
-              localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
+              localStorage.setItem('aeron_purchase_orders', JSON.stringify(cleanPOs));
             } catch(e) {}
-            return remotePOs;
+            return cleanPOs;
           });
         }
       } catch (e) {
@@ -4345,22 +4361,26 @@ function useAeronHR({ currentUser }) {
   const [leaveRequests, setLeaveRequests] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_leave_requests');
-      return saved ? JSON.parse(saved) : window.INITIAL_LEAVE_REQUESTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_leave_requests:', e);
-      return window.INITIAL_LEAVE_REQUESTS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('leave_requests', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 2. Attendance Logs State
   const [attendanceLogs, setAttendanceLogs] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_attendance_logs');
-      return saved ? JSON.parse(saved) : window.INITIAL_ATTENDANCE_LOGS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_attendance_logs:', e);
-      return window.INITIAL_ATTENDANCE_LOGS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('attendance_logs', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals
@@ -4377,18 +4397,20 @@ function useAeronHR({ currentUser }) {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
+        const filterFn = window.filterQuarantineData;
 
         // 1. Leave Requests (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('leave_requests')) {
           const remoteLeaves = await fetcher('leave_requests', null);
           if (isMounted && Array.isArray(remoteLeaves)) {
+            const cleanLeaves = filterFn ? filterFn('leave_requests', remoteLeaves) : remoteLeaves;
             setLeaveRequests(prev => {
               if (window.isAeronMutating && window.isAeronMutating('leave_requests')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteLeaves)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanLeaves)) return prev;
               try {
-                localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
+                localStorage.setItem('aeron_leave_requests', JSON.stringify(cleanLeaves));
               } catch(e) {}
-              return remoteLeaves;
+              return cleanLeaves;
             });
           }
         }
@@ -4397,13 +4419,14 @@ function useAeronHR({ currentUser }) {
         if (!window.isAeronMutating || !window.isAeronMutating('attendance_logs')) {
           const remoteAttendance = await fetcher('attendance_logs', null);
           if (isMounted && Array.isArray(remoteAttendance)) {
+            const cleanAttendance = filterFn ? filterFn('attendance_logs', remoteAttendance) : remoteAttendance;
             setAttendanceLogs(prev => {
               if (window.isAeronMutating && window.isAeronMutating('attendance_logs')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteAttendance)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanAttendance)) return prev;
               try {
-                localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
+                localStorage.setItem('aeron_attendance_logs', JSON.stringify(cleanAttendance));
               } catch(e) {}
-              return remoteAttendance;
+              return cleanAttendance;
             });
           }
         }
@@ -4601,44 +4624,52 @@ function useAeronLogistics({ setActiveView }) {
   const [soldProducts, setSoldProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_sold_products');
-      return saved ? JSON.parse(saved) : window.INITIAL_SOLD_PRODUCTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_sold_products:', e);
-      return window.INITIAL_SOLD_PRODUCTS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('sold_products', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 3. Import Logistics / Shipments State
   const [shipments, setShipments] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_shipments');
-      return saved ? JSON.parse(saved) : window.INITIAL_SHIPMENTS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_shipments:', e);
-      return window.INITIAL_SHIPMENTS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('shipments', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 4. Repair Tickets State
   const [repairTickets, setRepairTickets] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_repair_tickets');
-      return saved ? JSON.parse(saved) : window.INITIAL_REPAIR_TICKETS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_repair_tickets:', e);
-      return window.INITIAL_REPAIR_TICKETS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('repair_tickets', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 5. Thai FDA Registrations State
   const [fdaRegistrations, setFdaRegistrations] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_fda_registrations');
-      return saved ? JSON.parse(saved) : window.INITIAL_FDA_REGISTRATIONS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_fda_registrations:', e);
-      return window.INITIAL_FDA_REGISTRATIONS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('fda_registrations', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals
@@ -4692,11 +4723,13 @@ function useAeronLogistics({ setActiveView }) {
         if (!window.isAeronMutating || !window.isAeronMutating('sold_products')) {
           const remoteSold = await fetcher('sold_products', null);
           if (isMounted && Array.isArray(remoteSold)) {
+            const filterFn = window.filterQuarantineData;
+            const cleanSold = filterFn ? filterFn('sold_products', remoteSold) : remoteSold;
             setSoldProducts(prev => {
               if (window.isAeronMutating && window.isAeronMutating('sold_products')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteSold)) return prev;
-              try { localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold)); } catch(e) {}
-              return remoteSold;
+              if (JSON.stringify(prev) === JSON.stringify(cleanSold)) return prev;
+              try { localStorage.setItem('aeron_sold_products', JSON.stringify(cleanSold)); } catch(e) {}
+              return cleanSold;
             });
           }
         }
@@ -4705,11 +4738,13 @@ function useAeronLogistics({ setActiveView }) {
         if (!window.isAeronMutating || !window.isAeronMutating('shipments')) {
           const remoteShipments = await fetcher('shipments', null);
           if (isMounted && Array.isArray(remoteShipments)) {
+            const filterFn = window.filterQuarantineData;
+            const cleanShipments = filterFn ? filterFn('shipments', remoteShipments) : remoteShipments;
             setShipments(prev => {
               if (window.isAeronMutating && window.isAeronMutating('shipments')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteShipments)) return prev;
-              try { localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments)); } catch(e) {}
-              return remoteShipments;
+              if (JSON.stringify(prev) === JSON.stringify(cleanShipments)) return prev;
+              try { localStorage.setItem('aeron_shipments', JSON.stringify(cleanShipments)); } catch(e) {}
+              return cleanShipments;
             });
           }
         }
@@ -4718,11 +4753,13 @@ function useAeronLogistics({ setActiveView }) {
         if (!window.isAeronMutating || !window.isAeronMutating('repair_tickets')) {
           const remoteRepairs = await fetcher('repair_tickets', null);
           if (isMounted && Array.isArray(remoteRepairs)) {
+            const filterFn = window.filterQuarantineData;
+            const cleanRepairs = filterFn ? filterFn('repair_tickets', remoteRepairs) : remoteRepairs;
             setRepairTickets(prev => {
               if (window.isAeronMutating && window.isAeronMutating('repair_tickets')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteRepairs)) return prev;
-              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs)); } catch(e) {}
-              return remoteRepairs;
+              if (JSON.stringify(prev) === JSON.stringify(cleanRepairs)) return prev;
+              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(cleanRepairs)); } catch(e) {}
+              return cleanRepairs;
             });
           }
         }
@@ -4731,11 +4768,13 @@ function useAeronLogistics({ setActiveView }) {
         if (!window.isAeronMutating || !window.isAeronMutating('fda_registrations')) {
           const remoteFDA = await fetcher('fda_registrations', null);
           if (isMounted && Array.isArray(remoteFDA)) {
+            const filterFn = window.filterQuarantineData;
+            const cleanFDA = filterFn ? filterFn('fda_registrations', remoteFDA) : remoteFDA;
             setFdaRegistrations(prev => {
               if (window.isAeronMutating && window.isAeronMutating('fda_registrations')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteFDA)) return prev;
-              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA)); } catch(e) {}
-              return remoteFDA;
+              if (JSON.stringify(prev) === JSON.stringify(cleanFDA)) return prev;
+              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(cleanFDA)); } catch(e) {}
+              return cleanFDA;
             });
           }
         }
@@ -5010,6 +5049,21 @@ function useAeronLogistics({ setActiveView }) {
     }
   }, []);
 
+  const handleDeleteProduct = useCallback((productId) => {
+    if (window.confirm('คุณต้องการลบรายการสินค้านี้ใช่หรือไม่?')) {
+      setProducts(prev => {
+        const updated = prev.filter(p => p.id !== productId);
+        try {
+          localStorage.setItem('aeron_products', JSON.stringify(updated));
+          if (typeof window.syncToDB === 'function') {
+            window.syncToDB('products', updated);
+          }
+        } catch(e) {}
+        return updated;
+      });
+    }
+  }, []);
+
   return {
     productCategories, setProductCategories,
     handleUpdateCategories,
@@ -5029,6 +5083,7 @@ function useAeronLogistics({ setActiveView }) {
     isFDAModalOpen, setIsFDAModalOpen,
     editingFDA, setEditingFDA,
     handleSaveProduct,
+    handleDeleteProduct,
     handleSaveSoldAsset,
     handleDeleteSoldAsset,
     handleSaveShipment,
@@ -5065,34 +5120,40 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   const [projects, setProjects] = useState(() => {
     try {
       const saved = localStorage.getItem('gov_hospital_projects');
-      const parsed = saved ? JSON.parse(saved) : (window.INITIAL_PROJECTS || []);
-      return sanitizeProjects(parsed);
-    } catch (e) {
-      console.warn('localStorage parse fallback for gov_hospital_projects:', e);
-      return sanitizeProjects(window.INITIAL_PROJECTS || []);
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        const cleanList = filterFn ? filterFn('projects', parsed) : parsed;
+        return sanitizeProjects(cleanList);
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 2. Cost Calculations State
   const [costCalculations, setCostCalculations] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_cost_calculations');
-      return saved ? JSON.parse(saved) : window.INITIAL_COST_CALCULATIONS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_cost_calculations:', e);
-      return window.INITIAL_COST_CALCULATIONS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('cost_calculations', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // 3. Demo Bookings State
   const [demoBookings, setDemoBookings] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_demo_bookings');
-      return saved ? JSON.parse(saved) : window.INITIAL_DEMO_BOOKINGS || [];
-    } catch (e) {
-      console.warn('localStorage parse fallback for aeron_demo_bookings:', e);
-      return window.INITIAL_DEMO_BOOKINGS || [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('demo_bookings', parsed) : parsed;
+      }
+    } catch (e) {}
+    return [];
   });
 
   // Modals & Target States
@@ -5112,27 +5173,33 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   // ⚡ Action-Driven Direct Cloud Sync
   useEffect(() => {
     if (isHydrated.current) {
-      localStorage.setItem('gov_hospital_projects', JSON.stringify(projects));
+      const filterFn = window.filterQuarantineData;
+      const clean = filterFn ? filterFn('projects', projects) : projects;
+      localStorage.setItem('gov_hospital_projects', JSON.stringify(clean));
       if (typeof window.syncToDB === 'function') {
-        window.syncToDB('projects', projects);
+        window.syncToDB('projects', clean);
       }
     }
   }, [projects]);
 
   useEffect(() => {
     if (isHydrated.current) {
-      localStorage.setItem('aeron_cost_calculations', JSON.stringify(costCalculations));
+      const filterFn = window.filterQuarantineData;
+      const clean = filterFn ? filterFn('cost_calculations', costCalculations) : costCalculations;
+      localStorage.setItem('aeron_cost_calculations', JSON.stringify(clean));
       if (typeof window.syncToDB === 'function') {
-        window.syncToDB('cost_calculations', costCalculations);
+        window.syncToDB('cost_calculations', clean);
       }
     }
   }, [costCalculations]);
 
   useEffect(() => {
     if (isHydrated.current) {
-      localStorage.setItem('aeron_demo_bookings', JSON.stringify(demoBookings));
+      const filterFn = window.filterQuarantineData;
+      const clean = filterFn ? filterFn('demo_bookings', demoBookings) : demoBookings;
+      localStorage.setItem('aeron_demo_bookings', JSON.stringify(clean));
       if (typeof window.syncToDB === 'function') {
-        window.syncToDB('demo_bookings', demoBookings);
+        window.syncToDB('demo_bookings', clean);
       }
     }
   }, [demoBookings]);
@@ -5144,12 +5211,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
+        const filterFn = window.filterQuarantineData;
 
         // 1. Projects (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('projects')) {
           const rawRemoteProjects = await fetcher('projects', null);
           if (isMounted && Array.isArray(rawRemoteProjects)) {
-            const remoteProjects = sanitizeProjects(rawRemoteProjects);
+            const cleanRaw = filterFn ? filterFn('projects', rawRemoteProjects) : rawRemoteProjects;
+            const remoteProjects = sanitizeProjects(cleanRaw);
             setProjects(prev => {
               if (window.isAeronMutating && window.isAeronMutating('projects')) return prev;
               if (JSON.stringify(prev) === JSON.stringify(remoteProjects)) return prev;
@@ -5165,13 +5234,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         if (!window.isAeronMutating || !window.isAeronMutating('cost_calculations')) {
           const remoteCost = await fetcher('cost_calculations', null);
           if (isMounted && Array.isArray(remoteCost)) {
+            const cleanCost = filterFn ? filterFn('cost_calculations', remoteCost) : remoteCost;
             setCostCalculations(prev => {
               if (window.isAeronMutating && window.isAeronMutating('cost_calculations')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteCost)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanCost)) return prev;
               try {
-                localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
+                localStorage.setItem('aeron_cost_calculations', JSON.stringify(cleanCost));
               } catch(e) {}
-              return remoteCost;
+              return cleanCost;
             });
           }
         }
@@ -5180,13 +5250,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         if (!window.isAeronMutating || !window.isAeronMutating('demo_bookings')) {
           const remoteDemo = await fetcher('demo_bookings', null);
           if (isMounted && Array.isArray(remoteDemo)) {
+            const cleanDemo = filterFn ? filterFn('demo_bookings', remoteDemo) : remoteDemo;
             setDemoBookings(prev => {
               if (window.isAeronMutating && window.isAeronMutating('demo_bookings')) return prev;
-              if (JSON.stringify(prev) === JSON.stringify(remoteDemo)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(cleanDemo)) return prev;
               try {
-                localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
+                localStorage.setItem('aeron_demo_bookings', JSON.stringify(cleanDemo));
               } catch(e) {}
-              return remoteDemo;
+              return cleanDemo;
             });
           }
         }
@@ -8416,76 +8487,70 @@ window.CategoryManagerModal = CategoryManagerModal;
 // MODULE: mod04_logistics/MessengerDispatchView.js
 
 function MessengerDispatchView({ currentUser, onLogout }) {
+  const isHydrated = useRef(false);
+
   const [jobs, setJobs] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_messenger_trips');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('messenger_trips', parsed) : parsed;
+      }
     } catch(e) {}
-    return [
-    {
-      id: 'MSG-2026-101',
-      hospitalName: 'โรงพยาบาลศิริราช',
-      department: 'แผนกศัลยกรรม (OR ชั้น 3)',
-      packageType: '📦 เอกสารสัญญาซื้อขาย TOR & ใบเสนอราคาชุดจริง',
-      recipient: 'ศ.ดร.นพ.สมศักดิ์ (หัวหน้าภาควิชา)',
-      phone: '081-999-8888',
-      salesPerson: 'สมชาย สายลุย',
-      status: '🚚 อยู่ระหว่างจัดส่ง',
-      updatedAt: '2026-08-01 10:30',
-      signature: 'อัมพร (ผู้ช่วยรับแทน)'
-    },
-    {
-      id: 'MSG-2026-102',
-      hospitalName: 'โรงพยาบาลรามาธิบดี',
-      department: 'แผนกจัดซื้อ ชั้น 4',
-      packageType: '📄 ใบสั่งซื้อ PO Vendor & เอกสารประกันซอง',
-      recipient: 'คุณปียะนันท์ (ฝ่ายจัดซื้อ)',
-      phone: '082-555-1234',
-      salesPerson: 'สมหญิง ใจดี',
-      status: '📦 รอดำเนินการ',
-      updatedAt: '2026-08-01 09:00',
-      signature: ''
-    },
-    {
-      id: 'MSG-2026-103',
-      hospitalName: 'โรงพยาบาลบำรุงราษฎร์',
-      department: 'ศูนย์เครื่องมือแพทย์',
-      packageType: '🔧 เครื่องส่งซ่อม Repair Unit & ใบรับประกัน',
-      recipient: 'นพ.ชัยวัฒน์ (ผู้อำนวยการแพทย์)',
-      phone: '089-111-2222',
-      salesPerson: 'อนันต์ ผู้โชคดี',
-      status: '📌 ส่งมอบสำเร็จ',
-      updatedAt: '2026-08-01 14:15',
-      signature: 'นพ.ชัยวัฒน์ (เซ็นรับแล้ว)'
-    }
-  ];
+    return [];
   });
 
   const [selectedJob, setSelectedJob] = useState(null);
 
-  // ⚡ Live Cloud Sync & LocalStorage Persistence
+  // ⚡ Live Cloud Sync & LocalStorage Persistence (Only after initial hydration)
   useEffect(() => {
+    if (!isHydrated.current) return;
     try {
-      localStorage.setItem('aeron_messenger_trips', JSON.stringify(jobs));
+      const filterFn = window.filterQuarantineData;
+      const cleanJobs = filterFn ? filterFn('messenger_trips', jobs) : jobs;
+      localStorage.setItem('aeron_messenger_trips', JSON.stringify(cleanJobs));
       if (typeof syncToDB === 'function') {
-        syncToDB('messenger_trips', jobs);
+        syncToDB('messenger_trips', cleanJobs);
       }
     } catch(e) {}
   }, [jobs]);
 
-  // ⚡ Startup Cloud Hydration
+  // ⚡ Server-Authoritative Cloud Hydration + Poller
   useEffect(() => {
+    let isMounted = true;
     async function hydrateTrips() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
+        if (window.isAeronMutating && window.isAeronMutating('messenger_trips')) return;
         const remoteTrips = await fetcher('messenger_trips', null);
-        if (Array.isArray(remoteTrips) && remoteTrips.length > 0) {
-          setJobs(remoteTrips);
+        if (isMounted && Array.isArray(remoteTrips)) {
+          const filterFn = window.filterQuarantineData;
+          const cleanTrips = filterFn ? filterFn('messenger_trips', remoteTrips) : remoteTrips;
+          setJobs(prev => {
+            if (window.isAeronMutating && window.isAeronMutating('messenger_trips')) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(cleanTrips)) return prev;
+            try { localStorage.setItem('aeron_messenger_trips', JSON.stringify(cleanTrips)); } catch(e) {}
+            return cleanTrips;
+          });
         }
-      } catch(e) {}
+      } catch(e) {
+        console.warn('[Messenger Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
+      }
     }
+
     hydrateTrips();
+    window.addEventListener('focus', hydrateTrips);
+    const poller = setInterval(hydrateTrips, 20000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateTrips);
+      clearInterval(poller);
+    };
   }, []);
 
   const handleUpdateStatus = (jobId, newStatus) => {
@@ -22515,6 +22580,7 @@ function App() {
     isFDAModalOpen, setIsFDAModalOpen,
     editingFDA, setEditingFDA,
     handleSaveProduct,
+    handleDeleteProduct,
     handleSaveSoldAsset,
     handleDeleteSoldAsset,
     handleSaveShipment,
@@ -23017,7 +23083,9 @@ function App() {
         'aeron_fda_registrations',
         'aeron_leave_requests',
         'aeron_attendance_logs',
-        'aeron_cost_calculations'
+        'aeron_cost_calculations',
+        'aeron_messenger_trips',
+        'aeron_petty_cash_accounts'
       ];
       keysToClear.forEach(k => {
         try { localStorage.removeItem(k); } catch(e) {}
@@ -23047,6 +23115,8 @@ function App() {
         window.syncToDB('leave_requests', window.INITIAL_LEAVE_REQUESTS || []);
         window.syncToDB('attendance_logs', window.INITIAL_ATTENDANCE_LOGS || []);
         window.syncToDB('cost_calculations', window.INITIAL_COST_CALCULATIONS || []);
+        window.syncToDB('messenger_trips', window.INITIAL_MESSENGER_TRIPS || []);
+        window.syncToDB('petty_cash_accounts', []);
       }
     }
   };
@@ -23216,15 +23286,7 @@ function App() {
                   demoBookings={demoBookings}
                   onOpenNewProduct={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
                   onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true); }}
-                  onDeleteProduct={(id) => {
-                    setProducts(prev => {
-                      const updated = prev.filter(p => p.id !== id);
-                      if (typeof window.syncToDB === 'function') {
-                        window.syncToDB('products', updated);
-                      }
-                      return updated;
-                    });
-                  }}
+                  onDeleteProduct={handleDeleteProduct}
                   onOpenRepairModal={handleOpenRepairFromCatalog}
                 />
               )}

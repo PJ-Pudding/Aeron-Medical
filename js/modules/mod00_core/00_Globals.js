@@ -191,7 +191,11 @@ const LEGACY_MOCK_IDS = new Set([
   'sold-101', 'sold-102',
   'rep-101', 'rep-102',
   'fda-101', 'fda-102', 'fda-103',
-  'pc-1', 'pc-2'
+  'pc-1', 'pc-2',
+  'MSG-2026-101', 'MSG-2026-102', 'MSG-2026-103', 'msg-101', 'msg-102', 'msg-103',
+  'leave-101', 'leave-102', 'leave-103',
+  'att-101', 'att-102', 'att-103',
+  'calc-101', 'calc-102', 'calc-103'
 ]);
 
 const LEGACY_MOCK_NAMES = new Set([
@@ -242,7 +246,15 @@ window.filterQuarantineData = filterQuarantineData;
       { key: 'aeron_sold_products', table: 'sold_products' },
       { key: 'aeron_repair_tickets', table: 'repair_tickets' },
       { key: 'aeron_fda_registrations', table: 'fda_registrations' },
-      { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' }
+      { key: 'aeron_cost_calculations', table: 'cost_calculations' },
+      { key: 'aeron_leave_requests', table: 'leave_requests' },
+      { key: 'aeron_attendance_logs', table: 'attendance_logs' },
+      { key: 'aeron_messenger_trips', table: 'messenger_trips' },
+      { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' },
+      { key: 'aeron_forecast_hospital_collections', table: 'forecast_hospital_collections' },
+      { key: 'aeron_forecast_projected_expenses', table: 'forecast_projected_expenses' },
+      { key: 'aeron_accounting_frozen_months', table: 'accounting_frozen_months' },
+      { key: 'aeron_accounting_recurring', table: 'accounting_recurring' }
     ];
     for (const item of keysToCheck) {
       const raw = localStorage.getItem(item.key);

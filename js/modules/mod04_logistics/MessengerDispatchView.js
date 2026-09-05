@@ -1,76 +1,70 @@
 // MODULE: mod04_logistics/MessengerDispatchView.js
 
 function MessengerDispatchView({ currentUser, onLogout }) {
+  const isHydrated = useRef(false);
+
   const [jobs, setJobs] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_messenger_trips');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filterFn = window.filterQuarantineData;
+        return filterFn ? filterFn('messenger_trips', parsed) : parsed;
+      }
     } catch(e) {}
-    return [
-    {
-      id: 'MSG-2026-101',
-      hospitalName: 'โรงพยาบาลศิริราช',
-      department: 'แผนกศัลยกรรม (OR ชั้น 3)',
-      packageType: '📦 เอกสารสัญญาซื้อขาย TOR & ใบเสนอราคาชุดจริง',
-      recipient: 'ศ.ดร.นพ.สมศักดิ์ (หัวหน้าภาควิชา)',
-      phone: '081-999-8888',
-      salesPerson: 'สมชาย สายลุย',
-      status: '🚚 อยู่ระหว่างจัดส่ง',
-      updatedAt: '2026-08-01 10:30',
-      signature: 'อัมพร (ผู้ช่วยรับแทน)'
-    },
-    {
-      id: 'MSG-2026-102',
-      hospitalName: 'โรงพยาบาลรามาธิบดี',
-      department: 'แผนกจัดซื้อ ชั้น 4',
-      packageType: '📄 ใบสั่งซื้อ PO Vendor & เอกสารประกันซอง',
-      recipient: 'คุณปียะนันท์ (ฝ่ายจัดซื้อ)',
-      phone: '082-555-1234',
-      salesPerson: 'สมหญิง ใจดี',
-      status: '📦 รอดำเนินการ',
-      updatedAt: '2026-08-01 09:00',
-      signature: ''
-    },
-    {
-      id: 'MSG-2026-103',
-      hospitalName: 'โรงพยาบาลบำรุงราษฎร์',
-      department: 'ศูนย์เครื่องมือแพทย์',
-      packageType: '🔧 เครื่องส่งซ่อม Repair Unit & ใบรับประกัน',
-      recipient: 'นพ.ชัยวัฒน์ (ผู้อำนวยการแพทย์)',
-      phone: '089-111-2222',
-      salesPerson: 'อนันต์ ผู้โชคดี',
-      status: '📌 ส่งมอบสำเร็จ',
-      updatedAt: '2026-08-01 14:15',
-      signature: 'นพ.ชัยวัฒน์ (เซ็นรับแล้ว)'
-    }
-  ];
+    return [];
   });
 
   const [selectedJob, setSelectedJob] = useState(null);
 
-  // ⚡ Live Cloud Sync & LocalStorage Persistence
+  // ⚡ Live Cloud Sync & LocalStorage Persistence (Only after initial hydration)
   useEffect(() => {
+    if (!isHydrated.current) return;
     try {
-      localStorage.setItem('aeron_messenger_trips', JSON.stringify(jobs));
+      const filterFn = window.filterQuarantineData;
+      const cleanJobs = filterFn ? filterFn('messenger_trips', jobs) : jobs;
+      localStorage.setItem('aeron_messenger_trips', JSON.stringify(cleanJobs));
       if (typeof syncToDB === 'function') {
-        syncToDB('messenger_trips', jobs);
+        syncToDB('messenger_trips', cleanJobs);
       }
     } catch(e) {}
   }, [jobs]);
 
-  // ⚡ Startup Cloud Hydration
+  // ⚡ Server-Authoritative Cloud Hydration + Poller
   useEffect(() => {
+    let isMounted = true;
     async function hydrateTrips() {
       try {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
+        if (window.isAeronMutating && window.isAeronMutating('messenger_trips')) return;
         const remoteTrips = await fetcher('messenger_trips', null);
-        if (Array.isArray(remoteTrips) && remoteTrips.length > 0) {
-          setJobs(remoteTrips);
+        if (isMounted && Array.isArray(remoteTrips)) {
+          const filterFn = window.filterQuarantineData;
+          const cleanTrips = filterFn ? filterFn('messenger_trips', remoteTrips) : remoteTrips;
+          setJobs(prev => {
+            if (window.isAeronMutating && window.isAeronMutating('messenger_trips')) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(cleanTrips)) return prev;
+            try { localStorage.setItem('aeron_messenger_trips', JSON.stringify(cleanTrips)); } catch(e) {}
+            return cleanTrips;
+          });
         }
-      } catch(e) {}
+      } catch(e) {
+        console.warn('[Messenger Cloud Hydration Notice]:', e.message);
+      } finally {
+        if (isMounted) isHydrated.current = true;
+      }
     }
+
     hydrateTrips();
+    window.addEventListener('focus', hydrateTrips);
+    const poller = setInterval(hydrateTrips, 20000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', hydrateTrips);
+      clearInterval(poller);
+    };
   }, []);
 
   const handleUpdateStatus = (jobId, newStatus) => {
