@@ -34,12 +34,7 @@ window.BUDGET_TYPES = [
   'งบกลาง / งบพิเศษ'
 ];
 
-window.PRODUCT_CATEGORIES = [
-  'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
-  'เครื่องช่วยหายใจ (Ventilator)',
-  'เครื่องมือแพทย์อื่นๆ',
-  'Power drill (ปืน,สว่าน เจาะกระดูก)'
-];
+window.PRODUCT_CATEGORIES = [];
 
 // Product Catalog - Seeded with Active Products
 window.CENTRAL_PRODUCT_CATALOG = [];

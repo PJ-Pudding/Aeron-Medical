@@ -140,9 +140,14 @@ function useAeronLogistics({ setActiveView }) {
         // 2. Categories
         if (!window.isAeronMutating || !window.isAeronMutating('product_categories')) {
           const remoteCategories = await fetcher('product_categories', null);
-          if (isMounted && Array.isArray(remoteCategories) && remoteCategories.length > 0) {
+          if (isMounted && Array.isArray(remoteCategories)) {
             setProductCategories(prev => {
               if (window.isAeronMutating && window.isAeronMutating('product_categories')) return prev;
+              if (remoteCategories.length === 0) {
+                try { localStorage.setItem('aeron_product_categories', JSON.stringify([])); } catch(e) {}
+                window.PRODUCT_CATEGORIES = [];
+                return [];
+              }
               const merged = Array.from(new Set([...(prev || []), ...remoteCategories]));
               if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
               try { localStorage.setItem('aeron_product_categories', JSON.stringify(merged)); } catch(e) {}

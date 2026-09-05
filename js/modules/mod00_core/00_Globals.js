@@ -68,7 +68,7 @@ const _TABLE_LS_MAP = {
 
 // 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
 (function purgeLegacyMockData() {
-  const PURGE_KEY = 'aeron_purge_v3';
+  const PURGE_KEY = 'aeron_purge_v4';
   try {
     if (localStorage.getItem(PURGE_KEY) !== 'true') {
       const keysToPurge = [
@@ -140,7 +140,7 @@ function decodeMojibakeString(str) {
     const bytes = [];
     let canDecode = true;
     for (let i = 0; i < s.length; i++) {
-      const code = s.charCodeAt(i);
+      const code = str.charCodeAt(i);
       if (code in _cp1252Map) bytes.push(_cp1252Map[code]);
       else if (code <= 0xFF) bytes.push(code);
       else {
@@ -178,7 +178,12 @@ window.sanitizeThaiData = sanitizeThaiData;
 // 🛡️ Local-First Smart Dataset Merge (CRDT-Inspired: Local Always Protected, Zero Data Loss)
 function mergeAeronDatasets(localList, remoteList, idKey = 'id') {
   if (!Array.isArray(localList) || localList.length === 0) return Array.isArray(remoteList) ? remoteList : [];
-  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList;
+  if (!Array.isArray(remoteList)) return localList;
+  if (remoteList.length === 0) {
+    // If remote was explicitly cleared/empty, only keep newly created pending local items
+    const pendingLocal = localList.filter(item => item && item._isLocalPending);
+    return pendingLocal;
+  }
 
   const remoteMap = new Map();
   remoteList.forEach(item => {
