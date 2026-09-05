@@ -516,24 +516,50 @@ function App() {
   // Reset Demo Data
   const handleResetDemoData = () => {
     if (window.confirm('คุณต้องการรีเซ็ตกลับเป็นข้อมูลตัวอย่างตั้งต้นของ AERON MEDICAL ทั้งหมดใช่หรือไม่?')) {
-      localStorage.removeItem('gov_hospital_projects');
-      localStorage.removeItem('gov_hospital_members');
-      localStorage.removeItem('aeron_products');
-      localStorage.removeItem('aeron_demo_bookings');
-      localStorage.removeItem('aeron_purchase_orders');
-      localStorage.removeItem('aeron_repair_tickets');
-      localStorage.removeItem('aeron_sold_products');
-      localStorage.removeItem('aeron_shipments');
-      localStorage.removeItem('aeron_fda_registrations');
-      setProjects(window.INITIAL_PROJECTS);
-      setMembers(window.INITIAL_MEMBERS);
-      setProducts(window.CENTRAL_PRODUCT_CATALOG);
-      setDemoBookings(window.INITIAL_DEMO_BOOKINGS);
+      const keysToClear = [
+        'gov_hospital_projects',
+        'gov_hospital_members',
+        'aeron_products',
+        'aeron_product_categories',
+        'aeron_demo_bookings',
+        'aeron_purchase_orders',
+        'aeron_repair_tickets',
+        'aeron_sold_products',
+        'aeron_shipments',
+        'aeron_fda_registrations',
+        'aeron_leave_requests',
+        'aeron_attendance_logs',
+        'aeron_cost_calculations'
+      ];
+      keysToClear.forEach(k => {
+        try { localStorage.removeItem(k); } catch(e) {}
+      });
+
+      setProjects(window.INITIAL_PROJECTS || []);
+      setMembers(window.INITIAL_MEMBERS || []);
+      setProducts(window.CENTRAL_PRODUCT_CATALOG || []);
+      setDemoBookings(window.INITIAL_DEMO_BOOKINGS || []);
       setPurchaseOrders(window.INITIAL_PURCHASE_ORDERS || []);
       setRepairTickets(window.INITIAL_REPAIR_TICKETS || []);
       setSoldProducts(window.INITIAL_SOLD_PRODUCTS || []);
       setShipments(window.INITIAL_SHIPMENTS || []);
       setFdaRegistrations(window.INITIAL_FDA_REGISTRATIONS || []);
+
+      if (typeof window.syncToDB === 'function') {
+        window.syncToDB('projects', window.INITIAL_PROJECTS || []);
+        window.syncToDB('members', window.INITIAL_MEMBERS || []);
+        window.syncToDB('products', window.CENTRAL_PRODUCT_CATALOG || []);
+        window.syncToDB('product_categories', window.PRODUCT_CATEGORIES || []);
+        window.syncToDB('demo_bookings', window.INITIAL_DEMO_BOOKINGS || []);
+        window.syncToDB('purchase_orders', window.INITIAL_PURCHASE_ORDERS || []);
+        window.syncToDB('repair_tickets', window.INITIAL_REPAIR_TICKETS || []);
+        window.syncToDB('sold_products', window.INITIAL_SOLD_PRODUCTS || []);
+        window.syncToDB('shipments', window.INITIAL_SHIPMENTS || []);
+        window.syncToDB('fda_registrations', window.INITIAL_FDA_REGISTRATIONS || []);
+        window.syncToDB('leave_requests', window.INITIAL_LEAVE_REQUESTS || []);
+        window.syncToDB('attendance_logs', window.INITIAL_ATTENDANCE_LOGS || []);
+        window.syncToDB('cost_calculations', window.INITIAL_COST_CALCULATIONS || []);
+      }
     }
   };
 

@@ -43,38 +43,32 @@ function useAeronHR({ currentUser }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Leave Requests (Smart Merge - NEVER wipes local items)
+        // 1. Leave Requests (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('leave_requests')) {
           const remoteLeaves = await fetcher('leave_requests', null);
           if (isMounted && Array.isArray(remoteLeaves)) {
             setLeaveRequests(prev => {
               if (window.isAeronMutating && window.isAeronMutating('leave_requests')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteLeaves, 'id')
-                : (remoteLeaves.length > 0 ? remoteLeaves : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(remoteLeaves)) return prev;
               try {
-                localStorage.setItem('aeron_leave_requests', JSON.stringify(merged));
+                localStorage.setItem('aeron_leave_requests', JSON.stringify(remoteLeaves));
               } catch(e) {}
-              return merged;
+              return remoteLeaves;
             });
           }
         }
 
-        // 2. Attendance Logs (Smart Merge - NEVER wipes local items)
+        // 2. Attendance Logs (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('attendance_logs')) {
           const remoteAttendance = await fetcher('attendance_logs', null);
           if (isMounted && Array.isArray(remoteAttendance)) {
             setAttendanceLogs(prev => {
               if (window.isAeronMutating && window.isAeronMutating('attendance_logs')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteAttendance, 'id')
-                : (remoteAttendance.length > 0 ? remoteAttendance : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(remoteAttendance)) return prev;
               try {
-                localStorage.setItem('aeron_attendance_logs', JSON.stringify(merged));
+                localStorage.setItem('aeron_attendance_logs', JSON.stringify(remoteAttendance));
               } catch(e) {}
-              return merged;
+              return remoteAttendance;
             });
           }
         }

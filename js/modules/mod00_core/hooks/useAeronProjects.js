@@ -98,57 +98,48 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Projects (Smart Merge & Empty Protection - NEVER wipes local items)
+        // 1. Projects (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('projects')) {
           const rawRemoteProjects = await fetcher('projects', null);
           if (isMounted && Array.isArray(rawRemoteProjects)) {
             const remoteProjects = sanitizeProjects(rawRemoteProjects);
             setProjects(prev => {
               if (window.isAeronMutating && window.isAeronMutating('projects')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteProjects, 'id')
-                : (remoteProjects.length > 0 ? remoteProjects : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(remoteProjects)) return prev;
               try {
-                localStorage.setItem('gov_hospital_projects', JSON.stringify(merged));
+                localStorage.setItem('gov_hospital_projects', JSON.stringify(remoteProjects));
               } catch(e) {}
-              return merged;
+              return remoteProjects;
             });
           }
         }
 
-        // 2. Cost Calculations (Smart Merge)
+        // 2. Cost Calculations (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('cost_calculations')) {
           const remoteCost = await fetcher('cost_calculations', null);
           if (isMounted && Array.isArray(remoteCost)) {
             setCostCalculations(prev => {
               if (window.isAeronMutating && window.isAeronMutating('cost_calculations')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteCost, 'id')
-                : (remoteCost.length > 0 ? remoteCost : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(remoteCost)) return prev;
               try {
-                localStorage.setItem('aeron_cost_calculations', JSON.stringify(merged));
+                localStorage.setItem('aeron_cost_calculations', JSON.stringify(remoteCost));
               } catch(e) {}
-              return merged;
+              return remoteCost;
             });
           }
         }
 
-        // 3. Demo Bookings (Smart Merge)
+        // 3. Demo Bookings (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('demo_bookings')) {
           const remoteDemo = await fetcher('demo_bookings', null);
           if (isMounted && Array.isArray(remoteDemo)) {
             setDemoBookings(prev => {
               if (window.isAeronMutating && window.isAeronMutating('demo_bookings')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteDemo, 'id')
-                : (remoteDemo.length > 0 ? remoteDemo : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              if (JSON.stringify(prev) === JSON.stringify(remoteDemo)) return prev;
               try {
-                localStorage.setItem('aeron_demo_bookings', JSON.stringify(merged));
+                localStorage.setItem('aeron_demo_bookings', JSON.stringify(remoteDemo));
               } catch(e) {}
-              return merged;
+              return remoteDemo;
             });
           }
         }
@@ -173,32 +164,18 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   }, []);
 
   const handleUpdateBookingStatus = useCallback((bookingId, newStatus) => {
-    setDemoBookings(prev => {
-      const updated = prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b);
-      localStorage.setItem('aeron_demo_bookings', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('demo_bookings', updated);
-      }
-      return updated;
-    });
+    setDemoBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   }, []);
 
   const handleSaveCostCalc = useCallback((calcData) => {
     setCostCalculations(prev => {
-      let updated;
       const idx = prev.findIndex(c => c.id === calcData.id || c.projectId === calcData.projectId);
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...calcData, id: copy[idx].id };
-        updated = copy;
-      } else {
-        updated = [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
+        return copy;
       }
-      localStorage.setItem('aeron_cost_calculations', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('cost_calculations', updated);
-      }
-      return updated;
+      return [{ ...calcData, id: `calc-${Date.now()}` }, ...prev];
     });
     setIsCostModalOpen(false);
     setEditingCostCalc(null);
@@ -206,21 +183,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
 
   const handleDeleteCostCalc = useCallback((calcId) => {
     if (window.confirm('ยืนยันการลบการคำนวณต้นทุนนี้?')) {
-      setCostCalculations(prev => {
-        const updated = prev.filter(c => c.id !== calcId);
-        localStorage.setItem('aeron_cost_calculations', JSON.stringify(updated));
-        if (typeof window.syncToDB === 'function') {
-          window.syncToDB('cost_calculations', updated);
-        }
-        return updated;
-      });
+      setCostCalculations(prev => prev.filter(c => c.id !== calcId));
     }
   }, []);
 
   // Handle move project stage in Kanban
   const handleMoveProject = useCallback((projectId, targetStageId) => {
     setProjects(prev => {
-      const updated = prev.map(p => {
+      return prev.map(p => {
         if (p.id === projectId) {
           const isWon = targetStageId === 'stage_won' || targetStageId === 'stage_ordering';
           if (isWon && p.status !== targetStageId && setToastNotification) {
@@ -275,34 +245,22 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         }
         return p;
       });
-      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('projects', updated);
-      }
-      return updated;
     });
   }, [setSoldProducts, setToastNotification]);
 
   // Add / Save Project
   const handleSaveProject = useCallback((projectData) => {
     setProjects(prev => {
-      let updated;
       if (projectData.id) {
-        updated = prev.map(p => p.id === projectData.id ? projectData : p);
-      } else {
-        const newProj = {
-          ...projectData,
-          id: 'proj-' + Date.now(),
-          createdDate: new Date().toISOString().split('T')[0],
-          weeklyLogs: []
-        };
-        updated = [newProj, ...prev];
+        return prev.map(p => p.id === projectData.id ? projectData : p);
       }
-      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('projects', updated);
-      }
-      return updated;
+      const newProj = {
+        ...projectData,
+        id: 'proj-' + Date.now(),
+        createdDate: new Date().toISOString().split('T')[0],
+        weeklyLogs: []
+      };
+      return [newProj, ...prev];
     });
     setIsModalOpen(false);
     setEditingProject(null);
@@ -311,21 +269,14 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   // Delete Project
   const handleDeleteProject = useCallback((projectId) => {
     if (window.confirm('คุณต้องการลบโครงการนี้ออกจากระบบใช่หรือไม่?')) {
-      setProjects(prev => {
-        const updated = prev.filter(p => p.id !== projectId);
-        localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
-        if (typeof window.syncToDB === 'function') {
-          window.syncToDB('projects', updated);
-        }
-        return updated;
-      });
+      setProjects(prev => prev.filter(p => p.id !== projectId));
     }
   }, []);
 
   // Add Weekly Log Note
   const handleAddWeeklyLog = useCallback((projectId, note, author) => {
     setProjects(prev => {
-      const updated = prev.map(p => {
+      return prev.map(p => {
         if (p.id === projectId) {
           const newLog = {
             date: new Date().toISOString().split('T')[0],
@@ -339,11 +290,6 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
         }
         return p;
       });
-      localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('projects', updated);
-      }
-      return updated;
     });
     setIsLogModalOpen(false);
     setLogTargetProject(null);
@@ -352,26 +298,19 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
   // Save Demo Booking
   const handleSaveDemoBooking = useCallback((bookingData) => {
     setDemoBookings(prev => {
-      let updated;
       if (bookingData.id) {
-        updated = prev.map(b => b.id === bookingData.id ? bookingData : b);
-      } else {
-        const newBooking = {
-          ...bookingData,
-          id: 'booking-' + Date.now()
-        };
-        updated = [newBooking, ...prev];
+        return prev.map(b => b.id === bookingData.id ? bookingData : b);
       }
-      localStorage.setItem('aeron_demo_bookings', JSON.stringify(updated));
-      if (typeof window.syncToDB === 'function') {
-        window.syncToDB('demo_bookings', updated);
-      }
-      return updated;
+      const newBooking = {
+        ...bookingData,
+        id: 'booking-' + Date.now()
+      };
+      return [newBooking, ...prev];
     });
 
     if (bookingData.projectId) {
       setProjects(prev => {
-        const updated = prev.map(p => {
+        return prev.map(p => {
           if (p.id === bookingData.projectId) {
             return {
               ...p,
@@ -382,11 +321,6 @@ function useAeronProjects({ soldProducts, setSoldProducts, setToastNotification 
           }
           return p;
         });
-        localStorage.setItem('gov_hospital_projects', JSON.stringify(updated));
-        if (typeof window.syncToDB === 'function') {
-          window.syncToDB('projects', updated);
-        }
-        return updated;
       });
     }
 

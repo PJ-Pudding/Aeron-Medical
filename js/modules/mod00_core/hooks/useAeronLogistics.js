@@ -10,18 +10,13 @@ function useAeronLogistics({ setActiveView }) {
   const [productCategories, setProductCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('aeron_product_categories');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
-      return (window.PRODUCT_CATEGORIES && window.PRODUCT_CATEGORIES.length > 0) ? window.PRODUCT_CATEGORIES : [
-        'Traction Frame ตัวต่อเสริม เตียงในการผ่ากระดูก ( Fracture Table)',
-        'เครื่องช่วยหายใจ (Ventilator)',
-        'เครื่องมือแพทย์อื่นๆ',
-        'Power drill (ปืน,สว่าน เจาะกระดูก)'
-      ];
+      return (window.PRODUCT_CATEGORIES && Array.isArray(window.PRODUCT_CATEGORIES)) ? window.PRODUCT_CATEGORIES : [];
     } catch(e) {
-      return window.PRODUCT_CATEGORIES || [];
+      return [];
     }
   });
 
@@ -111,9 +106,7 @@ function useAeronLogistics({ setActiveView }) {
   const [isFDAModalOpen, setIsFDAModalOpen] = useState(false);
   const [editingFDA, setEditingFDA] = useState(null);
 
-  // ⚡ Action-Driven Direct Cloud Sync: State updates only trigger cloud sync on explicit user actions!
-
-  // ⚡ Universal Notion-Like Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Smart Merge - Zero Data Loss)
+  // ⚡ Universal Hydration: Initial Mount + Tab Focus + 20s Heartbeat Poller (Server-Authoritative SSoT)
   useEffect(() => {
     let isMounted = true;
     async function hydrateLogisticsFromCloud() {
@@ -121,102 +114,81 @@ function useAeronLogistics({ setActiveView }) {
         const fetcher = window.loadFromDB || (typeof loadFromDB === 'function' ? loadFromDB : null);
         if (!fetcher) return;
 
-        // 1. Products (Smart Merge - NEVER wipes local items)
+        // 1. Products (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('products')) {
           const remoteProducts = await fetcher('products', null);
           if (isMounted && Array.isArray(remoteProducts)) {
             setProducts(prev => {
               if (window.isAeronMutating && window.isAeronMutating('products')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteProducts, 'id')
-                : (remoteProducts.length > 0 ? remoteProducts : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_products', JSON.stringify(merged)); } catch(e) {}
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteProducts)) return prev;
+              try { localStorage.setItem('aeron_products', JSON.stringify(remoteProducts)); } catch(e) {}
+              return remoteProducts;
             });
           }
         }
 
-        // 2. Categories
+        // 2. Categories (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('product_categories')) {
           const remoteCategories = await fetcher('product_categories', null);
           if (isMounted && Array.isArray(remoteCategories)) {
             setProductCategories(prev => {
               if (window.isAeronMutating && window.isAeronMutating('product_categories')) return prev;
-              if (remoteCategories.length === 0) {
-                try { localStorage.setItem('aeron_product_categories', JSON.stringify([])); } catch(e) {}
-                window.PRODUCT_CATEGORIES = [];
-                return [];
-              }
-              const merged = Array.from(new Set([...(prev || []), ...remoteCategories]));
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_product_categories', JSON.stringify(merged)); } catch(e) {}
-              window.PRODUCT_CATEGORIES = merged;
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteCategories)) return prev;
+              try { localStorage.setItem('aeron_product_categories', JSON.stringify(remoteCategories)); } catch(e) {}
+              window.PRODUCT_CATEGORIES = remoteCategories;
+              return remoteCategories;
             });
           }
         }
 
-        // 3. Sold Products (Smart Merge)
+        // 3. Sold Products (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('sold_products')) {
           const remoteSold = await fetcher('sold_products', null);
           if (isMounted && Array.isArray(remoteSold)) {
             setSoldProducts(prev => {
               if (window.isAeronMutating && window.isAeronMutating('sold_products')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteSold, 'id')
-                : (remoteSold.length > 0 ? remoteSold : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_sold_products', JSON.stringify(merged)); } catch(e) {}
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteSold)) return prev;
+              try { localStorage.setItem('aeron_sold_products', JSON.stringify(remoteSold)); } catch(e) {}
+              return remoteSold;
             });
           }
         }
 
-        // 4. Shipments (Smart Merge)
+        // 4. Shipments (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('shipments')) {
           const remoteShipments = await fetcher('shipments', null);
           if (isMounted && Array.isArray(remoteShipments)) {
             setShipments(prev => {
               if (window.isAeronMutating && window.isAeronMutating('shipments')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteShipments, 'id')
-                : (remoteShipments.length > 0 ? remoteShipments : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_shipments', JSON.stringify(merged)); } catch(e) {}
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteShipments)) return prev;
+              try { localStorage.setItem('aeron_shipments', JSON.stringify(remoteShipments)); } catch(e) {}
+              return remoteShipments;
             });
           }
         }
 
-        // 5. Repair Tickets (Smart Merge)
+        // 5. Repair Tickets (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('repair_tickets')) {
           const remoteRepairs = await fetcher('repair_tickets', null);
           if (isMounted && Array.isArray(remoteRepairs)) {
             setRepairTickets(prev => {
               if (window.isAeronMutating && window.isAeronMutating('repair_tickets')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteRepairs, 'id')
-                : (remoteRepairs.length > 0 ? remoteRepairs : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(merged)); } catch(e) {}
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteRepairs)) return prev;
+              try { localStorage.setItem('aeron_repair_tickets', JSON.stringify(remoteRepairs)); } catch(e) {}
+              return remoteRepairs;
             });
           }
         }
 
-        // 6. FDA Registrations (Smart Merge)
+        // 6. FDA Registrations (Server-Authoritative SSoT)
         if (!window.isAeronMutating || !window.isAeronMutating('fda_registrations')) {
           const remoteFDA = await fetcher('fda_registrations', null);
           if (isMounted && Array.isArray(remoteFDA)) {
             setFdaRegistrations(prev => {
               if (window.isAeronMutating && window.isAeronMutating('fda_registrations')) return prev;
-              const merged = typeof window.mergeAeronDatasets === 'function'
-                ? window.mergeAeronDatasets(prev, remoteFDA, 'id')
-                : (remoteFDA.length > 0 ? remoteFDA : prev);
-              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(merged)); } catch(e) {}
-              return merged;
+              if (JSON.stringify(prev) === JSON.stringify(remoteFDA)) return prev;
+              try { localStorage.setItem('aeron_fda_registrations', JSON.stringify(remoteFDA)); } catch(e) {}
+              return remoteFDA;
             });
           }
         }

@@ -68,7 +68,7 @@ const _TABLE_LS_MAP = {
 
 // 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
 (function purgeLegacyMockData() {
-  const PURGE_KEY = 'aeron_purge_v4';
+  const PURGE_KEY = 'aeron_purge_v5';
   try {
     if (localStorage.getItem(PURGE_KEY) !== 'true') {
       const keysToPurge = [
@@ -175,63 +175,10 @@ function sanitizeThaiData(val) {
 
 window.sanitizeThaiData = sanitizeThaiData;
 
-// 🛡️ Local-First Smart Dataset Merge (CRDT-Inspired: Local Always Protected, Zero Data Loss)
-function mergeAeronDatasets(localList, remoteList, idKey = 'id') {
-  if (!Array.isArray(localList) || localList.length === 0) return Array.isArray(remoteList) ? remoteList : [];
-  if (!Array.isArray(remoteList)) return localList;
-  if (remoteList.length === 0) {
-    // If remote was explicitly cleared/empty, only keep newly created pending local items
-    const pendingLocal = localList.filter(item => item && item._isLocalPending);
-    return pendingLocal;
-  }
-
-  const remoteMap = new Map();
-  remoteList.forEach(item => {
-    if (item && item[idKey]) remoteMap.set(String(item[idKey]), item);
-  });
-
-  const merged = [];
-  const visitedIds = new Set();
-
-  // 1. Keep all local items (so newly created or modified local items are NEVER wiped by remote)
-  localList.forEach(localItem => {
-    if (!localItem || !localItem[idKey]) {
-      merged.push(localItem);
-      return;
-    }
-    const idStr = String(localItem[idKey]);
-    visitedIds.add(idStr);
-    const remoteItem = remoteMap.get(idStr);
-
-    if (!remoteItem) {
-      // Local item not yet on remote: KEEP IT!
-      merged.push(localItem);
-    } else {
-      // Both exist: check updated timestamp or preserve local if newer
-      const localTime = new Date(localItem.updated_at || localItem.updatedDate || localItem.createdDate || 0).getTime();
-      const remoteTime = new Date(remoteItem.updated_at || remoteItem.updatedDate || remoteItem.createdDate || 0).getTime();
-      if (localTime >= remoteTime) {
-        merged.push(localItem);
-      } else {
-        merged.push(remoteItem);
-      }
-    }
-  });
-
-  // 2. Add remote items that are not in local
-  remoteList.forEach(remoteItem => {
-    if (remoteItem && remoteItem[idKey]) {
-      const idStr = String(remoteItem[idKey]);
-      if (!visitedIds.has(idStr)) {
-        merged.push(remoteItem);
-        visitedIds.add(idStr);
-      }
-    }
-  });
-
-  return merged;
-}
-window.mergeAeronDatasets = mergeAeronDatasets;
+// 🛡️ Server-Authoritative Sync (SSoT Pattern — เหมือน Google Sheets / Notion)
+// Server เป็น Source of Truth เสมอ — Client ใช้ค่าจาก Server ตรงๆ
+// ไม่มี merge ซ้ำซ้อนอีกต่อไป
+window.mergeAeronDatasets = null; // Deprecated: removed to prevent ghost data resurrection
 
 window.AeronCloudDB = {
   async save(tableName, data) {
@@ -288,31 +235,15 @@ window.AeronCloudDB = {
         const data = await res.json();
         if (data !== undefined && data !== null) {
           const cleanData = sanitizeThaiData(data);
-          const lsKey = _TABLE_LS_MAP[tableName];
-          if (lsKey) {
-            try {
-              const cached = localStorage.getItem(lsKey);
-              const parsedCached = cached ? JSON.parse(cached) : null;
-              if (Array.isArray(cleanData) && Array.isArray(parsedCached)) {
-                if (cleanData.length === 0 && !window.isAeronMutating(tableName)) {
-                  localStorage.setItem(lsKey, JSON.stringify([]));
-                  localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-                  return [];
-                }
-                // Smart Merge: NEVER destroy local items!
-                const finalData = mergeAeronDatasets(parsedCached, cleanData);
-                if (finalData.length > cleanData.length) {
-                  // Local had pending/unpushed records, heal cloud
-                  window.AeronCloudDB.save(tableName, finalData);
-                }
-                localStorage.setItem(lsKey, JSON.stringify(finalData));
-                localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-                return finalData;
-              }
+          // 🛡️ Server-Authoritative: ใช้ค่าจาก Server ตรงๆ ไม่ merge กับ localStorage
+          // อัปเดต localStorage เป็น offline cache เท่านั้น
+          try {
+            const lsKey = _TABLE_LS_MAP[tableName];
+            if (lsKey) {
               localStorage.setItem(lsKey, JSON.stringify(cleanData));
               localStorage.setItem('aeron_ts_' + tableName, Date.now().toString());
-            } catch(e) {}
-          }
+            }
+          } catch(e) {}
           return cleanData;
         }
       }
@@ -320,6 +251,7 @@ window.AeronCloudDB = {
       console.warn('[AeronCloudDB Load Warning]:', err.message);
     }
 
+    // Offline fallback: ใช้ localStorage เมื่อ Server ไม่ตอบ
     try {
       const lsKey = _TABLE_LS_MAP[tableName];
       if (lsKey) {

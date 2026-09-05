@@ -127,13 +127,13 @@ window.INITIAL_MEMBERS = [
     "avatar": "🏢"
   },
   {
-    "id": "m3",
+    "id": "m7",
     "name": "คุณแจง (Sales-Esarn1)",
     "role": "SALES_HEAD",
     "avatar": "👨‍⚕️"
   },
   {
-    "id": "m1",
+    "id": "m6",
     "name": "คุณอุ๋มอิ๋ม (Sales Bkk2)",
     "role": "SALES",
     "avatar": "👨‍⚕️"
