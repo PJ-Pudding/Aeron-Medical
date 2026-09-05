@@ -84,13 +84,17 @@ function Header({
       ];
 
       let pushed = 0;
+      const filterFn = window.filterQuarantineData || ((t, d) => d);
       for (const item of syncMap) {
         const raw = localStorage.getItem(item.key);
         if (raw) {
           try {
             const data = JSON.parse(raw);
-            if (data && typeof syncToDB === 'function') {
-              await syncToDB(item.table, data);
+            const cleanData = filterFn(item.table, data);
+            // Scrub localStorage with clean data
+            localStorage.setItem(item.key, JSON.stringify(cleanData));
+            if (cleanData && typeof syncToDB === 'function') {
+              await syncToDB(item.table, cleanData);
               pushed++;
             }
           } catch(e) {}

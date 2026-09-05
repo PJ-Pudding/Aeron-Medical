@@ -183,6 +183,7 @@ window.mergeAeronDatasets = null; // Deprecated: removed to prevent ghost data r
 // 🛡️ Client-Side Anti-Resurrection Quarantine Filter
 const LEGACY_MOCK_IDS = new Set([
   'prod-101', 'prod-102', 'prod-103', 'prod-104', 'prod-105', 'prod-1788420592050',
+  'prod-1788498375729',
   'proj-101', 'proj-102', 'proj-103', 'proj-104', 'proj-105', 'proj-106', 'proj-107', 'proj-108', 'proj-109', 'proj-110',
   'bk-101', 'bk-102', 'bk-103', 'bk-104', 'bk-105',
   'po-101', 'po-102', 'po-103',
@@ -191,6 +192,16 @@ const LEGACY_MOCK_IDS = new Set([
   'rep-101', 'rep-102',
   'fda-101', 'fda-102', 'fda-103',
   'pc-1', 'pc-2'
+]);
+
+const LEGACY_MOCK_NAMES = new Set([
+  'AERON Cardio 12L-AI',
+  'AERON EchoVision 3D Pro',
+  'AERON Operative Table X3',
+  'AERON RespiVent V800',
+  'AERON CentralStation 32B',
+  '222222222',
+  'Test'
 ]);
 
 const LEGACY_MOCK_CATEGORIES = new Set([
@@ -209,13 +220,40 @@ function filterQuarantineData(tableName, data) {
     return data.filter(item => {
       if (!item) return false;
       if (item.id && LEGACY_MOCK_IDS.has(String(item.id))) return false;
-      if (item.name === '222222222' || item.title === '222222222') return false;
+      if (item.name && LEGACY_MOCK_NAMES.has(String(item.name).trim())) return false;
+      if (item.title && LEGACY_MOCK_NAMES.has(String(item.title).trim())) return false;
       return true;
     });
   }
   return data;
 }
 window.filterQuarantineData = filterQuarantineData;
+
+// 🧹 Auto-Purge Mock Data from Browser LocalStorage immediately on script execution
+(function autoCleanseBrowserStorage() {
+  try {
+    const keysToCheck = [
+      { key: 'aeron_products', table: 'products' },
+      { key: 'aeron_product_categories', table: 'product_categories' },
+      { key: 'gov_hospital_projects', table: 'projects' },
+      { key: 'aeron_demo_bookings', table: 'demo_bookings' },
+      { key: 'aeron_purchase_orders', table: 'purchase_orders' },
+      { key: 'aeron_shipments', table: 'shipments' },
+      { key: 'aeron_sold_products', table: 'sold_products' },
+      { key: 'aeron_repair_tickets', table: 'repair_tickets' },
+      { key: 'aeron_fda_registrations', table: 'fda_registrations' },
+      { key: 'aeron_petty_cash_accounts', table: 'petty_cash_accounts' }
+    ];
+    for (const item of keysToCheck) {
+      const raw = localStorage.getItem(item.key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const cleaned = filterQuarantineData(item.table, parsed);
+        localStorage.setItem(item.key, JSON.stringify(cleaned));
+      }
+    }
+  } catch(e) {}
+})();
 
 window.AeronCloudDB = {
   async save(tableName, data) {

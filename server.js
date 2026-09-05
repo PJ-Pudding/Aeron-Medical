@@ -73,6 +73,7 @@ function isValidTableName(tableName) {
 const LEGACY_MOCK_IDS = new Set([
   // Products
   'prod-101', 'prod-102', 'prod-103', 'prod-104', 'prod-105', 'prod-1788420592050',
+  'prod-1788498375729',
   // Projects
   'proj-101', 'proj-102', 'proj-103', 'proj-104', 'proj-105', 'proj-106', 'proj-107', 'proj-108', 'proj-109', 'proj-110',
   // Bookings
@@ -89,6 +90,16 @@ const LEGACY_MOCK_IDS = new Set([
   'fda-101', 'fda-102', 'fda-103',
   // Petty cash
   'pc-1', 'pc-2'
+]);
+
+const LEGACY_MOCK_NAMES = new Set([
+  'AERON Cardio 12L-AI',
+  'AERON EchoVision 3D Pro',
+  'AERON Operative Table X3',
+  'AERON RespiVent V800',
+  'AERON CentralStation 32B',
+  '222222222',
+  'Test'
 ]);
 
 const LEGACY_MOCK_CATEGORIES = new Set([
@@ -109,7 +120,8 @@ function filterQuarantineData(tableName, data) {
     return data.filter(item => {
       if (!item) return false;
       if (item.id && LEGACY_MOCK_IDS.has(String(item.id))) return false;
-      if (item.name === '222222222' || item.title === '222222222') return false;
+      if (item.name && LEGACY_MOCK_NAMES.has(String(item.name).trim())) return false;
+      if (item.title && LEGACY_MOCK_NAMES.has(String(item.title).trim())) return false;
       return true;
     });
   }
