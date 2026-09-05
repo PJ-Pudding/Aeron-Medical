@@ -74,7 +74,7 @@ const _TABLE_LS_MAP = {
 
 // 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
 (function purgeLegacyMockData() {
-  const PURGE_KEY = 'aeron_purge_v5';
+  const PURGE_KEY = 'aeron_purge_v6';
   try {
     if (localStorage.getItem(PURGE_KEY) !== 'true') {
       const keysToPurge = [
@@ -290,21 +290,14 @@ function getCompanyAccounts() {
   try {
     const saved = localStorage.getItem('aeron_petty_cash_accounts');
     if (saved) {
-      pettyCashList = JSON.parse(saved);
-    } else {
-      pettyCashList = [
-        { id: 'pc-1', empName: 'คุณตู้', limit: 20000, name: 'เงินสดสำรองจ่าย - คุณตู้ (Petty Cash)' },
-        { id: 'pc-2', empName: 'คุณแบงค์', limit: 15000, name: 'เงินสดสำรองจ่าย - คุณแบงค์ (Petty Cash)' }
-      ];
-      localStorage.setItem('aeron_petty_cash_accounts', JSON.stringify(pettyCashList));
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) pettyCashList = parsed;
     }
   } catch (e) {
-    pettyCashList = [
-      { id: 'pc-1', empName: 'คุณตู้', limit: 20000, name: 'เงินสดสำรองจ่าย - คุณตู้ (Petty Cash)' }
-    ];
+    pettyCashList = [];
   }
 
-  const pettyNames = pettyCashList.map(pc => pc.name || `เงินสดสำรองจ่าย - ${pc.empName}`);
+  const pettyNames = (pettyCashList || []).map(pc => pc.name || `เงินสดสำรองจ่าย - ${pc.empName || ''}`);
   return [...FIXED_COMPANY_BANK_ACCOUNTS, ...pettyNames];
 }
 
@@ -4017,16 +4010,13 @@ function useAeronAccounting({ setShipments }) {
         // 🛡️ Skip hydration if user has active local mutations
         if (window.isAeronMutating && window.isAeronMutating('accounting')) return;
 
-        // 1. Transactions (Smart Merge & Universal Thai Sanitizer - NEVER wipes local items)
+        // 1. Transactions (Server-Authoritative SSoT & Universal Thai Sanitizer)
         const remoteTxns = await fetcher('accounting', null);
         if (isMounted && Array.isArray(remoteTxns)) {
           const rawTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
           setTransactions(prev => {
             if (window.isAeronMutating && window.isAeronMutating('accounting')) return prev;
-            const merged = typeof window.mergeAeronDatasets === 'function'
-              ? window.mergeAeronDatasets(prev, rawTxns, 'id')
-              : (rawTxns.length > 0 ? rawTxns : prev);
-            const cleanTxns = merged.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
+            const cleanTxns = rawTxns.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
             if (JSON.stringify(prev) === JSON.stringify(cleanTxns)) return prev;
             try {
               localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
@@ -4035,19 +4025,16 @@ function useAeronAccounting({ setShipments }) {
           });
         }
 
-        // 2. Purchase Orders (Smart Merge)
+        // 2. Purchase Orders (Server-Authoritative SSoT)
         const remotePOs = await fetcher('purchase_orders', null);
         if (isMounted && Array.isArray(remotePOs)) {
           setPurchaseOrders(prev => {
             if (window.isAeronMutating && window.isAeronMutating('purchase_orders')) return prev;
-            const merged = typeof window.mergeAeronDatasets === 'function'
-              ? window.mergeAeronDatasets(prev, remotePOs, 'id')
-              : (remotePOs.length > 0 ? remotePOs : prev);
-            if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(remotePOs)) return prev;
             try {
-              localStorage.setItem('aeron_purchase_orders', JSON.stringify(merged));
+              localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
             } catch(e) {}
-            return merged;
+            return remotePOs;
           });
         }
       } catch (e) {

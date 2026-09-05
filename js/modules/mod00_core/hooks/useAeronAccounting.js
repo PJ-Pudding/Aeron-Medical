@@ -50,16 +50,13 @@ function useAeronAccounting({ setShipments }) {
         // 🛡️ Skip hydration if user has active local mutations
         if (window.isAeronMutating && window.isAeronMutating('accounting')) return;
 
-        // 1. Transactions (Smart Merge & Universal Thai Sanitizer - NEVER wipes local items)
+        // 1. Transactions (Server-Authoritative SSoT & Universal Thai Sanitizer)
         const remoteTxns = await fetcher('accounting', null);
         if (isMounted && Array.isArray(remoteTxns)) {
           const rawTxns = typeof window.sanitizeThaiData === 'function' ? window.sanitizeThaiData(remoteTxns) : remoteTxns;
           setTransactions(prev => {
             if (window.isAeronMutating && window.isAeronMutating('accounting')) return prev;
-            const merged = typeof window.mergeAeronDatasets === 'function'
-              ? window.mergeAeronDatasets(prev, rawTxns, 'id')
-              : (rawTxns.length > 0 ? rawTxns : prev);
-            const cleanTxns = merged.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
+            const cleanTxns = rawTxns.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id || '').localeCompare(String(a.id || '')));
             if (JSON.stringify(prev) === JSON.stringify(cleanTxns)) return prev;
             try {
               localStorage.setItem('aeron_accounting_txns', JSON.stringify(cleanTxns));
@@ -68,19 +65,16 @@ function useAeronAccounting({ setShipments }) {
           });
         }
 
-        // 2. Purchase Orders (Smart Merge)
+        // 2. Purchase Orders (Server-Authoritative SSoT)
         const remotePOs = await fetcher('purchase_orders', null);
         if (isMounted && Array.isArray(remotePOs)) {
           setPurchaseOrders(prev => {
             if (window.isAeronMutating && window.isAeronMutating('purchase_orders')) return prev;
-            const merged = typeof window.mergeAeronDatasets === 'function'
-              ? window.mergeAeronDatasets(prev, remotePOs, 'id')
-              : (remotePOs.length > 0 ? remotePOs : prev);
-            if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(remotePOs)) return prev;
             try {
-              localStorage.setItem('aeron_purchase_orders', JSON.stringify(merged));
+              localStorage.setItem('aeron_purchase_orders', JSON.stringify(remotePOs));
             } catch(e) {}
-            return merged;
+            return remotePOs;
           });
         }
       } catch (e) {

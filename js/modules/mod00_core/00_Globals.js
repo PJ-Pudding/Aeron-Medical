@@ -68,7 +68,7 @@ const _TABLE_LS_MAP = {
 
 // 🧹 One-Time Cache Purge Migration (Purges legacy mock/demo data while strictly preserving GSheet accounting txns & users)
 (function purgeLegacyMockData() {
-  const PURGE_KEY = 'aeron_purge_v5';
+  const PURGE_KEY = 'aeron_purge_v6';
   try {
     if (localStorage.getItem(PURGE_KEY) !== 'true') {
       const keysToPurge = [
@@ -284,21 +284,14 @@ function getCompanyAccounts() {
   try {
     const saved = localStorage.getItem('aeron_petty_cash_accounts');
     if (saved) {
-      pettyCashList = JSON.parse(saved);
-    } else {
-      pettyCashList = [
-        { id: 'pc-1', empName: 'คุณตู้', limit: 20000, name: 'เงินสดสำรองจ่าย - คุณตู้ (Petty Cash)' },
-        { id: 'pc-2', empName: 'คุณแบงค์', limit: 15000, name: 'เงินสดสำรองจ่าย - คุณแบงค์ (Petty Cash)' }
-      ];
-      localStorage.setItem('aeron_petty_cash_accounts', JSON.stringify(pettyCashList));
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) pettyCashList = parsed;
     }
   } catch (e) {
-    pettyCashList = [
-      { id: 'pc-1', empName: 'คุณตู้', limit: 20000, name: 'เงินสดสำรองจ่าย - คุณตู้ (Petty Cash)' }
-    ];
+    pettyCashList = [];
   }
 
-  const pettyNames = pettyCashList.map(pc => pc.name || `เงินสดสำรองจ่าย - ${pc.empName}`);
+  const pettyNames = (pettyCashList || []).map(pc => pc.name || `เงินสดสำรองจ่าย - ${pc.empName || ''}`);
   return [...FIXED_COMPANY_BANK_ACCOUNTS, ...pettyNames];
 }
 

@@ -1,1 +1,87 @@
-[]
+[
+  {
+    "id": "prod-1788580085069",
+    "name": "Bojin 5600",
+    "brand": "Bojin",
+    "price": 1000000,
+    "category": "Power Drill สว่านเจาะกระดูก",
+    "demoUnits": [
+      {
+        "sn": "1111",
+        "status": "พร้อมใช้งาน",
+        "location": "สำนักงาน Aeron Bkk",
+        "accessories": "ตัวเครื่องหลัก (Main Unit) (1 เครื่อง), Battery (1 ชุด), คู่มือการใช้งานภาษาไทย (1 เล่ม)"
+      }
+    ],
+    "updated_at": "2026-09-05T03:53:26.220Z",
+    "description": "",
+    "accessoriesList": [
+      {
+        "id": "comp_1",
+        "qty": 1,
+        "name": "ตัวเครื่องหลัก (Main Unit)",
+        "note": "ตรวจ QC พร้อมใช้งาน",
+        "unit": "เครื่อง",
+        "itemNo": "MAIN-01",
+        "serialNo": ""
+      },
+      {
+        "id": "comp_2",
+        "qty": 1,
+        "name": "Battery",
+        "note": "",
+        "unit": "ชุด",
+        "itemNo": "Battery",
+        "serialNo": ""
+      },
+      {
+        "id": "comp_3",
+        "qty": 1,
+        "name": "คู่มือการใช้งานภาษาไทย",
+        "note": "",
+        "unit": "เล่ม",
+        "itemNo": "MAN-TH",
+        "serialNo": ""
+      }
+    ],
+    "demoSerialNumbers": [
+      "1111"
+    ],
+    "demoUnitsAvailable": 1,
+    "masterChecklistItems": [
+      {
+        "id": "comp_1",
+        "qty": 1,
+        "name": "ตัวเครื่องหลัก (Main Unit)",
+        "note": "ตรวจ QC พร้อมใช้งาน",
+        "unit": "เครื่อง",
+        "itemNo": "MAIN-01",
+        "partNo": "MAIN-01",
+        "serialNo": "",
+        "condition": "สมบูรณ์"
+      },
+      {
+        "id": "comp_2",
+        "qty": 1,
+        "name": "Battery",
+        "note": "",
+        "unit": "ชุด",
+        "itemNo": "Battery",
+        "partNo": "Battery",
+        "serialNo": "",
+        "condition": "สมบูรณ์"
+      },
+      {
+        "id": "comp_3",
+        "qty": 1,
+        "name": "คู่มือการใช้งานภาษาไทย",
+        "note": "",
+        "unit": "เล่ม",
+        "itemNo": "MAN-TH",
+        "partNo": "MAN-TH",
+        "serialNo": "",
+        "condition": "สมบูรณ์"
+      }
+    ]
+  }
+]
